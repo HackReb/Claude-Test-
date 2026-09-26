@@ -9,7 +9,7 @@ import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
 import { createId } from "../game/ids";
 import { BUILDING_NAME_MAX_LENGTH, cleanBuildingName, personalName } from "../game/names";
-import { isOwned } from "../game/plots";
+import { belongsTo } from "../game/plots";
 import { buildingRentPerMinute } from "../game/rent";
 import type { Building, BuildingUse, Facade, Part, PartCategory, Plot } from "../model/types";
 import { getPart, isUnlocked, partsOf } from "../parts/catalog";
@@ -17,6 +17,7 @@ import { partAt, placePart, removeAt, setFloors, setText, starterFacade, TEXT_MA
 import { FACADE_RULES, validateFacade } from "../parts/rules";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
+import { useStreetContext, type StreetContext } from "../store/useStreetContext";
 
 type Tab = PartCategory | "erase";
 
@@ -31,13 +32,18 @@ const TABS: { id: Tab; label: string }[] = [
 
 
 export function BuilderScreen() {
-  const { plotId } = useParams();
-  const plot = useGameStore((s) => s.street?.plots.find((p) => p.id === plotId));
-  if (!plot || !isOwned(plot)) return <Navigate to={plot ? routes.plot(plot.id) : routes.street} replace />;
-  return <Builder plot={plot} />;
+  const { plotId, streetId } = useParams();
+  const ctx = useStreetContext(streetId);
+  const playerId = useGameStore((s) => s.player!.id);
+  const plot = ctx?.street.plots.find((p) => p.id === plotId);
+  // Bauen nur auf eigenen Grundstücken – auch in Nachbarstraßen.
+  if (!ctx || !plot || !belongsTo(ctx.street, plot, playerId)) {
+    return <Navigate to={ctx && plot ? ctx.plotRoute(plot.id) : (ctx?.backRoute ?? routes.street)} replace />;
+  }
+  return <Builder plot={plot} ctx={ctx} />;
 }
 
-function Builder({ plot }: { plot: Plot }) {
+function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   const player = useGameStore((s) => s.player)!;
   const build = useGameStore((s) => s.build);
   const unlock = useGameStore((s) => s.unlockPart);
@@ -113,9 +119,9 @@ function Builder({ plot }: { plot: Plot }) {
 
   async function onBuild() {
     if (errors.length || !cleanName) return;
-    if (await build(plot.id, draft)) {
+    if (await build(plot.id, draft, ctx.streetId)) {
       sound.build();
-      navigate(routes.plot(plot.id));
+      navigate(ctx.plotRoute(plot.id));
     }
   }
 
@@ -130,7 +136,7 @@ function Builder({ plot }: { plot: Plot }) {
   return (
     <div className="builder">
       <div className="builder-head">
-        <Link className="btn btn-link back" to={routes.plot(plot.id)}>
+        <Link className="btn btn-link back" to={ctx.plotRoute(plot.id)}>
           ← Abbrechen
         </Link>
         <label className="field builder-name">

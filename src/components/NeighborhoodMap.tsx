@@ -10,6 +10,7 @@ interface Props {
   neighborhood: Neighborhood;
   playerStreet: Street;
   playerName: string;
+  playerId: string;
   streets: Record<string, Street>;
   unreadByBot: Record<string, number>;
   onSelect: (streetId: string) => void;
@@ -18,7 +19,7 @@ interface Props {
 const shorten = (name: string, max = 17) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 
 /** Karte: eigene Straße in der Mitte, Bot-Straßen in ihrer Himmelsrichtung drumherum. */
-export function NeighborhoodMap({ neighborhood, playerStreet, playerName, streets, unreadByBot, onSelect }: Props) {
+export function NeighborhoodMap({ neighborhood, playerStreet, playerName, playerId, streets, unreadByBot, onSelect }: Props) {
   const nodes = neighborhood.bots.flatMap((bot) => {
     const street = streets[bot.streetId];
     if (!street) return [];
@@ -26,7 +27,8 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, street
     const x = Math.min(SIZE - 62, Math.max(62, C + RADIUS * Math.cos(angle)));
     const y = Math.min(SIZE - 44, Math.max(40, C - RADIUS * Math.sin(angle)));
     const built = street.plots.filter((p) => p.building).length;
-    return [{ bot, street, x, y, built }];
+    const mine = street.plots.filter((p) => p.ownerId === playerId).length;
+    return [{ bot, street, x, y, built, mine }];
   });
 
   return (
@@ -67,7 +69,7 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, street
         </text>
       </g>
 
-      {nodes.map(({ bot, street, x, y, built }) => {
+      {nodes.map(({ bot, street, x, y, built, mine }) => {
         const unread = unreadByBot[bot.id] ?? 0;
         return (
           <g
@@ -75,7 +77,7 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, street
             className="map-node"
             role="button"
             tabIndex={0}
-            aria-label={`${street.name} von ${bot.name}, ${built} Gebäude${unread ? `, ${unread} Neuigkeiten` : ""}`}
+            aria-label={`${street.name} von ${bot.name}, ${built} Gebäude${mine ? `, ${mine} davon deine Grundstücke` : ""}${unread ? `, ${unread} Neuigkeiten` : ""}`}
             onClick={() => onSelect(street.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -84,12 +86,12 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, street
               }
             }}
           >
-            <rect x={x - 60} y={y + 8} width={120} height={34} rx={10} fill="#fff" stroke={INK} strokeWidth={2.5} />
+            <rect x={x - 60} y={y + 8} width={120} height={34} rx={10} fill="#fff" stroke={mine ? "#ff7a45" : INK} strokeWidth={mine ? 4 : 2.5} />
             <text x={x} y={y + 23} textAnchor="middle" fontSize={11} fontWeight={900} fill={INK}>
               {shorten(street.name)}
             </text>
             <text x={x} y={y + 36} textAnchor="middle" fontSize={9} fontWeight={700} fill="#7a6a5a">
-              {bot.name} · {built} 🏠
+              {mine ? `${mine}× deins · ${built} 🏠` : `${bot.name} · ${built} 🏠`}
             </text>
             <circle className="map-avatar" cx={x} cy={y - 8} r={20} fill="#fff7e8" stroke={INK} strokeWidth={2.5} />
             <text x={x} y={y - 1} textAnchor="middle" fontSize={20}>

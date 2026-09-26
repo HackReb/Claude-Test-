@@ -1176,3 +1176,15 @@ h2 {
   background: var(--primary);
   color: var(--primary-ink);
 }
+
+/* ---------- Bauen bei Nachbarn ---------- */
+
+.neighbor-mine {
+  border-color: var(--primary);
+  background: #fff1ea;
+}
+
+.greeting p {
+  margin: 0;
+  font-weight: 700;
+}

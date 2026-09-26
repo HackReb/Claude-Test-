@@ -112,3 +112,41 @@ describe("gameStore – Leben auf der Straße", () => {
     expect((await repo.loadStreet(later.getState().street!.id))?.litter).toHaveLength(litter.length - 1);
   });
 });
+
+describe("gameStore – bei Nachbarn bauen", () => {
+  it("kaufen, bauen, Begrüßung, und die Miete von dort kommt auch offline an", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    let now = 0;
+    const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await vi.waitFor(() => expect(store.getState().neighborhood).not.toBeNull());
+
+    const hood = store.getState().neighborhood!;
+    const zoeStreetId = hood.bots.find((b) => b.character === "sweet")!.streetId;
+    const zoeStreet = store.getState().neighborStreets[zoeStreetId];
+    const plot = zoeStreet.plots.find((p) => p.size === "S" && p.purchasedAt === undefined)!;
+
+    const bought = await store.getState().buyPlot(plot.id, zoeStreetId);
+    expect(bought.ok).toBe(true);
+    expect(bought.greeting).toContain("Zucker-Zoe");
+    expect(store.getState().player!.coins).toBe(1000 - 625);
+    expect(store.getState().neighborhood!.news[0].text).toContain("Willkommen");
+
+    const home = buildingFromTemplate(templatesFor("S").find((t) => t.id === "kiosk")!);
+    expect(await store.getState().build(plot.id, home, zoeStreetId)).toBe(true);
+    // Bauen auf Zoes eigenem Grundstück ist verboten
+    const zoesOwn = store.getState().neighborStreets[zoeStreetId].plots.find((p) => p.building && !p.ownerId)!;
+    expect(await store.getState().build(zoesOwn.id, home, zoeStreetId)).toBe(false);
+    expect((await store.getState().upgrade(zoesOwn.id, zoeStreetId)).ok).toBe(false);
+
+    // 1 h später neu starten: Miete aus beiden Straßen
+    now = 60 * MIN;
+    const later = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await later.getState().init();
+    const saved = later.getState().neighborStreets[zoeStreetId].plots.find((p) => p.id === plot.id)!;
+    expect(saved.ownerId).toBe(later.getState().player!.id);
+    expect(saved.building).toBeDefined();
+    const ownOnly = 60 * 10.5; // Kalles Kiosk zu Hause
+    expect(later.getState().offlineEarnings!).toBeGreaterThan(ownOnly + 60 * 10);
+  });
+});

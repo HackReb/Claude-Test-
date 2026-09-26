@@ -62,6 +62,11 @@ export interface Plot {
   purchasedAt?: number;
   /** Start-Geschenk – zählt nicht als Kauf für den Preisanstieg. */
   gifted?: boolean;
+  /**
+   * Käufer, wenn es nicht der Besitzer der Straße ist (z. B. dein Grundstück in Zoes Zuckerallee).
+   * Fehlt → das Grundstück gehört dem Besitzer der Straße.
+   */
+  ownerId?: string;
   /** Anlage ohne Gebäude, z. B. ein Spielplatz. */
   amenity?: Amenity;
 }

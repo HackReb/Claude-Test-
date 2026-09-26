@@ -10,16 +10,18 @@ export interface Persona {
   fallbackStreet: string;
   /** Kurzbeschreibung des Charakters. */
   tagline: string;
+  /** Was der Bot sagt, wenn du in seiner Straße ein Grundstück kaufst. */
+  greeting: string;
 }
 
 /** Bot-Nachbarn (Konzept Abschnitt 7) – alle Werte hier anpassbar. */
 export const BOTS = {
   personas: [
-    { name: "Zucker-Zoe", shortName: "Zoe", avatar: "🍭", character: "sweet", fallbackStreet: "Zuckerallee", tagline: "Süßigkeiten-Fan" },
-    { name: "Beton-Bernd", shortName: "Bernd", avatar: "🧱", character: "concrete", fallbackStreet: "Betonring", tagline: "Beton-Liebhaber" },
-    { name: "Chaos-Chris", shortName: "Chris", avatar: "🌀", character: "chaos", fallbackStreet: "Kuddelmuddelweg", tagline: "Chaot – baut alles durcheinander" },
-    { name: "Palmen-Paula", shortName: "Paula", avatar: "🌴", character: "nature", fallbackStreet: "Palmenweg", tagline: "Mag Holz, Palmen und Spitzdächer" },
-    { name: "Disco-Dieter", shortName: "Dieter", avatar: "🪩", character: "party", fallbackStreet: "Discostraße", tagline: "Feiert gern – Neon und Flaggen" },
+    { name: "Zucker-Zoe", shortName: "Zoe", avatar: "🍭", character: "sweet", fallbackStreet: "Zuckerallee", tagline: "Süßigkeiten-Fan", greeting: "Willkommen, Nachbar! Magst du Gummibärchen? 🍬" },
+    { name: "Beton-Bernd", shortName: "Bernd", avatar: "🧱", character: "concrete", fallbackStreet: "Betonring", tagline: "Beton-Liebhaber", greeting: "Hm. Hoffentlich baust du was Ordentliches. Mit Flachdach." },
+    { name: "Chaos-Chris", shortName: "Chris", avatar: "🌀", character: "chaos", fallbackStreet: "Kuddelmuddelweg", tagline: "Chaot – baut alles durcheinander", greeting: "Yeah! Noch mehr Durcheinander in meiner Straße!" },
+    { name: "Palmen-Paula", shortName: "Paula", avatar: "🌴", character: "nature", fallbackStreet: "Palmenweg", tagline: "Mag Holz, Palmen und Spitzdächer", greeting: "Schön! Pflanz doch eine Palme, das tut allen gut." },
+    { name: "Disco-Dieter", shortName: "Dieter", avatar: "🪩", character: "party", fallbackStreet: "Discostraße", tagline: "Feiert gern – Neon und Flaggen", greeting: "Ein neuer Nachbar? Das schreit nach einer Party! 🪩" },
   ] satisfies Persona[],
 
   /** Alle wie viele Stunden ein Bot etwas tut. */

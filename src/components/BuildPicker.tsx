@@ -15,16 +15,20 @@ import { sound } from "../audio/sound";
 export type BuildMode = "template" | "random";
 
 /** Auswahl eines neuen Gebäudes: Vorlagen-Liste oder Würfeln. */
-export function BuildPicker({ plot, mode, onDone }: { plot: Plot; mode: BuildMode; onDone: () => void }) {
-  return mode === "template" ? <TemplateList plot={plot} onDone={onDone} /> : <Dice plot={plot} onDone={onDone} />;
+export function BuildPicker({ plot, mode, streetId, onDone }: { plot: Plot; mode: BuildMode; streetId?: string; onDone: () => void }) {
+  return mode === "template" ? (
+    <TemplateList plot={plot} streetId={streetId} onDone={onDone} />
+  ) : (
+    <Dice plot={plot} streetId={streetId} onDone={onDone} />
+  );
 }
 
 /** Baut das Gebäude mit dem gewählten Namen; ohne gültigen Namen passiert nichts. */
-function useBuild(plot: Plot, onDone: () => void) {
+function useBuild(plot: Plot, streetId: string | undefined, onDone: () => void) {
   const build = useGameStore((s) => s.build);
   return async (building: Building, name: string, use: BuildingUse) => {
     const clean = cleanBuildingName(name);
-    if (clean && (await build(plot.id, { ...building, name: clean, use }))) {
+    if (clean && (await build(plot.id, { ...building, name: clean, use }, streetId))) {
       sound.build();
       onDone();
     } else {
@@ -35,8 +39,8 @@ function useBuild(plot: Plot, onDone: () => void) {
 
 const usePlayerName = () => useGameStore((s) => s.player!.name);
 
-function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
-  const place = useBuild(plot, onDone);
+function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDone: () => void }) {
+  const place = useBuild(plot, streetId, onDone);
   const playerName = usePlayerName();
   const templates = templatesFor(plot.size);
   const [chosen, setChosen] = useState<Template | null>(null);
@@ -99,8 +103,8 @@ function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
   );
 }
 
-function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
-  const place = useBuild(plot, onDone);
+function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDone: () => void }) {
+  const place = useBuild(plot, streetId, onDone);
   const unlockedParts = useGameStore((s) => s.player!.unlockedParts);
   // Würfeln nutzt nur freigeschaltete Bausteine (Vorlagen dagegen sind fertige Gebäude).
   const roll = () => randomBuilding(plot.size, Math.random, { isAvailable: (part) => isUnlocked(part, unlockedParts) });

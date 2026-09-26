@@ -33,8 +33,10 @@ export const ECONOMY = {
     L: { tiles: 3, price: 4000, baseRentPerMinute: 90, maxFloors: 3 },
   } satisfies Record<PlotSize, PlotSizeConfig>,
 
-  /** Preisanstieg je gekauftem Grundstück (0.15 = +15 %). */
+  /** Preisanstieg je gekauftem Grundstück (0.15 = +15 %) – zählt über alle Straßen. */
   plotPriceIncrease: 0.15,
+  /** Aufpreis für Grundstücke in fremden Straßen (1.25 = +25 %). */
+  neighborPriceFactor: 1.25,
 
   /** Maximal angerechnete Offline-Zeit in Minuten (8 h). */
   maxOfflineMinutes: 8 * 60,
