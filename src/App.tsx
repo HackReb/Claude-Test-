@@ -9,6 +9,7 @@ import { NeighborhoodScreen } from "./screens/NeighborhoodScreen";
 import { NeighborStreetScreen } from "./screens/NeighborStreetScreen";
 import { PlotScreen } from "./screens/PlotScreen";
 import { ShareScreen } from "./screens/ShareScreen";
+import { GarageScreen } from "./screens/GarageScreen";
 import { StreetScreen } from "./screens/StreetScreen";
 import { useGameStore } from "./store/gameStore";
 
@@ -42,6 +43,7 @@ export function App() {
             <Route path="/neighborhood/:streetId/plot/:plotId" element={<PlotScreen />} />
             <Route path="/neighborhood/:streetId/builder/:plotId" element={<BuilderScreen />} />
             <Route path={routes.share} element={<ShareScreen />} />
+            <Route path={routes.garage} element={<GarageScreen />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to={hasPlayer ? routes.street : routes.start} replace />} />

@@ -62,6 +62,7 @@ export function NeighborStreetScreen() {
           sound.tap();
           navigate(routes.neighborPlot(street.id, plot.id));
         }}
+        onCarTap={({ model }) => sound.horn(model.horn)}
       />
       {mine.length > 0 ? (
         <div className="card neighbor-mine">

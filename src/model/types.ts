@@ -132,6 +132,19 @@ export interface Player {
   streetId: string;
   /** Zeitpunkt, bis zu dem Miete in `pendingRent` verbucht ist. */
   lastSeen: number;
+  /** Eigene Autos, die auf der Straße fahren. */
+  cars?: Car[];
+}
+
+export interface Car {
+  id: string;
+  modelId: string;
+  color: string;
+  /** z. B. „Kalles Borsche“ */
+  name: string;
+  /** Nummernschild, z. B. „TUT-KA 911“ */
+  plate: string;
+  boughtAt: number;
 }
 
 // ---------- Nachbarschaft (Bots) ----------

@@ -16,8 +16,9 @@ import { personaOf } from "../config/bots";
 import { addLitter, buildPlayground, spawnLitter, tapLitter, type AmenityResult, type CleanResult } from "../game/life";
 import { accrueRent, collectRent } from "../game/rent";
 import { unlockPart, type UnlockResult } from "../game/unlock";
+import { buyCar, updateCar, type BuyCarResult } from "../game/cars";
 import { findNeighborStreets } from "../geo/neighbors";
-import type { Building, LitterItem, LitterKind, Neighborhood, Player, Street, StreetLocation } from "../model/types";
+import type { Building, Car, LitterItem, LitterKind, Neighborhood, Player, Street, StreetLocation } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import type { Repository } from "../repository/Repository";
 
@@ -57,6 +58,10 @@ interface GameState {
   buildPlayground(plotId: string): Promise<AmenityResult>;
   /** Stellt ein Gebäude auf ein eigenes Grundstück (auch in einer Nachbarstraße). */
   build(plotId: string, building: Building, streetId?: string): Promise<boolean>;
+  /** Auto im Autohaus kaufen. */
+  buyCar(input: { modelId: string; color: string; name: string; plate: string }): Promise<BuyCarResult>;
+  /** Name, Nummernschild oder Farbe eines eigenen Autos ändern. */
+  updateCar(carId: string, changes: Partial<Pick<Car, "name" | "plate" | "color">>): Promise<boolean>;
   /** Baustein gegen Münzen freischalten. */
   unlockPart(partId: string): Promise<UnlockResult>;
   /** Ungeprüfte Straße mit einer echten Straße aus der Kartensuche bestätigen. */
@@ -308,6 +313,24 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         if (!street) return false;
         set({ player: owned.player, ...streetPatch(street) });
         await save(owned.player, street);
+        return true;
+      },
+
+      async buyCar(input) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "unknown-model" };
+        const bought = buyCar(result.player, input, clock());
+        set({ player: bought.ok ? bought.player : result.player });
+        await save(bought.ok ? bought.player : result.player);
+        return bought;
+      },
+
+      async updateCar(carId, changes) {
+        const player = get().player;
+        const updated = player && updateCar(player, carId, changes);
+        if (!updated) return false;
+        set({ player: updated });
+        await save(updated);
         return true;
       },
 
