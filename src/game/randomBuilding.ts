@@ -31,7 +31,12 @@ const between = (min: number, max: number, random: Random) => min + Math.floor(r
  * Würfelt eine gültige Fassade (Konzept 6.2): genau ein Grundkörper, genau ein Dach,
  * mindestens eine Tür, 1–4 Fenster, 0–3 Deko-Teile.
  */
-export function randomFacade(size: PlotSize, random: Random = Math.random): Facade {
+export function randomFacade(
+  size: PlotSize,
+  random: Random = Math.random,
+  isAvailable: (part: Part) => boolean = () => true,
+): Facade {
+  const usable = (category: Part["category"]) => partsOf(category).filter(isAvailable);
   const floors = between(1, ECONOMY.plotSizes[size].maxFloors, random) as 1 | 2 | 3;
   const columns = facadeColumns(size);
   const used = new Set<string>();
@@ -59,21 +64,21 @@ export function randomFacade(size: PlotSize, random: Random = Math.random): Faca
   const mainCells = columns * floors;
   const windowCount = Math.min(between(FACADE_RULES.minWindows, FACADE_RULES.maxWindows, random), mainCells - doorCount);
 
-  const door = pick(partsOf("door"), random);
+  const door = pick(usable("door"), random);
   for (let i = 0; i < doorCount; i++) place(door);
-  const window = pick(partsOf("window"), random);
+  const window = pick(usable("window"), random);
   for (let i = 0; i < windowCount; i++) place(window);
 
   // Boden-Deko vor Wand-Deko setzen, damit Schilder ihr ausweichen können. Findet ein Teil keinen Platz, entfällt es.
   const decoCount = between(0, FACADE_RULES.maxDeco, random);
-  const decos = shuffle(partsOf("deco"), random)
+  const decos = shuffle(usable("deco"), random)
     .slice(0, decoCount)
     .sort((a, b) => Number(layerOf(a) === "top") - Number(layerOf(b) === "top"));
   for (const deco of decos) place(deco);
 
   return {
-    base: { partId: pick(partsOf("base"), random).id },
-    roof: { partId: pick(partsOf("roof"), random).id },
+    base: { partId: pick(usable("base"), random).id },
+    roof: { partId: pick(usable("roof"), random).id },
     floors,
     parts,
   };
@@ -84,7 +89,11 @@ export function randomBuildingName(facade: Facade, size: PlotSize, random: Rando
   return `${prefix}-${pick(NAME_NOUN[size], random)}`;
 }
 
-export function randomBuilding(size: PlotSize, random: Random = Math.random): Building {
-  const facade = randomFacade(size, random);
+export function randomBuilding(
+  size: PlotSize,
+  random: Random = Math.random,
+  isAvailable?: (part: Part) => boolean,
+): Building {
+  const facade = randomFacade(size, random, isAvailable);
   return { id: createId(), name: randomBuildingName(facade, size, random), level: 1, createdBy: "random", facade };
 }

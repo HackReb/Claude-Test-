@@ -4,6 +4,7 @@ import { randomBuilding } from "../game/randomBuilding";
 import { buildingRentPerMinute } from "../game/rent";
 import { buildingFromTemplate, templatesFor } from "../game/templates";
 import type { Building, Plot } from "../model/types";
+import { isUnlocked } from "../parts/catalog";
 import { useGameStore } from "../store/gameStore";
 import { FacadePreview } from "./FacadePreview";
 
@@ -50,7 +51,10 @@ function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
 
 function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
   const place = useBuild(plot, onDone);
-  const [building, setBuilding] = useState(() => randomBuilding(plot.size));
+  const unlockedParts = useGameStore((s) => s.player!.unlockedParts);
+  // Würfeln nutzt nur freigeschaltete Bausteine (Vorlagen dagegen sind fertige Gebäude).
+  const roll = () => randomBuilding(plot.size, Math.random, (part) => isUnlocked(part, unlockedParts));
+  const [building, setBuilding] = useState(roll);
   const [rolls, setRolls] = useState(1);
 
   return (
@@ -73,7 +77,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
           type="button"
           className="btn"
           onClick={() => {
-            setBuilding(randomBuilding(plot.size));
+            setBuilding(roll());
             setRolls((n) => n + 1);
           }}
         >

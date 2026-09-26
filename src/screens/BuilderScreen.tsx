@@ -1,13 +1,239 @@
-import { Link, useParams } from "react-router-dom";
-import { Placeholder } from "../components/Placeholder";
+import { useState } from "react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { EditorCanvas } from "../components/builder/EditorCanvas";
+import { PartThumb } from "../components/builder/PartThumb";
+import { ECONOMY } from "../config/economy";
+import { formatCoins, formatRate } from "../format";
+import { createId } from "../game/ids";
+import { isOwned } from "../game/plots";
+import { buildingRentPerMinute } from "../game/rent";
+import type { Building, Facade, Part, PartCategory, Plot } from "../model/types";
+import { getPart, isUnlocked, partsOf } from "../parts/catalog";
+import { partAt, placePart, removeAt, setFloors, setText, starterFacade, TEXT_MAX_LENGTH } from "../parts/editor";
+import { FACADE_RULES, validateFacade } from "../parts/rules";
 import { routes } from "../routes";
+import { useGameStore } from "../store/gameStore";
+
+type Tab = PartCategory | "erase";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "base", label: "Wand" },
+  { id: "roof", label: "Dach" },
+  { id: "door", label: "Türen" },
+  { id: "window", label: "Fenster" },
+  { id: "deco", label: "Deko" },
+  { id: "erase", label: "Weg" },
+];
+
+const NAME_MAX_LENGTH = 24;
 
 export function BuilderScreen() {
-  const { plotId = "" } = useParams();
+  const { plotId } = useParams();
+  const plot = useGameStore((s) => s.street?.plots.find((p) => p.id === plotId));
+  if (!plot || !isOwned(plot)) return <Navigate to={plot ? routes.plot(plot.id) : routes.street} replace />;
+  return <Builder plot={plot} />;
+}
+
+function Builder({ plot }: { plot: Plot }) {
+  const player = useGameStore((s) => s.player)!;
+  const build = useGameStore((s) => s.build);
+  const unlock = useGameStore((s) => s.unlockPart);
+  const navigate = useNavigate();
+
+  const [name, setName] = useState(plot.building?.name ?? "Mein Haus");
+  const [facade, setFacade] = useState<Facade>(() => structuredClone(plot.building?.facade ?? starterFacade()));
+  const [tab, setTab] = useState<Tab>("door");
+  const [toolId, setToolId] = useState<string | null>(null);
+  const [active, setActive] = useState<{ x: number; y: number } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [offer, setOffer] = useState<Part | null>(null);
+
+  const tool = toolId ? (getPart(toolId) ?? null) : null;
+  const errors = validateFacade(facade, plot.size);
+  const draft: Building = { id: createId(), name: name.trim() || "Mein Haus", level: 1, createdBy: "player", facade };
+  const rent = buildingRentPerMinute(plot.size, draft);
+  const count = (category: PartCategory) => facade.parts.filter((p) => getPart(p.partId)?.category === category).length;
+  const activePart = active ? partAt(facade, active.x, active.y) : undefined;
+  const editingText = activePart && getPart(activePart.partId)?.textFill ? activePart : undefined;
+  const maxFloors = ECONOMY.plotSizes[plot.size].maxFloors;
+
+  function onCell(x: number, y: number) {
+    setMessage(null);
+    if (tab === "erase") {
+      setFacade(removeAt(facade, x, y));
+      setActive(null);
+      return;
+    }
+    const existing = partAt(facade, x, y);
+    // Gleiches Teil nochmal antippen = auswählen (z. B. um den Schild-Text zu ändern), nicht ersetzen.
+    if (!tool || existing?.partId === tool.id) {
+      setActive(existing ? { x, y } : null);
+      if (!tool && !existing) setMessage("Wähl unten ein Teil aus und tipp dann auf die Fassade.");
+      return;
+    }
+    const result = placePart(facade, plot.size, tool.id, x, y);
+    if (result.ok) {
+      setFacade(result.facade);
+      setActive({ x, y });
+    } else {
+      setMessage(result.reason);
+    }
+  }
+
+  function onPalette(part: Part) {
+    setMessage(null);
+    if (!isUnlocked(part, player.unlockedParts)) {
+      setOffer(part);
+      return;
+    }
+    select(part);
+  }
+
+  function select(part: Part) {
+    setOffer(null);
+    if (part.category === "base") setFacade({ ...facade, base: { partId: part.id } });
+    else if (part.category === "roof") setFacade({ ...facade, roof: { partId: part.id } });
+    else setToolId(toolId === part.id ? null : part.id);
+  }
+
+  async function onUnlock(part: Part) {
+    const result = await unlock(part.id);
+    // Direkt auswählen – `player` in diesem Render ist noch der Stand vor dem Freischalten.
+    if (result.ok) select(part);
+  }
+
+  async function onBuild() {
+    if (errors.length) return;
+    if (await build(plot.id, draft)) navigate(routes.plot(plot.id));
+  }
+
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    setOffer(null);
+    setMessage(null);
+    if (next === "erase") setToolId(null);
+    else if (tool && tool.category !== next) setToolId(null);
+  };
+
   return (
-    <Placeholder title="Baukasten" milestone="M4: Fassaden-Editor">
-      <p>Vorschau oben, Kategorien-Leiste unten (Grundkörper · Dach · Türen · Fenster · Deko), Live-Mietanzeige.</p>
-      <Link className="btn btn-link" to={routes.plot(plotId)}>← Zurück zum Grundstück</Link>
-    </Placeholder>
+    <div className="builder">
+      <div className="builder-head">
+        <Link className="btn btn-link back" to={routes.plot(plot.id)}>
+          ← Abbrechen
+        </Link>
+        <label className="field builder-name">
+          <span className="sr-only">Name des Gebäudes</span>
+          <input value={name} maxLength={NAME_MAX_LENGTH} onChange={(e) => setName(e.target.value)} aria-label="Name des Gebäudes" />
+        </label>
+      </div>
+
+      <div className="card builder-stage">
+        <EditorCanvas facade={facade} size={plot.size} tool={tool} erasing={tab === "erase"} active={active} onCell={onCell} />
+      </div>
+
+      <div className="builder-stats">
+        <strong className="builder-rent">🪙 {formatRate(rent)}/min</strong>
+        <span className="subtle">
+          Türen {count("door")} · Fenster {count("window")}/{FACADE_RULES.maxWindows} · Deko {count("deco")}/{FACADE_RULES.maxDeco}
+        </span>
+        {maxFloors > 1 && (
+          <div className="stepper" role="group" aria-label="Stockwerke">
+            <button type="button" className="btn" disabled={facade.floors <= 1} onClick={() => setFacade(setFloors(facade, plot.size, facade.floors - 1))} aria-label="Ein Stockwerk weniger">
+              −
+            </button>
+            <span>
+              {facade.floors} Stockwerk{facade.floors > 1 ? "e" : ""}
+            </span>
+            <button type="button" className="btn" disabled={facade.floors >= maxFloors} onClick={() => setFacade(setFloors(facade, plot.size, facade.floors + 1))} aria-label="Ein Stockwerk mehr">
+              +
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editingText && (
+        <label className="field">
+          <span>Text auf dem {getPart(editingText.partId)?.name}</span>
+          <input
+            value={editingText.text ?? ""}
+            maxLength={TEXT_MAX_LENGTH}
+            autoCapitalize="characters"
+            onChange={(e) => setFacade(setText(facade, editingText.x, editingText.y, e.target.value))}
+          />
+        </label>
+      )}
+
+      {message && <p className="error" role="status">{message}</p>}
+
+      <div className="palette">
+        <div className="palette-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "selected" : ""} onClick={() => selectTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "erase" ? (
+          <p className="hint left palette-hint">Tipp auf ein Teil der Fassade, um es zu entfernen.</p>
+        ) : (
+          <>
+            <div className="palette-parts">
+              {partsOf(tab).map((part) => {
+                const unlocked = isUnlocked(part, player.unlockedParts);
+                const selected =
+                  part.id === toolId || part.id === facade.base.partId || part.id === facade.roof.partId;
+                return (
+                  <button
+                    key={part.id}
+                    type="button"
+                    className={`palette-part${selected ? " selected" : ""}${unlocked ? "" : " locked"}`}
+                    aria-pressed={selected}
+                    onClick={() => onPalette(part)}
+                  >
+                    <PartThumb part={part} />
+                    <span>{part.name}</span>
+                    {!unlocked && <small>🔒 {formatCoins(part.price)}</small>}
+                  </button>
+                );
+              })}
+            </div>
+            {tab !== "base" && tab !== "roof" && !offer && (
+              <p className="hint left palette-hint">
+                {tool ? `${tool.name} ausgewählt – tipp auf ein hervorgehobenes Feld.` : "Teil auswählen, dann auf die Fassade tippen."}
+              </p>
+            )}
+          </>
+        )}
+
+        {offer && (
+          <div className="unlock-offer">
+            <p>
+              <strong>{offer.name}</strong> freischalten für <strong>🪙 {formatCoins(offer.price)}</strong>?
+              {player.coins < offer.price && <> Dir fehlen noch 🪙 {formatCoins(offer.price - player.coins)}.</>}
+            </p>
+            <div className="actions">
+              <button type="button" className="btn btn-primary" disabled={player.coins < offer.price} onClick={() => void onUnlock(offer)}>
+                Freischalten
+              </button>
+              <button type="button" className="btn btn-link" onClick={() => setOffer(null)}>
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {errors.length > 0 && (
+        <ul className="builder-errors">
+          {errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="btn btn-primary btn-wide" disabled={errors.length > 0} onClick={() => void onBuild()}>
+        {plot.building ? `${draft.name} bauen (ersetzt ${plot.building.name})` : `${draft.name} bauen`}
+      </button>
+    </div>
   );
 }

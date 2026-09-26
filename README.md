@@ -52,6 +52,7 @@ src/
     rent.ts                Miete pro Minute, Offline-Verbuchung, Einsammeln
     templates.ts           Vorlagen-Bibliothek (≥3 je Größe, u. a. Gummibärchenschloss)
     randomBuilding.ts      Zufallsgenerator („Würfeln“) nach den Regeln aus Konzept 6.2
+    unlock.ts              Bausteine gegen Münzen freischalten
     migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)
     ids.ts                 ID-Erzeugung
@@ -59,10 +60,12 @@ src/
     catalog.ts             22 Bausteine (5 Grundkörper, 5 Dächer, 3 Türen, 3 Fenster, 6+ Deko) als Inline-SVG
     grid.ts                Fassaden-Raster (Zellen, Dach, Maße je Grundstücksgröße)
     rules.ts               Gültigkeitsregeln einer Fassade (validateFacade)
+    editor.ts              Baukasten-Schritte: Teil setzen/entfernen, Stockwerke, Schild-Text
   components/
     street/                SVG-Straßen-Ansicht (Layout + Rendering)
     FacadeSvg.tsx          Fassaden-Renderer (+ FacadePreview für Einzelbilder)
     BuildPicker.tsx        Vorlage wählen / Würfeln
+    builder/               Editor-Raster (EditorCanvas) und Paletten-Vorschaubilder
     RentBar.tsx            Miete bereit + Einsammeln
     StreetSearch.tsx       Suchfeld mit Straßen-Vorschlägen
     AppLayout.tsx          Münzen-Leiste, Bottom-Nav, Miet-Ticker
@@ -74,6 +77,6 @@ src/
 | Start / Claim | `#/start` | echte Straße per OSM-Suche, Fallback manuell |
 | Meine Straße | `#/street` | SVG-Straße, Miete einsammeln, Offline-Meldung |
 | Grundstück | `#/plot/:plotId` | Kaufen, Bauen per Vorlage oder Würfeln, Umbauen |
-| Baukasten | `#/builder/:plotId` | Platzhalter (M4) |
+| Baukasten | `#/builder/:plotId` | Fassaden-Editor, Schild-Text, Live-Miete, Bausteine freischalten |
 | Nachbarschaft | `#/neighborhood` | Platzhalter (M5) |
 | Teilen | `#/share` | Platzhalter (M5) |

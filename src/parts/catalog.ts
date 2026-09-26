@@ -5,6 +5,7 @@ import type { Part, PartCategory, PartMount } from "../model/types";
 // - base/door/window/deco: eine Zelle 40×50, Unterkante y=50 = Boden bzw. Dachansatz (bei mount "roof")
 // - roof: 100×40, wird auf die Fassadenbreite gestreckt → Konturen mit non-scaling-stroke
 // Teile dürfen über ihre Zelle hinausragen (Palmwedel, Fahnenmasten).
+// `price` 0 = Start-Set, sonst Freischalt-Preis in Münzen (Geldsenke, Konzept 6.3).
 
 const INK = "#2b2118";
 const OUTLINE = `stroke="${INK}" vector-effect="non-scaling-stroke"`;
@@ -35,18 +36,21 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "base-chocolate",
+    price: 800,
     name: "Schokolade",
     category: "base",
     svg: `<rect width="40" height="50" fill="#5c3317"/><g fill="#7b4a2a"><rect x="2" y="2" width="16" height="21" rx="2"/><rect x="22" y="2" width="16" height="21" rx="2"/><rect x="2" y="27" width="16" height="21" rx="2"/><rect x="22" y="27" width="16" height="21" rx="2"/></g><path d="M4 4.5h12M24 4.5h12M4 29.5h12M24 29.5h12" stroke="#a0673f" stroke-width="1.5"/>`,
   }),
   part({
     id: "base-gummy",
+    price: 1500,
     name: "Gummibärchen",
     category: "base",
     svg: `<rect width="40" height="50" fill="#fff3d6"/>${gummyBear(0, 0, "#ff595e")}${gummyBear(20, 0, "#8ac926")}${gummyBear(0, 25, "#ffca3a")}${gummyBear(20, 25, "#1982c4")}`,
   }),
   part({
     id: "base-ice",
+    price: 600,
     name: "Eis",
     category: "base",
     svg: `<rect width="40" height="50" fill="#caf0f8"/><path d="M0 16.6h40M0 33.3h40M20 0v16.6M10 16.6v16.7M30 16.6v16.7M20 33.3v16.7" stroke="#90e0ef" stroke-width="1.5"/><path d="M4 7l6-4M24 23l6-4M6 41l6-4" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
@@ -67,18 +71,21 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "roof-dome",
+    price: 600,
     name: "Kuppel",
     category: "roof",
     svg: `<path d="M3 40C3 4 97 4 97 40Z" fill="#f78fb3" ${OUTLINE} stroke-width="3"/><path d="M20 22C30 13 45 10 55 10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6" vector-effect="non-scaling-stroke"/>`,
   }),
   part({
     id: "roof-icing",
+    price: 900,
     name: "Zuckerguss",
     category: "roof",
     svg: `<rect y="14" width="100" height="26" fill="#ffb3c6" ${OUTLINE} stroke-width="3"/><path d="M0 14h100v10q-5 9-10 0q-5 11-10 0q-5 8-10 0q-5 12-10 0q-5 8-10 0q-5 10-10 0q-5 8-10 0q-5 11-10 0q-5 8-10 0q-5 9-10 0z" fill="#fff" ${OUTLINE} stroke-width="2"/><g fill="#06d6a0"><rect x="12" y="16" width="4" height="2"/><rect x="47" y="17" width="4" height="2"/><rect x="82" y="16" width="4" height="2"/></g><g fill="#ffca3a"><rect x="28" y="18" width="4" height="2"/><rect x="66" y="16" width="4" height="2"/></g>`,
   }),
   part({
     id: "roof-battlements",
+    price: 1200,
     name: "Burgzinnen",
     category: "roof",
     svg: `<path d="M0 40V14h12v10h10V14h12v10h10V14h12v10h10V14h12v10h10V14h12v26z" fill="#b5a1e6" ${OUTLINE} stroke-width="3" stroke-linejoin="round"/>`,
@@ -101,6 +108,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "door-glass",
+    price: 300,
     name: "Glastür",
     category: "door",
     mount: "ground",
@@ -122,6 +130,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "window-arch",
+    price: 300,
     name: "Bogenfenster",
     category: "window",
     svg: `<path d="M9 38V26a11 11 0 0 1 22 0v12z" fill="#cdb4db" stroke="${INK}" stroke-width="2.5"/><path d="M20 15v23M9 28h22" stroke="${INK}" stroke-width="1.8"/>`,
@@ -138,6 +147,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "deco-neon",
+    price: 500,
     name: "Neonschrift",
     category: "deco",
     rentBonus: DECO,
@@ -146,6 +156,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "deco-fountain",
+    price: 800,
     name: "Schokobrunnen",
     category: "deco",
     mount: "ground",
@@ -154,6 +165,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "deco-fence",
+    price: 400,
     name: "Zuckerstangen-Zaun",
     category: "deco",
     mount: "ground",
@@ -162,6 +174,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "deco-palm",
+    price: 400,
     name: "Palme",
     category: "deco",
     mount: "ground",
@@ -178,6 +191,7 @@ export const PARTS: Part[] = [
   }),
   part({
     id: "deco-flag",
+    price: 300,
     name: "Flagge",
     category: "deco",
     mount: "roof",
@@ -197,3 +211,8 @@ export function partsOf(category: PartCategory): Part[] {
 }
 
 export const mountOf = (part: Part): PartMount => part.mount ?? "wall";
+
+/** Darf der Spieler dieses Teil im Baukasten und beim Würfeln verwenden? */
+export function isUnlocked(part: Part, unlockedParts: readonly string[]): boolean {
+  return part.price === 0 || unlockedParts.includes(part.id);
+}
