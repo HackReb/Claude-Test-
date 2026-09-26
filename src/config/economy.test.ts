@@ -14,9 +14,9 @@ describe("economy", () => {
   });
 
   it("Miete: Basis × (1 + Deko + Stockwerke) × Upgrade", () => {
-    expect(rentPerMinute({ size: "S", floors: 1, decoCount: 0, level: 1 })).toBe(10);
-    expect(rentPerMinute({ size: "M", floors: 2, decoCount: 2, level: 1 })).toBeCloseTo(30 * 1.3);
-    expect(rentPerMinute({ size: "L", floors: 3, decoCount: 0, level: 3 })).toBeCloseTo(90 * 1.4 * 2.2);
+    expect(rentPerMinute({ size: "S", floors: 1, partsBonus: 0, level: 1 })).toBe(10);
+    expect(rentPerMinute({ size: "M", floors: 2, partsBonus: 0.1, level: 1 })).toBeCloseTo(30 * 1.3);
+    expect(rentPerMinute({ size: "L", floors: 3, partsBonus: 0, level: 3 })).toBeCloseTo(90 * 1.4 * 2.2);
   });
 
   it("Upgrade-Kosten 50 % / 100 % des Grundstückpreises", () => {

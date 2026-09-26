@@ -39,7 +39,7 @@ export const ECONOMY = {
   /** Maximal angerechnete Offline-Zeit in Minuten (8 h). */
   maxOfflineMinutes: 8 * 60,
 
-  /** Bonus je verbautem Deko-Teil (+5 %). */
+  /** Standard-Bonus je verbautem Deko-Teil (+5 %), übernommen als `rentBonus` im Teile-Katalog. */
   decoRentBonus: 0.05,
   /** Bonus je zusätzlichem Stockwerk über dem Erdgeschoss (+20 %). */
   floorRentBonus: 0.2,
@@ -65,14 +65,15 @@ export function upgradeCost(plotBasePrice: number, targetLevel: 2 | 3): number {
 export interface RentInput {
   size: PlotSize;
   floors: 1 | 2 | 3;
-  decoCount: number;
+  /** Summe der `rentBonus`-Werte aller verbauten Teile (z. B. 2 Deko-Teile = 0.1). */
+  partsBonus: number;
   level: 1 | 2 | 3;
 }
 
 /** Miete pro Minute eines bebauten Grundstücks. */
-export function rentPerMinute({ size, floors, decoCount, level }: RentInput): number {
+export function rentPerMinute({ size, floors, partsBonus, level }: RentInput): number {
   const base = ECONOMY.plotSizes[size].baseRentPerMinute;
-  const bonus = 1 + decoCount * ECONOMY.decoRentBonus + (floors - 1) * ECONOMY.floorRentBonus;
+  const bonus = 1 + partsBonus + (floors - 1) * ECONOMY.floorRentBonus;
   return base * bonus * ECONOMY.upgradeLevels[level].multiplier;
 }
 

@@ -1,12 +1,26 @@
+import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { formatCoins } from "../format";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 
-const formatCoins = new Intl.NumberFormat("de-DE");
+const TICK_MS = 1000;
 
 export function AppLayout() {
   const player = useGameStore((s) => s.player)!;
   const street = useGameStore((s) => s.street)!;
+  const tick = useGameStore((s) => s.tick);
+
+  // Miete läuft sekündlich hoch; beim Zurückkehren in den Tab sofort nachrechnen.
+  useEffect(() => {
+    const onTick = () => void tick();
+    const timer = setInterval(onTick, TICK_MS);
+    document.addEventListener("visibilitychange", onTick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onTick);
+    };
+  }, [tick]);
 
   return (
     <div className="app">
@@ -16,7 +30,7 @@ export function AppLayout() {
           <span className="topbar-city">{street.city}</span>
         </div>
         <div className="coins" aria-label={`${player.coins} Münzen`}>
-          <span aria-hidden>🪙</span> {formatCoins.format(player.coins)}
+          <span aria-hidden>🪙</span> {formatCoins(player.coins)}
         </div>
       </header>
 

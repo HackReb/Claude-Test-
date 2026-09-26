@@ -18,6 +18,8 @@ export interface Plot {
   price: number;
   building?: Building;
   purchasedAt?: number;
+  /** Start-Geschenk – zählt nicht als Kauf für den Preisanstieg. */
+  gifted?: boolean;
 }
 
 export interface Building {
@@ -61,7 +63,10 @@ export interface Player {
   id: string;
   name: string;
   coins: number;
+  /** Angesammelte, noch nicht eingesammelte Miete (mit Nachkommastellen). */
+  pendingRent: number;
   unlockedParts: string[];
   streetId: string;
+  /** Zeitpunkt, bis zu dem Miete in `pendingRent` verbucht ist. */
   lastSeen: number;
 }

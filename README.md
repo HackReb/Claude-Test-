@@ -11,6 +11,7 @@ npm run dev        # Dev-Server (http://localhost:5173)
 npm test           # Unit-Tests (Vitest)
 npm run build      # Typecheck + Produktions-Build inkl. Service Worker (dist/)
 npm run preview    # gebauten Stand lokal ansehen (PWA installierbar)
+npm run build:artifact  # Vorschau als einzelne HTML-Datei (dist-artifact/babo-preview.html)
 ```
 
 ## Stack
@@ -30,20 +31,31 @@ src/
   repository/
     Repository.ts          Persistenz-Interface (async, später ApiRepository/Symfony)
     LocalRepository.ts     Implementierung über localStorage
-  store/gameStore.ts       Zustand-Store: init / claim / reset
+  store/gameStore.ts       Zustand-Store: init / claim / tick / collect / buyPlot / reset
   game/
     claimStreet.ts         Straße + Spieler anlegen, Validierung, Grundstücks-Layout
+    plots.ts               Kauf-Logik, Preisanstieg
+    rent.ts                Miete pro Minute, Offline-Verbuchung, Einsammeln
+    templates.ts           Gebäude-Vorlagen (bisher: Start-Kiosk)
+    migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)
     ids.ts                 ID-Erzeugung
-  components/              AppLayout (Münzen-Leiste, Bottom-Nav), Guards, Platzhalter
+  parts/
+    catalog.ts             Bausteine (Start-Set) als Inline-SVG
+    grid.ts                Fassaden-Raster (Zellen, Dach, Maße je Grundstücksgröße)
+  components/
+    street/                SVG-Straßen-Ansicht (Layout + Rendering)
+    FacadeSvg.tsx          Fassaden-Renderer
+    RentBar.tsx            Miete bereit + Einsammeln
+    AppLayout.tsx          Münzen-Leiste, Bottom-Nav, Miet-Ticker
   screens/                 Claim, Straße, Grundstück, Baukasten, Nachbarschaft, Teilen
 ```
 
 | Screen | Route | Stand |
 |---|---|---|
 | Start / Claim | `#/start` | fertig |
-| Meine Straße | `#/street` | Entwurf (Kachel-Liste), SVG in M2 |
-| Grundstück | `#/plot/:plotId` | Infos, Aktionen in M2/M3 |
+| Meine Straße | `#/street` | SVG-Straße, Miete einsammeln, Offline-Meldung |
+| Grundstück | `#/plot/:plotId` | Kaufen; Bauen in M3 |
 | Baukasten | `#/builder/:plotId` | Platzhalter (M4) |
 | Nachbarschaft | `#/neighborhood` | Platzhalter (M5) |
 | Teilen | `#/share` | Platzhalter (M5) |

@@ -1,37 +1,51 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Placeholder } from "../components/Placeholder";
-import type { Plot } from "../model/types";
+import { useNavigate } from "react-router-dom";
+import { RentBar } from "../components/RentBar";
+import { StreetView } from "../components/street/StreetView";
+import { formatCoins } from "../format";
+import { currentPrice } from "../game/plots";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
-
-function PlotTile({ plot }: { plot: Plot }) {
-  const owned = plot.purchasedAt !== undefined;
-  return (
-    <Link to={routes.plot(plot.id)} className={`plot-tile size-${plot.size} ${owned ? "owned" : ""}`}>
-      <strong>{plot.size}</strong>
-      <span>{owned ? "Deins" : `🪙 ${plot.price.toLocaleString("de-DE")}`}</span>
-    </Link>
-  );
-}
 
 export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
   const player = useGameStore((s) => s.player)!;
+  const offlineEarnings = useGameStore((s) => s.offlineEarnings);
+  const dismissOfflineEarnings = useGameStore((s) => s.dismissOfflineEarnings);
+  const collect = useGameStore((s) => s.collect);
   const reset = useGameStore((s) => s.reset);
+  const navigate = useNavigate();
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const side = (s: Plot["side"]) =>
-    street.plots.filter((p) => p.side === s).sort((a, b) => a.index - b.index);
-
   return (
-    <Placeholder title={`Moin, ${player.name}!`} milestone="M2: Straßen-Ansicht als SVG, Kaufen & Miete">
-      <p>Deine Straße hat {street.plots.length} Grundstücke. Tipp eins an:</p>
-      <div className="street-draft">
-        <div className="street-side">{side("left").map((p) => <PlotTile key={p.id} plot={p} />)}</div>
-        <div className="street-road" aria-hidden />
-        <div className="street-side">{side("right").map((p) => <PlotTile key={p.id} plot={p} />)}</div>
-      </div>
+    <div className="street-screen">
+      {offlineEarnings !== null && (
+        <div className="notice card" role="status">
+          <p>
+            Willkommen zurück, {player.name}! Während du weg warst, hat deine Straße{" "}
+            <strong>🪙 {formatCoins(offlineEarnings)}</strong> Miete verdient.
+          </p>
+          <div className="actions">
+            <button type="button" className="btn btn-primary" onClick={() => void collect()}>
+              Einsammeln
+            </button>
+            <button type="button" className="btn btn-link" onClick={dismissOfflineEarnings}>
+              Später
+            </button>
+          </div>
+        </div>
+      )}
+
+      <StreetView
+        street={street}
+        coins={player.coins}
+        priceOf={(plot) => currentPrice(street, plot)}
+        onSelect={(plot) => navigate(routes.plot(plot.id))}
+      />
+      <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an</p>
+
+      <RentBar />
+
       {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
       {confirmReset ? (
         <div className="confirm">
@@ -50,6 +64,6 @@ export function StreetScreen() {
           Spielstand zurücksetzen
         </button>
       )}
-    </Placeholder>
+    </div>
   );
 }
