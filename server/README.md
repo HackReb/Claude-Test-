@@ -66,4 +66,13 @@ bei jedem Push auf `Main`, der `server/` ändert. Einmalig unter *Settings → S
   öffentlichen Teil in `~/.ssh/authorized_keys` auf dem Server eintragen), optional `SSH_PORT`
 - Variables: `DEPLOY_PATH` (z. B. `/home/kalle/babo-api`), `API_URL` (z. B. `https://babo.example.de`)
 
+Nach dem ersten Deploy einmalig Webserver und HTTPS einrichten (eigener Server mit nginx, als root):
+
+```bash
+bash /var/www/babo-api/deploy/setup-nginx.sh babo.138.199.148.107.sslip.io
+```
+
+Das Skript legt nur eine neue nginx-Seite an, prüft mit `nginx -t` und holt ein Let's-Encrypt-Zertifikat
+(certbot). `*.sslip.io` zeigt ohne DNS-Eintrag auf die IP im Namen; eine eigene Domain geht genauso.
+
 `API_URL` nutzt auch der PWA-Workflow: danach einmal *Deploy PWA* laufen lassen, dann spielt die App online.

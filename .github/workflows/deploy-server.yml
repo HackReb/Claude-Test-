@@ -6,9 +6,11 @@
 #   Variables: DEPLOY_PATH  – Zielordner auf dem Server, z. B. /var/www/babo-api
 #              API_URL      – öffentliche Adresse, z. B. https://babo.example.de (auch für die PWA)
 #              PAGES_ORIGIN – optional, Standard https://<owner>.github.io
+#              WEB_USER     – optional, Benutzer von PHP-FPM (Standard www-data)
 #
-# Der Workflow legt beim ersten Mal server/.env.local auf dem Server an (APP_ENV=prod, zufälliges
+# Der Workflow legt beim ersten Mal .env.local auf dem Server an (APP_ENV=prod, zufälliges
 # APP_SECRET, SQLite-Datenbank) – nichts davon steht im Repo. Andere Dateien auf dem Server bleiben unberührt.
+# Webserver + HTTPS einmalig mit deploy/setup-nginx.sh einrichten (siehe server/README.md).
 name: Deploy Server
 
 on:
@@ -28,6 +30,7 @@ jobs:
       CONFIGURED: ${{ secrets.SSH_PRIVATE_KEY != '' && vars.DEPLOY_PATH != '' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       PAGES_ORIGIN: ${{ vars.PAGES_ORIGIN || format('https://{0}.github.io', github.repository_owner) }}
+      WEB_USER: ${{ vars.WEB_USER || 'www-data' }}
     steps:
       - name: Noch nicht eingerichtet?
         if: env.CONFIGURED != 'true'
@@ -73,14 +76,20 @@ jobs:
       - name: Einrichten und Datenbank aktualisieren
         if: env.CONFIGURED == 'true'
         run: |
+          # Browser schicken den Origin klein geschrieben (https://hackreb.github.io).
+          ORIGIN="${PAGES_ORIGIN,,}"
           ssh deploy "cd '$DEPLOY_PATH' && \
             if [ ! -f .env.local ]; then \
-              printf 'APP_ENV=prod\nAPP_DEBUG=0\nAPP_SECRET=%s\nCORS_ALLOW_ORIGIN=%s\n' \"\$(openssl rand -hex 16)\" '$PAGES_ORIGIN' > .env.local; \
+              printf 'APP_ENV=prod\nAPP_DEBUG=0\nAPP_SECRET=%s\nCORS_ALLOW_ORIGIN=%s\n' \"\$(openssl rand -hex 16)\" '$ORIGIN' > .env.local; \
+              chmod 640 .env.local; \
             fi && \
             mkdir -p var && \
             php bin/console cache:clear --no-warmup && \
             php bin/console cache:warmup && \
-            php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration"
+            php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration && \
+            if id '$WEB_USER' >/dev/null 2>&1; then \
+              chown -R '$WEB_USER:$WEB_USER' var && chgrp '$WEB_USER' .env.local; \
+            fi"
 
       - name: Läuft er?
         if: env.CONFIGURED == 'true' && vars.API_URL != ''
