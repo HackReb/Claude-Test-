@@ -1,0 +1,14 @@
+# Apache: alle Anfragen an Symfony (index.php) weiterreichen.
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI}::$0 ^(/.+)/(.*)::\2$
+    RewriteRule .* - [E=BASE:%1]
+    # Authorization-Header (Geräte-Schlüssel) an PHP durchreichen – fehlt bei manchen Hostern sonst.
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+    RewriteRule ^ %{ENV:BASE}/index.php [L]
+</IfModule>

@@ -1,4 +1,4 @@
-# Typecheck, Tests und Build für jeden Push und Pull Request.
+# Typecheck, Tests und Build (PWA + Server) für jeden Push und Pull Request.
 name: CI
 
 on:
@@ -17,3 +17,19 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_sqlite
+          tools: composer
+      - run: composer install --no-interaction --no-progress
+      - run: php bin/console lint:container
+      - run: php bin/phpunit

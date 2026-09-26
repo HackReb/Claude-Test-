@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AccountCard } from "../components/AccountCard";
 import { ambienceFor } from "../audio/ambience";
 import { sound } from "../audio/sound";
 import { Voices } from "../components/Voices";
@@ -172,6 +173,8 @@ export function StreetScreen() {
       </Link>
 
       <Voices voices={voices} highlight={highlight} />
+
+      <AccountCard />
 
       {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
       {confirmReset ? (

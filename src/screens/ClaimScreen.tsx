@@ -6,6 +6,7 @@ import { NAME_MAX_LENGTH, validateClaim } from "../game/claimStreet";
 import { ownedStreetName } from "../game/names";
 import { formatPlace } from "../geo/streetSearch";
 import type { StreetLocation } from "../model/types";
+import { StreetTakenError } from "../repository/Repository";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 
@@ -19,6 +20,8 @@ export function ClaimScreen() {
   const [choice, setChoice] = useState<StreetChoice>({ mode: "search", selected: null });
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [taken, setTaken] = useState<string | null>(null);
+  const online = useGameStore((s) => s.account !== null);
 
   const street: StreetLocation =
     choice.mode === "manual" ? { name: choice.name, city: choice.city } : (choice.selected ?? { name: "", city: "" });
@@ -30,9 +33,16 @@ export function ClaimScreen() {
     setTouched(true);
     if (!valid || saving) return;
     setSaving(true);
+    setTaken(null);
     try {
       await claim({ playerName, street });
       navigate(routes.street, { replace: true });
+    } catch (error) {
+      if (!(error instanceof StreetTakenError)) throw error;
+      setTaken(
+        `Die ${street.name.trim()} gehört schon ${error.ownerName ?? "jemand anderem"} – wer zuerst kommt, dem gehört sie. ` +
+          "Nimm eine andere Straße; bei den Nachbarn kannst du dich später einkaufen.",
+      );
     } finally {
       setSaving(false);
     }
@@ -120,6 +130,11 @@ export function ClaimScreen() {
           </>
         )}
 
+        {taken && (
+          <p className="error" role="alert">
+            {taken}
+          </p>
+        )}
         <button type="submit" className="btn btn-primary" disabled={saving}>
           {street.name.trim()
             ? `${playerName.trim() ? ownedStreetName(playerName, street.name.trim()) : street.name.trim()} claimen`
@@ -130,6 +145,57 @@ export function ClaimScreen() {
           {ECONOMY.giftPlotSize}-Grundstück mit Kiosk.
         </p>
       </form>
+
+      {online && <RecoverForm />}
     </div>
+  );
+}
+
+/** Schon auf einem anderen Gerät gespielt? Mit dem Code geht es hier weiter. */
+function RecoverForm() {
+  const recover = useGameStore((s) => s.recover);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "unknown" | "offline">("idle");
+
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-link" onClick={() => setOpen(true)}>
+        Ich habe schon einen Code
+      </button>
+    );
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setState("busy");
+    try {
+      if (await recover(code)) navigate(routes.street, { replace: true });
+      else setState("unknown");
+    } catch {
+      setState("offline");
+    }
+  }
+
+  return (
+    <form className="card claim-form" onSubmit={onSubmit}>
+      <label className="field">
+        <span>Dein Code</span>
+        <input
+          value={code}
+          placeholder="BABO-XXXX-XXXX-XXXX"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+        />
+      </label>
+      {state === "unknown" && <small className="error">Diesen Code kennen wir nicht. Tippfehler?</small>}
+      {state === "offline" && <small className="error">Der Server ist gerade nicht erreichbar. Versuch es gleich nochmal.</small>}
+      <button type="submit" className="btn btn-primary" disabled={state === "busy" || code.replace(/[^A-Z0-9]/g, "").length < 12}>
+        Weiterspielen
+      </button>
+    </form>
   );
 }
