@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RentBar } from "../components/RentBar";
+import { StreetSearch } from "../components/StreetSearch";
 import { StreetView } from "../components/street/StreetView";
 import { formatCoins } from "../format";
 import { currentPrice } from "../game/plots";
@@ -15,7 +16,9 @@ export function StreetScreen() {
   const collect = useGameStore((s) => s.collect);
   const reset = useGameStore((s) => s.reset);
   const navigate = useNavigate();
+  const verifyStreet = useGameStore((s) => s.verifyStreet);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   return (
     <div className="street-screen">
@@ -33,6 +36,35 @@ export function StreetScreen() {
               Später
             </button>
           </div>
+        </div>
+      )}
+
+      {!street.osm && (
+        <div className="notice card">
+          {verifying ? (
+            <>
+              <StreetSearch
+                label="Deine Straße auf der Karte"
+                initialQuery={`${street.name} ${street.city}`}
+                onSelect={async (location) => {
+                  if (await verifyStreet(location)) setVerifying(false);
+                }}
+              />
+              <button type="button" className="btn btn-link" onClick={() => setVerifying(false)}>
+                Abbrechen
+              </button>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>{street.name}</strong> ist noch <strong>ungeprüft</strong>. Bestätige sie auf der Karte, damit sie als echte
+                Straße zählt.
+              </p>
+              <button type="button" className="btn" onClick={() => setVerifying(true)}>
+                Auf der Karte bestätigen
+              </button>
+            </>
+          )}
         </div>
       )}
 

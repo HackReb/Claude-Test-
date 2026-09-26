@@ -4,7 +4,7 @@ import { claimStreet } from "./claimStreet";
 import { accrueRent, collectRent, streetRentPerMinute } from "./rent";
 
 const MIN = 60_000;
-const start = () => claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 0);
+const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
 
 describe("Miete", () => {
   it("Start-Kiosk bringt S-Basismiete + 5 % für das Schild", () => {

@@ -15,7 +15,7 @@ function memoryStorage(): KeyValueStorage & { size: () => number } {
 describe("LocalRepository ohne localStorage", () => {
   it("fällt auf In-Memory-Speicher zurück, statt abzustürzen", async () => {
     const repo = new LocalRepository();
-    const { player } = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 1);
+    const { player } = claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 1);
     await repo.savePlayer(player);
     expect(await repo.loadPlayer()).toEqual(player);
   });
@@ -25,7 +25,7 @@ describe("LocalRepository", () => {
   it("speichert und lädt Spieler und Straße", async () => {
     const storage = memoryStorage();
     const repo = new LocalRepository(storage);
-    const { player, street } = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 1);
+    const { player, street } = claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 1);
 
     expect(await repo.loadPlayer()).toBeNull();
     await repo.saveStreet(street);
@@ -40,7 +40,7 @@ describe("LocalRepository", () => {
   it("indexiert Straßen nicht doppelt und reset löscht alles", async () => {
     const storage = memoryStorage();
     const repo = new LocalRepository(storage);
-    const { player, street } = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 1);
+    const { player, street } = claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 1);
     await repo.saveStreet(street);
     await repo.saveStreet(street);
     await repo.savePlayer(player);

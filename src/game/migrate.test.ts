@@ -5,7 +5,7 @@ import { migrateSave } from "./migrate";
 
 describe("migrateSave", () => {
   it("rüstet M1-Stände nach: Miet-Zähler, Geschenk-Markierung, Kiosk", () => {
-    const { player, street } = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 0);
+    const { player, street } = claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
     // M1-Form nachbauen
     const { pendingRent: _, ...oldPlayer } = player;
     const oldStreet: Street = {
@@ -21,7 +21,7 @@ describe("migrateSave", () => {
   });
 
   it("lässt aktuelle Stände unverändert", () => {
-    const save = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 0);
+    const save = claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
     const migrated = migrateSave(save.player, save.street);
     expect(migrated.player).toBe(save.player);
     expect(migrated.street).toBe(save.street);

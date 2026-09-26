@@ -15,7 +15,7 @@ function setup() {
 describe("gameStore", () => {
   it("Offline-Miete wird beim Start verbucht und gemeldet", async () => {
     const { repo, store, advance } = setup();
-    await store.getState().claim({ playerName: "Kalle", streetName: "Weg", city: "Ulm" });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
 
     advance(60 * MIN);
     // App neu starten: neuer Store auf demselben Speicher
@@ -33,7 +33,7 @@ describe("gameStore", () => {
 
   it("Kauf wird gespeichert", async () => {
     const { repo, store } = setup();
-    await store.getState().claim({ playerName: "Kalle", streetName: "Weg", city: "Ulm" });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
     const target = store.getState().street!.plots.find((p) => p.size === "S" && p.purchasedAt === undefined)!;
 
     const result = await store.getState().buyPlot(target.id);
@@ -45,7 +45,7 @@ describe("gameStore", () => {
 
   it("Bauen ersetzt das Gebäude, verbucht vorher die alte Miete und speichert", async () => {
     const { repo, store, advance } = setup();
-    await store.getState().claim({ playerName: "Kalle", streetName: "Weg", city: "Ulm" });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
     const gift = store.getState().street!.plots.find((p) => p.gifted)!;
     advance(10 * MIN);
 
@@ -61,7 +61,7 @@ describe("gameStore", () => {
 
   it("tick lässt Miete während des Spielens hochlaufen", async () => {
     const { store, advance } = setup();
-    await store.getState().claim({ playerName: "Kalle", streetName: "Weg", city: "Ulm" });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
     advance(2 * MIN);
     await store.getState().tick();
     expect(store.getState().player?.pendingRent).toBeCloseTo(21);

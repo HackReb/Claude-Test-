@@ -3,7 +3,7 @@ import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
 import { buyPlot, currentPrice, plotsBought } from "./plots";
 
-const start = () => claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 0);
+const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
 const free = (street: Street, size: "S" | "M" | "L") =>
   street.plots.find((p) => p.size === size && p.purchasedAt === undefined)!;
 

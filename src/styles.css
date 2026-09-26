@@ -510,3 +510,94 @@ h2 {
 .missing p {
   margin: 0 0 8px;
 }
+
+/* ---------- Straßensuche ---------- */
+
+.street-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint.left {
+  text-align: left;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-result,
+.chosen-street {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 3px solid var(--border);
+  border-radius: 12px;
+  background: #fffdf8;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+}
+
+.search-result {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-height: 52px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.search-result:hover,
+.search-result:focus-visible {
+  background: #ffe3d6;
+  outline: none;
+}
+
+.search-result span,
+.chosen-street span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chosen-street {
+  background: #d8f3dc;
+}
+
+.chosen-street > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.search-unavailable p {
+  margin: 0 0 8px;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.btn-inline {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.attribution {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}

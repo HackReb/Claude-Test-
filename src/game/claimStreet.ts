@@ -1,5 +1,5 @@
 import { ECONOMY } from "../config/economy";
-import type { Player, Plot, PlotSize, Street } from "../model/types";
+import type { Player, Plot, PlotSize, Street, StreetLocation } from "../model/types";
 import { createId } from "./ids";
 import { hashString, seededRandom, shuffle } from "./random";
 import { starterKiosk } from "./templates";
@@ -9,22 +9,24 @@ const SIDE_MIX: readonly PlotSize[] = ["S", "S", "S", "M", "M", "L"];
 
 export interface ClaimInput {
   playerName: string;
-  streetName: string;
-  city: string;
+  /** Aus der Kartensuche gewählt (mit `osm`) oder manuell eingetippt (ungeprüft). */
+  street: StreetLocation;
 }
 
 export const NAME_MAX_LENGTH = 40;
 
+export type ClaimErrors = Partial<Record<"playerName" | "streetName" | "city", string>>;
+
 /** Liefert eine Fehlermeldung je Feld oder ein leeres Objekt, wenn alles passt. */
-export function validateClaim(input: ClaimInput): Partial<Record<keyof ClaimInput, string>> {
-  const errors: Partial<Record<keyof ClaimInput, string>> = {};
-  const fields: [keyof ClaimInput, string][] = [
-    ["playerName", "Wie heißt du?"],
-    ["streetName", "Welche Straße willst du claimen?"],
-    ["city", "In welchem Ort liegt die Straße?"],
+export function validateClaim(input: ClaimInput): ClaimErrors {
+  const errors: ClaimErrors = {};
+  const fields: [keyof ClaimErrors, string, string][] = [
+    ["playerName", input.playerName, "Wie heißt du?"],
+    ["streetName", input.street.name, "Welche Straße willst du claimen?"],
+    ["city", input.street.city, "In welchem Ort liegt die Straße?"],
   ];
-  for (const [field, emptyMessage] of fields) {
-    const value = input[field].trim();
+  for (const [field, raw, emptyMessage] of fields) {
+    const value = raw.trim();
     if (value.length === 0) errors[field] = emptyMessage;
     else if (value.length > NAME_MAX_LENGTH) errors[field] = `Maximal ${NAME_MAX_LENGTH} Zeichen.`;
   }
@@ -32,13 +34,16 @@ export function validateClaim(input: ClaimInput): Partial<Record<keyof ClaimInpu
 }
 
 /**
- * Legt die 12 Grundstücke einer Straße an. Das Layout hängt nur von Straße + Ort ab,
- * damit dieselbe echte Straße immer gleich aussieht (wichtig für später, wenn mehrere
- * Spieler dieselbe Straße sehen).
+ * Kennung für das Grundstücks-Layout: bei echten Straßen die OSM-Kennung, sonst Name + Ort.
+ * So sieht dieselbe echte Straße für alle Spieler gleich aus.
  */
-export function generatePlots(streetName: string, city: string): Plot[] {
-  const seed = hashString(`${streetName.trim().toLowerCase()}|${city.trim().toLowerCase()}`);
-  const random = seededRandom(seed);
+export function layoutKey(location: StreetLocation): string {
+  return location.osm?.key ?? `${location.name.trim().toLowerCase()}|${location.city.trim().toLowerCase()}`;
+}
+
+/** Legt die 12 Grundstücke einer Straße an – deterministisch aus der Layout-Kennung. */
+export function generatePlots(key: string): Plot[] {
+  const random = seededRandom(hashString(key));
   const plots: Plot[] = [];
   for (const side of ["left", "right"] as const) {
     const sizes = shuffle(SIDE_MIX.slice(0, ECONOMY.plotsPerSide), random);
@@ -53,14 +58,21 @@ export function generatePlots(streetName: string, city: string): Plot[] {
 export function claimStreet(input: ClaimInput, now: number): { player: Player; street: Street } {
   const playerId = createId();
   const streetId = createId();
-  const streetName = input.streetName.trim();
-  const city = input.city.trim();
+  const streetName = input.street.name.trim();
+  const city = input.street.city.trim();
 
-  const plots = generatePlots(streetName, city);
+  const plots = generatePlots(layoutKey({ ...input.street, name: streetName, city }));
   const gift = plots.find((p) => p.size === ECONOMY.giftPlotSize);
   if (gift) Object.assign(gift, { purchasedAt: now, gifted: true, building: starterKiosk() });
 
-  const street: Street = { id: streetId, name: streetName, city, ownerId: playerId, plots };
+  const street: Street = {
+    id: streetId,
+    name: streetName,
+    city,
+    ...(input.street.osm && { osm: input.street.osm }),
+    ownerId: playerId,
+    plots,
+  };
   const player: Player = {
     id: playerId,
     name: input.playerName.trim(),
@@ -71,4 +83,13 @@ export function claimStreet(input: ClaimInput, now: number): { player: Player; s
     lastSeen: now,
   };
   return { player, street };
+}
+
+/**
+ * Bestätigt eine ungeprüfte Straße nachträglich über die Kartensuche. Name und Ort werden
+ * auf die echte Schreibweise gesetzt; Grundstücke und Gebäude bleiben, wie sie sind.
+ */
+export function verifyStreet(street: Street, location: StreetLocation): Street | null {
+  if (street.osm || !location.osm) return null;
+  return { ...street, name: location.name, city: location.city, osm: location.osm };
 }

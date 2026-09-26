@@ -6,8 +6,33 @@ export interface Street {
   id: string;
   name: string; // z. B. "Bahnhofstraße"
   city: string; // z. B. "Tuttlingen"
+  /** Verweis auf die echte Straße in OpenStreetMap; fehlt bei manuell eingegebenen (ungeprüften) Straßen. */
+  osm?: OsmStreetRef;
   ownerId: string; // Spieler oder Bot
   plots: Plot[];
+}
+
+/** Echte Straße aus OpenStreetMap. */
+export interface OsmStreetRef {
+  /**
+   * Stabile Kennung der Straße (Land + PLZ + Ort + Name, normalisiert). Nicht die Weg-ID:
+   * in OSM besteht eine Straße meist aus vielen einzelnen Wegen.
+   */
+  key: string;
+  /** Ein OSM-Weg dieser Straße, z. B. "W123456" – für eine spätere Kartenansicht. */
+  wayId: string;
+  lat: number;
+  lon: number;
+  postcode?: string;
+  district?: string;
+  countryCode?: string;
+}
+
+/** Straße, wie sie beim Claimen gewählt oder eingetippt wurde. */
+export interface StreetLocation {
+  name: string;
+  city: string;
+  osm?: OsmStreetRef;
 }
 
 export interface Plot {

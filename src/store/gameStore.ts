@@ -1,9 +1,9 @@
 import { create } from "zustand";
-import { claimStreet, type ClaimInput } from "../game/claimStreet";
+import { claimStreet, verifyStreet, type ClaimInput } from "../game/claimStreet";
 import { migrateSave } from "../game/migrate";
 import { buyPlot, placeBuilding, type BuyResult } from "../game/plots";
 import { accrueRent, collectRent } from "../game/rent";
-import type { Building, Player, Street } from "../model/types";
+import type { Building, Player, Street, StreetLocation } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import type { Repository } from "../repository/Repository";
 
@@ -30,6 +30,8 @@ interface GameState {
   buyPlot(plotId: string): Promise<BuyResult>;
   /** Stellt ein Gebäude auf ein eigenes Grundstück. */
   build(plotId: string, building: Building): Promise<boolean>;
+  /** Ungeprüfte Straße mit einer echten Straße aus der Kartensuche bestätigen. */
+  verifyStreet(location: StreetLocation): Promise<boolean>;
   dismissOfflineEarnings(): void;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
@@ -121,6 +123,15 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         if (!street) return false;
         set({ player: result.player, street });
         await save(result.player, street);
+        return true;
+      },
+
+      async verifyStreet(location) {
+        const current = get().street;
+        const street = current && verifyStreet(current, location);
+        if (!street) return false;
+        set({ street });
+        await repo.saveStreet(street);
         return true;
       },
 
