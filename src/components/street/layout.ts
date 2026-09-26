@@ -6,7 +6,7 @@ export const STREET = {
   padX: 20,
   tile: 100,
   gap: 10,
-  lotHeight: 200,
+  lotHeight: 220,
   slab: 8,
   topY: 16,
   sidewalk: 12,

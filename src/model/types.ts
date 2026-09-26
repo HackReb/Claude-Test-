@@ -51,9 +51,16 @@ export interface PartRef {
 
 export type PartCategory = "base" | "roof" | "door" | "window" | "deco";
 
+/** Wo ein Teil sitzt: an der Wand (Standard), auf dem Boden vor der Wand oder auf dem Dach. */
+export type PartMount = "wall" | "ground" | "roof";
+
 export interface Part {
   id: string;
+  name: string;
   category: PartCategory;
+  mount?: PartMount;
+  /** Textfarbe, falls das Teil eigenen Text trägt (Schild, Neonschrift). */
+  textFill?: string;
   svg: string; // Inline-SVG-Symbol
   price: number; // 0 = Start-Set
   rentBonus: number; // z. B. 0.05

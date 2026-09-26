@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { claimStreet, type ClaimInput } from "../game/claimStreet";
 import { migrateSave } from "../game/migrate";
-import { buyPlot, type BuyResult } from "../game/plots";
+import { buyPlot, placeBuilding, type BuyResult } from "../game/plots";
 import { accrueRent, collectRent } from "../game/rent";
-import type { Player, Street } from "../model/types";
+import type { Building, Player, Street } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import type { Repository } from "../repository/Repository";
 
@@ -28,6 +28,8 @@ interface GameState {
   /** Überträgt die angesammelte Miete auf das Konto. */
   collect(): Promise<number>;
   buyPlot(plotId: string): Promise<BuyResult>;
+  /** Stellt ein Gebäude auf ein eigenes Grundstück. */
+  build(plotId: string, building: Building): Promise<boolean>;
   dismissOfflineEarnings(): void;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
@@ -109,6 +111,17 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(bought.player, bought.street);
         }
         return bought;
+      },
+
+      async build(plotId, building) {
+        // Miete bis jetzt mit dem alten Gebäude verbuchen, danach gilt die neue Miete.
+        const result = accrued();
+        if (!result) return false;
+        const street = placeBuilding(result.street, plotId, building);
+        if (!street) return false;
+        set({ player: result.player, street });
+        await save(result.player, street);
+        return true;
       },
 
       dismissOfflineEarnings() {

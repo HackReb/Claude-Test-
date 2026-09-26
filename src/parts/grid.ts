@@ -3,13 +3,16 @@ import type { PlotSize } from "../model/types";
 
 /**
  * Raster der Fassade. Türen, Fenster und Deko sitzen in Zellen (x = Spalte, y = Stockwerk, 0 = Erdgeschoss).
- * Zell-Teile zeichnen in 40×50, Dächer in 100×30 (werden auf die Fassadenbreite gestreckt).
+ * Dach-Deko (Antenne, Flagge) sitzt in der Dachreihe y = floors.
+ * Zell-Teile zeichnen in 40×50, Dächer in 100×40 (werden auf die Fassadenbreite gestreckt).
  */
 export const FACADE_GRID = {
   cellWidth: 40,
   cellHeight: 50,
-  roofHeight: 30,
-  roofViewBox: { width: 100, height: 30 },
+  roofHeight: 40,
+  roofViewBox: { width: 100, height: 40 },
+  /** Wie weit Dach-Deko (Fahnenmast, Antenne) über die Fassade hinausragen darf. */
+  topOverflow: 24,
   /** Spalten je Kachel Grundstücksbreite. */
   columnsPerTile: 2,
 } as const;

@@ -1,5 +1,5 @@
 import { plotPrice } from "../config/economy";
-import type { Player, Plot, Street } from "../model/types";
+import type { Building, Player, Plot, Street } from "../model/types";
 
 export const isOwned = (plot: Plot) => plot.purchasedAt !== undefined;
 
@@ -30,4 +30,12 @@ export function buyPlot(player: Player, street: Street, plotId: string, now: num
     player: { ...player, coins: player.coins - price },
     street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, purchasedAt: now } : p)) },
   };
+}
+
+/** Stellt ein Gebäude auf ein eigenes Grundstück (ersetzt ein vorhandenes, Upgrade-Stufe bleibt erhalten). */
+export function placeBuilding(street: Street, plotId: string, building: Building): Street | null {
+  const plot = street.plots.find((p) => p.id === plotId);
+  if (!plot || !isOwned(plot)) return null;
+  const placed = plot.building ? { ...building, level: plot.building.level } : building;
+  return { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building: placed } : p)) };
 }

@@ -408,8 +408,88 @@ p {
   background: #d8f3dc;
 }
 
-.plot-preview > svg {
+.facade-preview {
+  display: block;
   width: 100%;
+}
+
+h2 {
+  margin: 8px 0 0;
+  font-size: 1.2rem;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.picker-head h2 {
+  margin: 0;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: #d8f3dc;
+  box-shadow: var(--shadow);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.template-card:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.template-card:focus-visible,
+.btn:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.template-card .facade-preview {
+  height: 110px;
+}
+
+.dice-preview {
+  background: #d8f3dc;
+  animation: pop 0.25s ease-out;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.94) rotate(-1deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-preview {
+    animation: none;
+  }
 }
 
 .price-card {

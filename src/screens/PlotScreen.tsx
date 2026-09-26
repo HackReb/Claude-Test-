@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { FacadeSvg } from "../components/FacadeSvg";
+import { BuildPicker, type BuildMode } from "../components/BuildPicker";
+import { FacadePreview } from "../components/FacadePreview";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
 import { currentPrice, isOwned } from "../game/plots";
 import { buildingRentPerMinute, streetRentPerMinute } from "../game/rent";
 import type { Plot } from "../model/types";
-import { facadeDimensions } from "../parts/grid";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 
@@ -36,22 +36,40 @@ export function PlotScreen() {
 }
 
 function OwnedPlot({ plot }: { plot: Plot }) {
-  if (plot.building) {
-    const { width, height } = facadeDimensions(plot.size, plot.building.facade.floors);
+  const [mode, setMode] = useState<BuildMode | null>(null);
+  const building = plot.building;
+
+  if (mode) return <BuildPicker plot={plot} mode={mode} onDone={() => setMode(null)} />;
+
+  const buildActions = (
+    <div className="actions">
+      <button type="button" className="btn" onClick={() => setMode("template")}>
+        Vorlage
+      </button>
+      <button type="button" className="btn" onClick={() => setMode("random")}>
+        Würfeln 🎲
+      </button>
+      <Link className="btn btn-primary" to={routes.builder(plot.id)}>
+        Selbst bauen
+      </Link>
+    </div>
+  );
+
+  if (building) {
     return (
       <>
         <div className="card plot-preview">
-          <svg viewBox={`-10 -4 ${width + 20} ${height + 8}`} style={{ maxHeight: 200 }} role="img" aria-label={plot.building.name}>
-            <FacadeSvg facade={plot.building.facade} size={plot.size} />
-          </svg>
+          <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={220} />
         </div>
         <ul className="facts">
           <li>
-            Bringt <strong>🪙 {formatRate(buildingRentPerMinute(plot.size, plot.building))} pro Minute</strong>
+            Bringt <strong>🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute</strong>
           </li>
-          <li>Stufe {plot.building.level} von 3</li>
+          <li>Stufe {building.level} von 3</li>
         </ul>
-        <p className="badge">Umbauen kommt in M3/M4, Upgrades in M5</p>
+        <h2>Umbauen</h2>
+        <p className="subtle">Ersetzt {building.name}. Die Upgrade-Stufe bleibt erhalten.</p>
+        {buildActions}
       </>
     );
   }
@@ -59,20 +77,10 @@ function OwnedPlot({ plot }: { plot: Plot }) {
   return (
     <>
       <p>
-        Dein Bauplatz ist bereit. Ein Gebäude hier bringt ab <strong>🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</strong>.
+        Dein Bauplatz ist bereit. Ein Gebäude hier bringt ab{" "}
+        <strong>🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</strong>.
       </p>
-      <div className="actions">
-        <button className="btn" disabled>
-          Vorlage
-        </button>
-        <button className="btn" disabled>
-          Würfeln 🎲
-        </button>
-        <Link className="btn btn-primary" to={routes.builder(plot.id)}>
-          Selbst bauen
-        </Link>
-      </div>
-      <p className="badge">Gebäude bauen kommt in M3</p>
+      {buildActions}
     </>
   );
 }

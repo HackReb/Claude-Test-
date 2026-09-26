@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LocalRepository, memoryStorage } from "../repository/LocalRepository";
+import { buildingFromTemplate, templatesFor } from "../game/templates";
 import { createGameStore } from "./gameStore";
 
 const MIN = 60_000;
@@ -40,6 +41,22 @@ describe("gameStore", () => {
     const saved = await repo.loadStreet(store.getState().street!.id);
     expect(saved?.plots.find((p) => p.id === target.id)?.purchasedAt).toBeDefined();
     expect((await repo.loadPlayer())?.coins).toBe(500);
+  });
+
+  it("Bauen ersetzt das Gebäude, verbucht vorher die alte Miete und speichert", async () => {
+    const { repo, store, advance } = setup();
+    await store.getState().claim({ playerName: "Kalle", streetName: "Weg", city: "Ulm" });
+    const gift = store.getState().street!.plots.find((p) => p.gifted)!;
+    advance(10 * MIN);
+
+    const imbiss = buildingFromTemplate(templatesFor("S").find((t) => t.id === "imbiss")!);
+    expect(await store.getState().build(gift.id, imbiss)).toBe(true);
+    expect(store.getState().player?.pendingRent).toBeCloseTo(105); // 10 min Kiosk
+    const saved = await repo.loadStreet(store.getState().street!.id);
+    expect(saved?.plots.find((p) => p.id === gift.id)?.building?.name).toBe("Imbiss");
+
+    const free = store.getState().street!.plots.find((p) => p.purchasedAt === undefined)!;
+    expect(await store.getState().build(free.id, imbiss)).toBe(false);
   });
 
   it("tick lässt Miete während des Spielens hochlaufen", async () => {
