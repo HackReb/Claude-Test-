@@ -12,8 +12,9 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       disable: mode === "artifact",
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg"],
+      includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
+        id: "./",
         name: "Babo – Deine Straße",
         short_name: "Babo",
         description: "Claim deine echte Straße, bau verrückte Häuser und kassier Miete.",
@@ -24,10 +25,18 @@ export default defineConfig(({ mode }) => ({
         orientation: "portrait",
         background_color: "#fff7e8",
         theme_color: "#ff7a45",
+        categories: ["games", "entertainment"],
         icons: [
+          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "maskable-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
           { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
         ],
+      },
+      workbox: {
+        // App-Hülle komplett offline verfügbar; die Straßensuche braucht natürlich Netz.
+        globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
+        navigateFallback: "index.html",
       },
     }),
   ],

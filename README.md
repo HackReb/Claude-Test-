@@ -14,6 +14,21 @@ npm run preview    # gebauten Stand lokal ansehen (PWA installierbar)
 npm run build:artifact  # Vorschau als einzelne HTML-Datei (dist-artifact/babo-preview.html)
 ```
 
+## Als PWA bereitstellen
+
+`npm run build` erzeugt in `dist/` eine installierbare PWA (Manifest, App-Icons, Service Worker,
+offline spielbar). Sie läuft auf jedem statischen Hosting, auch in einem Unterpfad.
+
+**GitHub Pages (Workflow liegt bei):** `.github/workflows/deploy.yml` baut und veröffentlicht bei
+jedem Push auf `main`. Einmalig: *Settings → Pages → Source: „GitHub Actions“*. Pages für private
+Repos braucht einen kostenpflichtigen GitHub-Plan; sonst Repo öffentlich machen oder ein anderes
+Hosting nehmen (Netlify, Cloudflare Pages, Vercel: Build `npm run build`, Ausgabe `dist`).
+
+Installieren: Android/Chrome → Menü „App installieren“; iPhone/Safari → Teilen → „Zum Home-Bildschirm“.
+
+App-Icons neu erzeugen (nach Änderungen an `public/icon*.svg`):
+`npx -y -p playwright node scripts/generate-icons.mjs`
+
 ## Stack
 
 React 19 + TypeScript + Vite, PWA via `vite-plugin-pwa`, State mit Zustand,

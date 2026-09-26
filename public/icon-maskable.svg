@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable-Variante: randloser Hintergrund, Motiv in der inneren Sicherheitszone (80 %) -->
+  <rect width="512" height="512" fill="#ff7a45"/>
+  <rect y="339.2" width="512" height="64" fill="#4a4a5a"/>
+  <g transform="translate(51.2 51.2) scale(0.8)">
+  <rect x="0" y="360" width="512" height="80" fill="#4a4a5a"/>
+  <rect x="40" y="394" width="60" height="12" rx="6" fill="#fff"/>
+  <rect x="160" y="394" width="60" height="12" rx="6" fill="#fff"/>
+  <rect x="280" y="394" width="60" height="12" rx="6" fill="#fff"/>
+  <rect x="400" y="394" width="60" height="12" rx="6" fill="#fff"/>
+  <rect x="96" y="200" width="150" height="160" fill="#ffd166" stroke="#3a2a1a" stroke-width="10"/>
+  <polygon points="80,205 171,120 262,205" fill="#ef476f" stroke="#3a2a1a" stroke-width="10" stroke-linejoin="round"/>
+  <rect x="148" y="290" width="46" height="70" fill="#8d5a3b" stroke="#3a2a1a" stroke-width="8"/>
+  <rect x="280" y="150" width="150" height="210" fill="#06d6a0" stroke="#3a2a1a" stroke-width="10"/>
+  <path d="M280,150 A75,75 0 0 1 430,150 Z" fill="#f78fb3" stroke="#3a2a1a" stroke-width="10" stroke-linejoin="round"/>
+  <rect x="306" y="200" width="40" height="40" fill="#bde0fe" stroke="#3a2a1a" stroke-width="8"/>
+  <rect x="364" y="200" width="40" height="40" fill="#bde0fe" stroke="#3a2a1a" stroke-width="8"/>
+  <rect x="333" y="290" width="46" height="70" fill="#8d5a3b" stroke="#3a2a1a" stroke-width="8"/>
+  </g>
+</svg>
