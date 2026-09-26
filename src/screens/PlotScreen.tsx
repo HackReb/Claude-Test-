@@ -4,7 +4,7 @@ import { BuildPicker, type BuildMode } from "../components/BuildPicker";
 import { FacadePreview } from "../components/FacadePreview";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
-import { currentPrice, isOwned } from "../game/plots";
+import { currentPrice, isOwned, nextUpgrade } from "../game/plots";
 import { buildingRentPerMinute, streetRentPerMinute } from "../game/rent";
 import type { Plot } from "../model/types";
 import { routes } from "../routes";
@@ -67,6 +67,7 @@ function OwnedPlot({ plot }: { plot: Plot }) {
           </li>
           <li>Stufe {building.level} von 3</li>
         </ul>
+        <UpgradeSection plot={plot} />
         <h2>Umbauen</h2>
         <p className="subtle">Ersetzt {building.name}. Die Upgrade-Stufe bleibt erhalten.</p>
         {buildActions}
@@ -82,6 +83,30 @@ function OwnedPlot({ plot }: { plot: Plot }) {
       </p>
       {buildActions}
     </>
+  );
+}
+
+function UpgradeSection({ plot }: { plot: Plot }) {
+  const coins = useGameStore((s) => s.player!.coins);
+  const upgrade = useGameStore((s) => s.upgrade);
+  const next = nextUpgrade(plot);
+  if (!plot.building) return null;
+  if (!next) return <p className="badge">⭐ Höchste Stufe erreicht</p>;
+
+  const rentNow = buildingRentPerMinute(plot.size, plot.building);
+  const rentNext = buildingRentPerMinute(plot.size, { ...plot.building, level: next.level });
+  return (
+    <div className="card upgrade-card">
+      <h2>Ausbauen auf Stufe {next.level}</h2>
+      <p className="subtle">
+        Miete ×{formatRate(ECONOMY.upgradeLevels[next.level].multiplier)}: 🪙 {formatRate(rentNow)} → <strong>{formatRate(rentNext)}</strong> pro
+        Minute
+      </p>
+      <button type="button" className="btn btn-primary" disabled={coins < next.cost} onClick={() => void upgrade(plot.id)}>
+        Ausbauen für 🪙 {formatCoins(next.cost)}
+      </button>
+      {coins < next.cost && <p className="subtle">Dir fehlen noch 🪙 {formatCoins(next.cost - coins)}.</p>}
+    </div>
   );
 }
 

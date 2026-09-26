@@ -53,7 +53,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
   const place = useBuild(plot, onDone);
   const unlockedParts = useGameStore((s) => s.player!.unlockedParts);
   // Würfeln nutzt nur freigeschaltete Bausteine (Vorlagen dagegen sind fertige Gebäude).
-  const roll = () => randomBuilding(plot.size, Math.random, (part) => isUnlocked(part, unlockedParts));
+  const roll = () => randomBuilding(plot.size, Math.random, { isAvailable: (part) => isUnlocked(part, unlockedParts) });
   const [building, setBuilding] = useState(roll);
   const [rolls, setRolls] = useState(1);
 

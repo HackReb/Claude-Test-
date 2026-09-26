@@ -24,7 +24,7 @@ describe("Bausteine freischalten", () => {
     const free = (id: string) => getPart(id)!.price === 0;
     for (let i = 0; i < 1000; i++) {
       for (const size of ["S", "M", "L"] as const) {
-        const f = randomFacade(size, random, (p) => p.price === 0);
+        const f = randomFacade(size, random, { isAvailable: (p) => p.price === 0 });
         expect(validateFacade(f, size)).toEqual([]);
         expect([f.base, f.roof, ...f.parts].every((p) => free(p.partId))).toBe(true);
       }

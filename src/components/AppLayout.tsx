@@ -11,6 +11,9 @@ export function AppLayout() {
   const player = useGameStore((s) => s.player)!;
   const street = useGameStore((s) => s.street)!;
   const tick = useGameStore((s) => s.tick);
+  const unreadNews = useGameStore(
+    (s) => s.neighborhood?.news.filter((n) => n.at > s.neighborhood!.newsSeenAt).length ?? 0,
+  );
 
   // Miete läuft sekündlich hoch; beim Zurückkehren in den Tab sofort nachrechnen.
   useEffect(() => {
@@ -45,6 +48,11 @@ export function AppLayout() {
         </NavLink>
         <NavLink to={routes.neighborhood}>
           <span aria-hidden>🗺️</span>Nachbarn
+          {unreadNews > 0 && (
+            <b className="nav-badge" aria-label={`${unreadNews} Neuigkeiten`}>
+              {unreadNews > 9 ? "9+" : unreadNews}
+            </b>
+          )}
         </NavLink>
         <NavLink to={routes.share}>
           <span aria-hidden>📸</span>Teilen

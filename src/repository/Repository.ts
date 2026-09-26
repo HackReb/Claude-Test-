@@ -1,4 +1,4 @@
-import type { Player, Street } from "../model/types";
+import type { Neighborhood, Player, Street } from "../model/types";
 
 /**
  * Persistenz-Schicht. Heute: LocalRepository (localStorage).
@@ -11,6 +11,9 @@ export interface Repository {
   loadStreet(id: string): Promise<Street | null>;
   saveStreet(street: Street): Promise<void>;
   listStreets(): Promise<Street[]>;
+
+  loadNeighborhood(): Promise<Neighborhood | null>;
+  saveNeighborhood(neighborhood: Neighborhood): Promise<void>;
 
   /** Löscht alle gespeicherten Spieldaten. */
   reset(): Promise<void>;

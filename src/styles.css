@@ -800,3 +800,163 @@ h2 {
   color: var(--danger);
   font-weight: 700;
 }
+
+/* ---------- Nachbarschaft ---------- */
+
+.neighborhood,
+.share-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.neighborhood h1,
+.share-screen h1,
+.share-screen > .subtle {
+  margin: 0;
+}
+
+.map-card {
+  padding: 8px;
+}
+
+.map {
+  display: block;
+  width: 100%;
+}
+
+.map-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.map-node:hover .map-avatar,
+.map-node:focus-visible .map-avatar {
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+
+.news {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.news li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 2px solid #e3dccf;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.news li.unread {
+  border-color: var(--primary);
+  background: #fff1ea;
+}
+
+.news-avatar {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.news li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.news a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.news small {
+  color: var(--muted);
+}
+
+.neighbor-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.neighbor-head h1 {
+  margin: 0;
+}
+
+.neighbor-head .subtle {
+  margin: 0;
+}
+
+.neighbor-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  background: #fff7e8;
+  font-size: 1.8rem;
+}
+
+.bottomnav a {
+  position: relative;
+}
+
+.nav-badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 8px);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 20px;
+  text-align: center;
+}
+
+.upgrade-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.upgrade-card h2,
+.upgrade-card p {
+  margin: 0;
+}
+
+/* ---------- Teilen ---------- */
+
+.share-preview {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  padding: 8px;
+}
+
+.share-preview img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+}
+
+.share-source {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 1200px;
+  pointer-events: none;
+}

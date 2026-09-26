@@ -102,3 +102,37 @@ export interface Player {
   /** Zeitpunkt, bis zu dem Miete in `pendingRent` verbucht ist. */
   lastSeen: number;
 }
+
+// ---------- Nachbarschaft (Bots) ----------
+
+export type BotCharacter = "sweet" | "concrete" | "chaos" | "nature" | "party";
+
+export interface Bot {
+  id: string;
+  name: string;
+  /** Emoji als Avatar. */
+  avatar: string;
+  character: BotCharacter;
+  streetId: string;
+  /** Zeitpunkt der letzten Aktion; Aktionen seit dann werden beim App-Start nachgeholt. */
+  lastActionAt: number;
+  /** Zähler aller Aktionen – macht das Verhalten reproduzierbar (Zufall aus Bot-ID + Zähler). */
+  actions: number;
+}
+
+export interface NeighborEvent {
+  botId: string;
+  streetId: string;
+  at: number;
+  text: string;
+}
+
+export interface Neighborhood {
+  playerStreetId: string;
+  bots: Bot[];
+  /** Richtung jeder Bot-Straße auf der Karte in Grad (0 = Osten, 90 = Norden). */
+  bearings: Record<string, number>;
+  news: NeighborEvent[];
+  /** Bis wann der Spieler die Neuigkeiten gesehen hat. */
+  newsSeenAt: number;
+}

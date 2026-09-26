@@ -1,4 +1,4 @@
-import { plotPrice } from "../config/economy";
+import { plotPrice, upgradeCost } from "../config/economy";
 import type { Building, Player, Plot, Street } from "../model/types";
 
 export const isOwned = (plot: Plot) => plot.purchasedAt !== undefined;
@@ -38,4 +38,31 @@ export function placeBuilding(street: Street, plotId: string, building: Building
   if (!plot || !isOwned(plot)) return null;
   const placed = plot.building ? { ...building, level: plot.building.level } : building;
   return { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building: placed } : p)) };
+}
+
+export type UpgradeResult =
+  | { ok: true; player: Player; street: Street; cost: number }
+  | { ok: false; reason: "not-found" | "no-building" | "max-level" | "too-expensive" };
+
+/** Nächste Upgrade-Stufe eines Gebäudes und ihre Kosten (Anteil des Grundstückpreises). */
+export function nextUpgrade(plot: Plot): { level: 2 | 3; cost: number } | null {
+  if (!plot.building || plot.building.level >= 3) return null;
+  const level = (plot.building.level + 1) as 2 | 3;
+  return { level, cost: upgradeCost(plot.price, level) };
+}
+
+export function upgradePlot(player: Player, street: Street, plotId: string): UpgradeResult {
+  const plot = street.plots.find((p) => p.id === plotId);
+  if (!plot || !isOwned(plot)) return { ok: false, reason: "not-found" };
+  if (!plot.building) return { ok: false, reason: "no-building" };
+  const next = nextUpgrade(plot);
+  if (!next) return { ok: false, reason: "max-level" };
+  if (player.coins < next.cost) return { ok: false, reason: "too-expensive" };
+  const building = { ...plot.building, level: next.level };
+  return {
+    ok: true,
+    cost: next.cost,
+    player: { ...player, coins: player.coins - next.cost },
+    street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building } : p)) },
+  };
 }

@@ -79,7 +79,7 @@ function Lot({
 
   const label = owned
     ? plot.building
-      ? `${plot.building.name}, Grundstück ${plot.size}`
+      ? `${plot.building.name}, Grundstück ${plot.size}, Stufe ${plot.building.level}`
       : `Dein Bauplatz ${plot.size}`
     : `Grundstück ${plot.size} zu verkaufen${price !== undefined ? ` für ${price} Münzen` : ""}`;
 
@@ -120,6 +120,15 @@ function Lot({
         <BuildSite width={width} groundY={groundY} />
       ) : (
         <ForSaleSign width={width} groundY={groundY} price={price} affordable={affordable} />
+      )}
+
+      {plot.building && plot.building.level > 1 && (
+        <g aria-hidden>
+          <rect x={width - 14 - 24 * (plot.building.level - 1) - 8} y={14} width={24 * (plot.building.level - 1) + 8} height={24} rx={12} fill="#ffd166" stroke={INK} strokeWidth={2.5} />
+          <text x={width - 14 - (24 * (plot.building.level - 1) + 8) / 2} y={31} textAnchor="middle" fontSize={15} fill={INK}>
+            {"★".repeat(plot.building.level - 1)}
+          </text>
+        </g>
       )}
 
       <g transform="translate(14 14)">

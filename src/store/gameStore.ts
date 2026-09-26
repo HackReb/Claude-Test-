@@ -1,10 +1,12 @@
 import { create } from "zustand";
 import { claimStreet, verifyStreet, type ClaimInput } from "../game/claimStreet";
 import { migrateSave } from "../game/migrate";
-import { buyPlot, placeBuilding, type BuyResult } from "../game/plots";
+import { createNeighborhood, simulateNeighborhood } from "../game/bots";
+import { buyPlot, placeBuilding, upgradePlot, type BuyResult, type UpgradeResult } from "../game/plots";
 import { accrueRent, collectRent } from "../game/rent";
 import { unlockPart, type UnlockResult } from "../game/unlock";
-import type { Building, Player, Street, StreetLocation } from "../model/types";
+import { findNeighborStreets } from "../geo/neighbors";
+import type { Building, Neighborhood, Player, Street, StreetLocation } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import type { Repository } from "../repository/Repository";
 
@@ -19,6 +21,9 @@ interface GameState {
   street: Street | null;
   /** Miete, die seit dem letzten Besuch aufgelaufen ist – wird einmal beim Start angezeigt. */
   offlineEarnings: number | null;
+  /** Bot-Nachbarn; null, solange sie noch „einziehen“ (Nachbarstraßen werden gesucht). */
+  neighborhood: Neighborhood | null;
+  neighborStreets: Record<string, Street>;
 
   /** Lädt den Spielstand aus dem Repository und verbucht die Offline-Miete (einmal beim App-Start). */
   init(): Promise<void>;
@@ -29,6 +34,9 @@ interface GameState {
   /** Überträgt die angesammelte Miete auf das Konto. */
   collect(): Promise<number>;
   buyPlot(plotId: string): Promise<BuyResult>;
+  upgrade(plotId: string): Promise<UpgradeResult>;
+  /** Neuigkeiten aus der Nachbarschaft als gelesen markieren. */
+  markNewsSeen(): Promise<void>;
   /** Stellt ein Gebäude auf ein eigenes Grundstück. */
   build(plotId: string, building: Building): Promise<boolean>;
   /** Baustein gegen Münzen freischalten. */
@@ -40,7 +48,17 @@ interface GameState {
   reset(): Promise<void>;
 }
 
-export function createGameStore(repo: Repository, clock: () => number = Date.now) {
+export interface StoreDeps {
+  /** Sucht echte Nachbarstraßen; austauschbar für Tests. */
+  findNeighbors?: (street: Street) => Promise<StreetLocation[]>;
+}
+
+const defaultFindNeighbors = (street: Street) =>
+  street.osm ? findNeighborStreets(street.osm, street.name) : Promise.resolve([]);
+
+export function createGameStore(repo: Repository, clock: () => number = Date.now, deps: StoreDeps = {}) {
+  const findNeighbors = deps.findNeighbors ?? defaultFindNeighbors;
+
   return create<GameState>()((set, get) => {
     async function save(player: Player, street?: Street) {
       if (street) await repo.saveStreet(street);
@@ -54,11 +72,42 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       return { ...accrueRent(player, street, clock()), street };
     }
 
+    async function saveNeighborhood(neighborhood: Neighborhood, streets: Street[]) {
+      for (const street of streets) await repo.saveStreet(street);
+      await repo.saveNeighborhood(neighborhood);
+    }
+
+    /** Bots ziehen ein: echte Nachbarstraßen suchen (falls möglich), Straßen anlegen, speichern. */
+    async function setupNeighborhood(playerStreet: Street) {
+      const neighbors = await findNeighbors(playerStreet).catch(() => []);
+      if (get().street?.id !== playerStreet.id) return; // inzwischen zurückgesetzt
+      const { neighborhood, streets } = createNeighborhood(playerStreet, neighbors, clock());
+      await saveNeighborhood(neighborhood, streets);
+      set({ neighborhood, neighborStreets: Object.fromEntries(streets.map((s) => [s.id, s])) });
+    }
+
+    /** Lädt die Nachbarschaft und holt nach, was die Bots seit dem letzten Besuch getan haben. */
+    async function loadNeighborhood(playerStreet: Street) {
+      const stored = await repo.loadNeighborhood();
+      if (!stored || stored.playerStreetId !== playerStreet.id) {
+        void setupNeighborhood(playerStreet);
+        return;
+      }
+      const loaded = (await Promise.all(stored.bots.map((b) => repo.loadStreet(b.streetId)))).filter(
+        (s): s is Street => s !== null,
+      );
+      const { neighborhood, streets } = simulateNeighborhood(stored, loaded, clock());
+      await saveNeighborhood(neighborhood, streets);
+      set({ neighborhood, neighborStreets: Object.fromEntries(streets.map((s) => [s.id, s])) });
+    }
+
     return {
       status: "loading",
       player: null,
       street: null,
       offlineEarnings: null,
+      neighborhood: null,
+      neighborStreets: {},
 
       async init() {
         try {
@@ -79,6 +128,7 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
             street: migrated.street,
             offlineEarnings: away >= OFFLINE_NOTICE_MIN_MS && gained >= 1 ? gained : null,
           });
+          await loadNeighborhood(migrated.street);
         } catch (error) {
           console.error("Spielstand konnte nicht geladen werden", error);
           set({ status: "error" });
@@ -88,7 +138,8 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       async claim(input) {
         const { player, street } = claimStreet(input, clock());
         await save(player, street);
-        set({ player, street, offlineEarnings: null });
+        set({ player, street, offlineEarnings: null, neighborhood: null, neighborStreets: {} });
+        void setupNeighborhood(street);
       },
 
       async tick() {
@@ -116,6 +167,25 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(bought.player, bought.street);
         }
         return bought;
+      },
+
+      async upgrade(plotId) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-found" };
+        const upgraded = upgradePlot(result.player, result.street, plotId);
+        if (upgraded.ok) {
+          set({ player: upgraded.player, street: upgraded.street });
+          await save(upgraded.player, upgraded.street);
+        }
+        return upgraded;
+      },
+
+      async markNewsSeen() {
+        const neighborhood = get().neighborhood;
+        if (!neighborhood) return;
+        const updated = { ...neighborhood, newsSeenAt: clock() };
+        set({ neighborhood: updated });
+        await repo.saveNeighborhood(updated);
       },
 
       async build(plotId, building) {
@@ -154,7 +224,7 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
 
       async reset() {
         await repo.reset();
-        set({ player: null, street: null, offlineEarnings: null });
+        set({ player: null, street: null, offlineEarnings: null, neighborhood: null, neighborStreets: {} });
       },
     };
   });

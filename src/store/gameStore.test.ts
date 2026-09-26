@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LocalRepository, memoryStorage } from "../repository/LocalRepository";
 import { buildingFromTemplate, templatesFor } from "../game/templates";
 import { createGameStore } from "./gameStore";
@@ -8,7 +8,7 @@ const MIN = 60_000;
 function setup() {
   const repo = new LocalRepository(memoryStorage());
   let now = 0;
-  const store = createGameStore(repo, () => now);
+  const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
   return { repo, store, advance: (ms: number) => (now += ms) };
 }
 
@@ -57,6 +57,31 @@ describe("gameStore", () => {
 
     const free = store.getState().street!.plots.find((p) => p.purchasedAt === undefined)!;
     expect(await store.getState().build(free.id, imbiss)).toBe(false);
+  });
+
+  it("Nachbarn ziehen nach dem Claimen ein und sind beim nächsten Start weitergekommen", async () => {
+    const { repo, store } = setup();
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await vi.waitFor(() => expect(store.getState().neighborhood).not.toBeNull());
+    expect(Object.keys(store.getState().neighborStreets)).toHaveLength(5);
+
+    const later = createGameStore(repo, () => 24 * 60 * MIN, { findNeighbors: async () => [] });
+    await later.getState().init();
+    const neighborhood = later.getState().neighborhood!;
+    expect(neighborhood.news.length).toBeGreaterThan(0);
+    expect(neighborhood.news.every((n) => n.at > neighborhood.newsSeenAt)).toBe(true);
+    await later.getState().markNewsSeen();
+    expect((await repo.loadNeighborhood())?.newsSeenAt).toBe(24 * 60 * MIN);
+  });
+
+  it("Upgrade kostet Münzen und wird gespeichert", async () => {
+    const { repo, store } = setup();
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    const gift = store.getState().street!.plots.find((p) => p.gifted)!;
+    expect((await store.getState().upgrade(gift.id)).ok).toBe(true);
+    expect(store.getState().player?.coins).toBe(750);
+    const saved = await repo.loadStreet(store.getState().street!.id);
+    expect(saved?.plots.find((p) => p.id === gift.id)?.building?.level).toBe(2);
   });
 
   it("tick lässt Miete während des Spielens hochlaufen", async () => {

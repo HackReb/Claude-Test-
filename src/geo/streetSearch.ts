@@ -44,7 +44,7 @@ interface PhotonFeature {
 }
 
 /** Wandelt eine Photon-Antwort in eindeutige Straßen um (nur echte Straßen, keine Haltestellen o. Ä.). */
-export function parsePhotonStreets(json: unknown): StreetLocation[] {
+export function parsePhotonStreets(json: unknown, max: number = GEO.maxResults): StreetLocation[] {
   const features = (json as { features?: PhotonFeature[] } | null)?.features ?? [];
   const seen = new Set<string>();
   const streets: StreetLocation[] = [];
@@ -68,7 +68,7 @@ export function parsePhotonStreets(json: unknown): StreetLocation[] {
     if (seen.has(osm.key)) continue;
     seen.add(osm.key);
     streets.push({ name: p.name, city, osm });
-    if (streets.length === GEO.maxResults) break;
+    if (streets.length === max) break;
   }
   return streets;
 }

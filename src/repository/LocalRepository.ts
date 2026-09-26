@@ -1,4 +1,4 @@
-import type { Player, Street } from "../model/types";
+import type { Neighborhood, Player, Street } from "../model/types";
 import type { Repository } from "./Repository";
 
 /** Minimaler Ausschnitt der Web-Storage-API, damit Tests einen In-Memory-Storage einsetzen können. */
@@ -7,6 +7,7 @@ export type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem"
 const PREFIX = "babo:v1:";
 const PLAYER_KEY = `${PREFIX}player`;
 const STREET_INDEX_KEY = `${PREFIX}streets`;
+const NEIGHBORHOOD_KEY = `${PREFIX}neighborhood`;
 const streetKey = (id: string) => `${PREFIX}street:${id}`;
 
 /** In-Memory-Ersatz, falls localStorage fehlt oder gesperrt ist (privater Modus, eingebettete Frames). */
@@ -65,11 +66,20 @@ export class LocalRepository implements Repository {
       .filter((s): s is Street => s !== null);
   }
 
+  async loadNeighborhood(): Promise<Neighborhood | null> {
+    return this.read<Neighborhood>(NEIGHBORHOOD_KEY);
+  }
+
+  async saveNeighborhood(neighborhood: Neighborhood): Promise<void> {
+    this.write(NEIGHBORHOOD_KEY, neighborhood);
+  }
+
   async reset(): Promise<void> {
     for (const id of this.streetIndex()) {
       this.storage.removeItem(streetKey(id));
     }
     this.storage.removeItem(STREET_INDEX_KEY);
+    this.storage.removeItem(NEIGHBORHOOD_KEY);
     this.storage.removeItem(PLAYER_KEY);
   }
 

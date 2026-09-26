@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
-import { buyPlot, currentPrice, plotsBought } from "./plots";
+import { buyPlot, currentPrice, nextUpgrade, plotsBought, upgradePlot } from "./plots";
 
 const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
 const free = (street: Street, size: "S" | "M" | "L") =>
@@ -34,5 +34,35 @@ describe("Grundstücke kaufen", () => {
     const gift = street.plots.find((p) => p.gifted)!;
     expect(buyPlot(player, street, gift.id, 1)).toEqual({ ok: false, reason: "owned" });
     expect(buyPlot(player, street, "gibt-es-nicht", 1)).toEqual({ ok: false, reason: "not-found" });
+  });
+});
+
+describe("Upgrades", () => {
+  it("Stufe 2 kostet 50 %, Stufe 3 100 % des Grundstückpreises, danach ist Schluss", () => {
+    const { player, street } = start();
+    const gift = street.plots.find((p) => p.gifted)!;
+    expect(nextUpgrade(gift)).toEqual({ level: 2, cost: 250 });
+
+    const first = upgradePlot(player, street, gift.id);
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.player.coins).toBe(750);
+    const upgraded = first.street.plots.find((p) => p.id === gift.id)!;
+    expect(upgraded.building?.level).toBe(2);
+    expect(nextUpgrade(upgraded)).toEqual({ level: 3, cost: 500 });
+
+    const second = upgradePlot(first.player, first.street, gift.id);
+    if (!second.ok) throw new Error(second.reason);
+    expect(second.player.coins).toBe(250);
+    expect(upgradePlot(second.player, second.street, gift.id)).toEqual({ ok: false, reason: "max-level" });
+  });
+
+  it("verweigert leere Bauplätze und fehlendes Geld", () => {
+    const { player, street } = start();
+    const gift = street.plots.find((p) => p.gifted)!;
+    expect(upgradePlot({ ...player, coins: 100 }, street, gift.id)).toEqual({ ok: false, reason: "too-expensive" });
+    const bought = buyPlot(player, street, free(street, "S").id, 1);
+    if (!bought.ok) throw new Error();
+    const empty = bought.street.plots.find((p) => p.purchasedAt === 1)!;
+    expect(upgradePlot(bought.player, bought.street, empty.id)).toEqual({ ok: false, reason: "no-building" });
   });
 });

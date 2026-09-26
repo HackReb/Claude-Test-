@@ -40,8 +40,11 @@ src/
   routes.ts                Pfade aller Screens
   config/economy.ts        Alle Zahlen (Preise, Mieten, Multiplikatoren) + Rechenfunktionen
   model/types.ts           Datenmodell aus Konzept Abschnitt 9 (+ OSM-Verweis)
-  config/geo.ts            Straßensuche (Photon-URL, Debounce, Timeout)
+  config/geo.ts            Straßensuche (Photon-URL, Debounce, Timeout, Nachbar-Radius)
+  config/bots.ts           Bot-Personas, Tempo, Vorlieben je Charakter
   geo/streetSearch.ts      Photon-Abfrage, Filter auf echte Straßen, Kennung, Zusammenfassen
+  geo/neighbors.ts         echte Nachbarstraßen (Photon reverse)
+  share/streetImage.ts     Straße als PNG mit Titelzeile
   repository/
     Repository.ts          Persistenz-Interface (async, später ApiRepository/Symfony)
     LocalRepository.ts     Implementierung über localStorage
@@ -53,6 +56,7 @@ src/
     templates.ts           Vorlagen-Bibliothek (≥3 je Größe, u. a. Gummibärchenschloss)
     randomBuilding.ts      Zufallsgenerator („Würfeln“) nach den Regeln aus Konzept 6.2
     unlock.ts              Bausteine gegen Münzen freischalten
+    bots.ts                Nachbarschaft anlegen, Bot-Aktionen, Simulation seit letztem Besuch
     migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)
     ids.ts                 ID-Erzeugung
@@ -66,6 +70,7 @@ src/
     FacadeSvg.tsx          Fassaden-Renderer (+ FacadePreview für Einzelbilder)
     BuildPicker.tsx        Vorlage wählen / Würfeln
     builder/               Editor-Raster (EditorCanvas) und Paletten-Vorschaubilder
+    NeighborhoodMap.tsx    Karte mit Bot-Straßen in ihrer Himmelsrichtung
     RentBar.tsx            Miete bereit + Einsammeln
     StreetSearch.tsx       Suchfeld mit Straßen-Vorschlägen
     AppLayout.tsx          Münzen-Leiste, Bottom-Nav, Miet-Ticker
@@ -76,7 +81,8 @@ src/
 |---|---|---|
 | Start / Claim | `#/start` | echte Straße per OSM-Suche, Fallback manuell |
 | Meine Straße | `#/street` | SVG-Straße, Miete einsammeln, Offline-Meldung |
-| Grundstück | `#/plot/:plotId` | Kaufen, Bauen per Vorlage oder Würfeln, Umbauen |
+| Grundstück | `#/plot/:plotId` | Kaufen, Bauen per Vorlage oder Würfeln, Umbauen, Ausbauen (Stufe 1–3) |
 | Baukasten | `#/builder/:plotId` | Fassaden-Editor, Schild-Text, Live-Miete, Bausteine freischalten |
-| Nachbarschaft | `#/neighborhood` | Platzhalter (M5) |
-| Teilen | `#/share` | Platzhalter (M5) |
+| Nachbarschaft | `#/neighborhood` | Karte mit 5 Bot-Straßen, Neuigkeiten seit letztem Besuch |
+| Bot-Straße | `#/neighborhood/:streetId` | Straße eines Nachbarn ansehen |
+| Teilen | `#/share` | Straße als Bild, Web-Share bzw. Speichern |
