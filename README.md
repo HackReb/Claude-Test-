@@ -20,7 +20,7 @@ npm run build:artifact  # Vorschau als einzelne HTML-Datei (dist-artifact/babo-p
 offline spielbar). Sie läuft auf jedem statischen Hosting, auch in einem Unterpfad.
 
 **GitHub Pages (Workflow liegt bei):** `.github/workflows/deploy.yml` baut und veröffentlicht bei
-jedem Push auf `main`. Einmalig: *Settings → Pages → Source: „GitHub Actions“*. Pages für private
+jedem Push auf `Main` (bzw. `main`). Einmalig: *Settings → Pages → Source: „GitHub Actions“*. Pages für private
 Repos braucht einen kostenpflichtigen GitHub-Plan; sonst Repo öffentlich machen oder ein anderes
 Hosting nehmen (Netlify, Cloudflare Pages, Vercel: Build `npm run build`, Ausgabe `dist`).
 
