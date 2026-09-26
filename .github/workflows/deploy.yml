@@ -1,10 +1,12 @@
 # Baut die PWA und stellt sie über GitHub Pages bereit.
 # Einmalig nötig: Settings → Pages → Source: „GitHub Actions“.
+# Läuft bei jedem Push auf den Haupt-Branch und manuell über „Run workflow“.
 name: Deploy PWA
 
 on:
   push:
-    branches: [main]
+    # Branch-Namen sind in Actions groß/klein-sensitiv; das Repo nutzt „Main“.
+    branches: [main, Main]
   workflow_dispatch:
 
 permissions:

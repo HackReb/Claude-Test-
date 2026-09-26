@@ -1,5 +1,5 @@
 import { ECONOMY } from "../config/economy";
-import type { Building, Facade, Part, PlacedPart, PlotSize } from "../model/types";
+import type { Building, BuildingUse, Facade, Part, PlacedPart, PlotSize } from "../model/types";
 import { partsOf } from "../parts/catalog";
 import { facadeColumns } from "../parts/grid";
 import { allowedRows, cellKey, FACADE_RULES, layerOf } from "../parts/rules";
@@ -45,6 +45,8 @@ export interface RandomOptions {
   isAvailable?: (part: Part) => boolean;
   /** Vorlieben: höheres Gewicht = häufiger (z. B. Bot-Charakter). */
   weight?: (part: Part) => number;
+  /** Nutzung; ohne Angabe per Zufall. */
+  use?: BuildingUse;
 }
 const between = (min: number, max: number, random: Random) => min + Math.floor(random() * (max - min + 1));
 
@@ -120,5 +122,6 @@ export function randomBuildingName(facade: Facade, size: PlotSize, random: Rando
 
 export function randomBuilding(size: PlotSize, random: Random = Math.random, options?: RandomOptions): Building {
   const facade = randomFacade(size, random, options);
-  return { id: createId(), name: randomBuildingName(facade, size, random), level: 1, createdBy: "random", facade };
+  const use = options?.use ?? (random() < 0.5 ? "residential" : "commercial");
+  return { id: createId(), name: randomBuildingName(facade, size, random), level: 1, createdBy: "random", use, facade };
 }

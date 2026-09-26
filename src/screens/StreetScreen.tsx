@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ambienceFor } from "../audio/ambience";
+import { sound } from "../audio/sound";
+import { Voices } from "../components/Voices";
+import { residentVoices, type Voice } from "../game/life";
+import type { LitterItem } from "../model/types";
 import { useNavigate } from "react-router-dom";
 import { RentBar } from "../components/RentBar";
 import { StreetSearch } from "../components/StreetSearch";
@@ -17,8 +22,53 @@ export function StreetScreen() {
   const reset = useGameStore((s) => s.reset);
   const navigate = useNavigate();
   const verifyStreet = useGameStore((s) => s.verifyStreet);
+  const cleanLitter = useGameStore((s) => s.cleanLitter);
+  const dropLitter = useGameStore((s) => s.dropLitter);
   const [confirmReset, setConfirmReset] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [highlight, setHighlight] = useState<string | null>(null);
+
+  const voices = useMemo(() => residentVoices(street), [street]);
+
+  // Neue Wünsche/Beschwerden kündigen sich mit einem kleinen Ton an.
+  const knownVoices = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = new Set(voices.map((v) => v.id));
+    if (knownVoices.current && [...ids].some((id) => !knownVoices.current!.has(id))) sound.bubble();
+    knownVoices.current = ids;
+  }, [voices]);
+
+  // Straßengeräusche passend zum sichtbaren Ausschnitt; beim Verlassen Ruhe.
+  const viewport = useRef<[number, number]>([0, 0.4]);
+  const streetRef = useRef(street);
+  streetRef.current = street;
+  const onViewport = useCallback((from: number, to: number) => {
+    viewport.current = [from, to];
+    sound.setAmbience(ambienceFor(streetRef.current, from, to));
+  }, []);
+  useEffect(() => {
+    sound.setAmbience(ambienceFor(street, ...viewport.current));
+  }, [street]);
+  useEffect(() => () => sound.stopAmbience(), []);
+
+  async function onLitterTap(item: LitterItem): Promise<number> {
+    const result = await cleanLitter(item.id);
+    if (!result) return 0;
+    if (!result.cleaned) sound.scrub();
+    else {
+      sound.pickup();
+      if (result.kind === "poop") sound.sparkle();
+      sound.coin(0.15);
+    }
+    return result.reward;
+  }
+
+  function onVoice(voice: Voice) {
+    sound.bubble();
+    setHighlight(voice.id);
+    document.getElementById("voices")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setHighlight(null), 1800);
+  }
 
   return (
     <div className="street-screen">
@@ -29,7 +79,14 @@ export function StreetScreen() {
             <strong>🪙 {formatCoins(offlineEarnings)}</strong> Miete verdient.
           </p>
           <div className="actions">
-            <button type="button" className="btn btn-primary" onClick={() => void collect()}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                const amount = await collect();
+                if (amount > 0) sound.coins(amount);
+              }}
+            >
               Einsammeln
             </button>
             <button type="button" className="btn btn-link" onClick={dismissOfflineEarnings}>
@@ -73,11 +130,22 @@ export function StreetScreen() {
         ownerName={player.name}
         coins={player.coins}
         priceOf={(plot) => currentPrice(street, plot)}
-        onSelect={(plot) => navigate(routes.plot(plot.id))}
+        onSelect={(plot) => {
+          sound.tap();
+          navigate(routes.plot(plot.id));
+        }}
+        life
+        onLitterTap={onLitterTap}
+        onDrop={(kind, spot) => void dropLitter(kind, spot)}
+        voices={voices}
+        onVoice={onVoice}
+        onViewport={onViewport}
       />
-      <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an</p>
+      <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an · Müll und 💩 wegtippen!</p>
 
       <RentBar />
+
+      <Voices voices={voices} highlight={highlight} />
 
       {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
       {confirmReset ? (

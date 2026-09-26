@@ -985,3 +985,194 @@ h2 {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ---------- Leben auf der Straße ---------- */
+
+.sound-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  background: #fff7e8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.litter.tappable {
+  cursor: pointer;
+  outline: none;
+}
+
+.litter.tappable:focus-visible circle {
+  stroke: var(--primary);
+  stroke-width: 3;
+}
+
+.litter .fly {
+  animation: buzz 0.6s ease-in-out infinite alternate;
+}
+
+.litter .fly-b {
+  animation-duration: 0.45s;
+}
+
+@keyframes buzz {
+  from {
+    transform: translate(-2px, 1px);
+  }
+  to {
+    transform: translate(3px, -2px);
+  }
+}
+
+.reward-popup {
+  animation: rise 1s ease-out forwards;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+
+.voice-bubble {
+  cursor: pointer;
+  outline: none;
+}
+
+.voice-bubble:focus-visible path {
+  stroke: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .litter .fly,
+  .reward-popup {
+    animation: none;
+  }
+}
+
+.rentbar-clean {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #2d7a3e;
+}
+
+.rentbar-clean.dirty {
+  color: var(--danger);
+}
+
+.voices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voices h2 {
+  margin: 0;
+}
+
+.voices ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.voice {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: transform 0.2s;
+}
+
+.voice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voice small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.voice span:last-child {
+  font-size: 0.9rem;
+}
+
+.voice-emoji {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.voice-wish {
+  background: #fff6db;
+}
+
+.voice-complaint {
+  background: #ffe8ea;
+}
+
+.voice-praise {
+  background: #e6f7ea;
+}
+
+.voice.highlight {
+  transform: scale(1.03);
+  box-shadow: 0 0 0 4px var(--primary);
+}
+
+.use-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.use-picker .subtle {
+  margin: 0;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.segmented button {
+  min-height: 46px;
+  border: none;
+  background: #fffdf8;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.segmented button + button {
+  border-left: 3px solid var(--border);
+}
+
+.segmented button.selected {
+  background: var(--primary);
+  color: var(--primary-ink);
+}

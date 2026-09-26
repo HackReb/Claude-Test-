@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { formatCoins, formatRate } from "../format";
+import { sound } from "../audio/sound";
+import { rentModifiers, streetStats } from "../game/life";
 import { streetRentPerMinute } from "../game/rent";
 import { useGameStore } from "../store/gameStore";
 
@@ -13,8 +15,13 @@ export function RentBar() {
   const pending = Math.floor(player.pendingRent);
   const rate = streetRentPerMinute(street);
 
+  const stats = streetStats(street);
+  const penalty = Math.round((1 - rentModifiers(street).cleanliness) * 100);
+
   async function onCollect() {
-    setLastCollected(await collect());
+    const amount = await collect();
+    if (amount > 0) sound.coins(amount);
+    setLastCollected(amount);
   }
 
   return (
@@ -23,6 +30,9 @@ export function RentBar() {
         <span className="rentbar-label">Miete bereit</span>
         <strong className="rentbar-amount">🪙 {formatCoins(pending)}</strong>
         <span className="rentbar-rate">+{formatRate(rate)} pro Minute</span>
+        <span className={`rentbar-clean${penalty > 0 ? " dirty" : ""}`}>
+          {penalty === 0 ? "😊 Straße sauber" : `${stats.litter >= 8 ? "🤢" : "😒"} ${stats.litter}× Dreck: −${penalty} % Miete`}
+        </span>
       </div>
       <button type="button" className="btn btn-primary" disabled={pending < 1} onClick={onCollect}>
         Einsammeln

@@ -92,3 +92,23 @@ describe("gameStore", () => {
     expect(store.getState().player?.pendingRent).toBeCloseTo(21);
   });
 });
+
+describe("gameStore – Leben auf der Straße", () => {
+  it("Müll entsteht offline, Wegräumen bringt Münzen und wird gespeichert", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    let now = 0;
+    const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    now = 24 * 60 * MIN; // volle Nachwürfel-Zeit: Kiosk-Kundschaft hat dann praktisch sicher Müll hinterlassen
+    const later = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await later.getState().init();
+    const litter = later.getState().street!.litter!;
+    expect(litter.length).toBeGreaterThan(0); // Kiosk → Kundschaft wirft Müll
+    const coins = later.getState().player!.coins;
+    const trash = litter.find((l) => l.kind === "trash")!;
+    const result = await later.getState().cleanLitter(trash.id);
+    expect(result?.cleaned).toBe(true);
+    expect(later.getState().player!.coins).toBe(coins + result!.reward);
+    expect((await repo.loadStreet(later.getState().street!.id))?.litter).toHaveLength(litter.length - 1);
+  });
+});

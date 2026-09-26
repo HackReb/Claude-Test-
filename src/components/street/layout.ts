@@ -9,7 +9,7 @@ export const STREET = {
   lotHeight: 220,
   slab: 8,
   topY: 16,
-  sidewalk: 12,
+  sidewalk: 30,
   road: 60,
 } as const;
 
