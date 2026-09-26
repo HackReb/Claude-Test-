@@ -35,7 +35,7 @@ describe("claimStreet", () => {
     expect(owned).toHaveLength(1);
     expect(owned[0].size).toBe("S");
     expect(owned[0].gifted).toBe(true);
-    expect(owned[0].building?.name).toBe("Kiosk");
+    expect(owned[0].building?.name).toBe("Kalles Kiosk");
   });
 
   it("gleiche Straße ergibt gleiches Layout", () => {

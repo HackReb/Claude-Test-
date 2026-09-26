@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { StreetView } from "../components/street/StreetView";
 import { formatRate } from "../format";
+import { ownedStreetName } from "../game/names";
 import { streetRentPerMinute } from "../game/rent";
 import { formatPlace } from "../geo/streetSearch";
 import { renderStreetImage } from "../share/streetImage";
@@ -16,9 +17,9 @@ export function ShareScreen() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const built = street.plots.filter((p) => p.building).length;
-  const title = `${street.name}, ${formatPlace(street)}`;
-  const subtitle = `von ${player.name} · ${built} Gebäude · 🪙 ${formatRate(streetRentPerMinute(street))}/min`;
-  const text = `Das ist meine ${street.name} in ${street.city}! ${built} Gebäude und ich kassier Miete. 🏠`;
+  const title = ownedStreetName(player.name, street.name);
+  const subtitle = `${formatPlace(street)} · ${built} Gebäude · 🪙 ${formatRate(streetRentPerMinute(street))}/min`;
+  const text = `Das ist ${title} in ${street.city}! ${built} Gebäude und ich kassier Miete. 🏠`;
 
   // Bild einmal beim Öffnen erzeugen – aus der aktuellen Straße.
   useEffect(() => {
@@ -60,7 +61,7 @@ export function ShareScreen() {
       <div className="card share-preview">
         {state.status === "rendering" && <p className="subtle">Bild wird gemalt …</p>}
         {state.status === "error" && <p className="error">Das Bild konnte nicht erzeugt werden.</p>}
-        {state.status === "ready" && <img src={state.url} alt={`Bild der ${street.name}`} />}
+        {state.status === "ready" && <img src={state.url} alt={`Bild von ${title}`} />}
       </div>
 
       {state.status === "ready" && (
@@ -80,7 +81,7 @@ export function ShareScreen() {
 
       {/* Vorlage fürs Bild: unsichtbar gerendert, damit das SVG vollständig im DOM steht */}
       <div ref={source} className="share-source" aria-hidden>
-        <StreetView street={street} />
+        <StreetView street={street} ownerName={player.name} />
       </div>
     </div>
   );

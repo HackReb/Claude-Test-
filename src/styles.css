@@ -960,3 +960,28 @@ h2 {
   width: 1200px;
   pointer-events: none;
 }
+
+/* ---------- Namen ---------- */
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.title-row h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.title-row .btn-link {
+  min-height: 32px;
+  padding: 0;
+}
+
+.rename {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { BuildPicker, type BuildMode } from "../components/BuildPicker";
+import { BuildingNameField } from "../components/BuildingNameField";
 import { FacadePreview } from "../components/FacadePreview";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
@@ -24,7 +25,7 @@ export function PlotScreen() {
       <Link className="btn btn-link back" to={routes.street}>
         ← Zur Straße
       </Link>
-      <h1>{plot.building ? plot.building.name : `Grundstück ${plot.size}`}</h1>
+      {plot.building ? <BuildingTitle plotId={plot.id} name={plot.building.name} /> : <h1>Grundstück {plot.size}</h1>}
       <p className="subtle">
         {where} · {cfg.tiles} Kachel{cfg.tiles > 1 ? "n" : ""} breit · bis {cfg.maxFloors} Stockwerk
         {cfg.maxFloors > 1 ? "e" : ""}
@@ -32,6 +33,42 @@ export function PlotScreen() {
 
       {isOwned(plot) ? <OwnedPlot plot={plot} /> : <PlotForSale plot={plot} />}
     </div>
+  );
+}
+
+/** Gebäudename als Überschrift, per Stift umbenennbar. */
+function BuildingTitle({ plotId, name }: { plotId: string; name: string }) {
+  const rename = useGameStore((s) => s.renameBuilding);
+  const [draft, setDraft] = useState<string | null>(null);
+
+  if (draft === null) {
+    return (
+      <div className="title-row">
+        <h1>{name}</h1>
+        <button type="button" className="btn btn-link" onClick={() => setDraft(name)} aria-label={`${name} umbenennen`}>
+          ✏️ Umbenennen
+        </button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="rename"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (await rename(plotId, draft)) setDraft(null);
+      }}
+    >
+      <BuildingNameField value={draft} onChange={setDraft} />
+      <div className="actions">
+        <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
+          Speichern
+        </button>
+        <button type="button" className="btn btn-link" onClick={() => setDraft(null)}>
+          Abbrechen
+        </button>
+      </div>
+    </form>
   );
 }
 

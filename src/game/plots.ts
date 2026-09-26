@@ -1,5 +1,6 @@
 import { plotPrice, upgradeCost } from "../config/economy";
 import type { Building, Player, Plot, Street } from "../model/types";
+import { cleanBuildingName } from "./names";
 
 export const isOwned = (plot: Plot) => plot.purchasedAt !== undefined;
 
@@ -65,4 +66,13 @@ export function upgradePlot(player: Player, street: Street, plotId: string): Upg
     player: { ...player, coins: player.coins - next.cost },
     street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building } : p)) },
   };
+}
+
+/** Benennt das Gebäude auf einem eigenen Grundstück um. */
+export function renameBuilding(street: Street, plotId: string, name: string): Street | null {
+  const plot = street.plots.find((p) => p.id === plotId);
+  const clean = cleanBuildingName(name);
+  if (!plot || !isOwned(plot) || !plot.building || !clean) return null;
+  const building = { ...plot.building, name: clean };
+  return { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building } : p)) };
 }

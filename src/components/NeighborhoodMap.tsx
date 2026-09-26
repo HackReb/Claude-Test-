@@ -1,3 +1,4 @@
+import { possessive } from "../game/names";
 import type { Neighborhood, Street } from "../model/types";
 
 const SIZE = 360;
@@ -8,6 +9,7 @@ const INK = "#2b2118";
 interface Props {
   neighborhood: Neighborhood;
   playerStreet: Street;
+  playerName: string;
   streets: Record<string, Street>;
   unreadByBot: Record<string, number>;
   onSelect: (streetId: string) => void;
@@ -16,7 +18,7 @@ interface Props {
 const shorten = (name: string, max = 17) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 
 /** Karte: eigene Straße in der Mitte, Bot-Straßen in ihrer Himmelsrichtung drumherum. */
-export function NeighborhoodMap({ neighborhood, playerStreet, streets, unreadByBot, onSelect }: Props) {
+export function NeighborhoodMap({ neighborhood, playerStreet, playerName, streets, unreadByBot, onSelect }: Props) {
   const nodes = neighborhood.bots.flatMap((bot) => {
     const street = streets[bot.streetId];
     if (!street) return [];
@@ -57,11 +59,11 @@ export function NeighborhoodMap({ neighborhood, playerStreet, streets, unreadByB
       {/* eigene Straße */}
       <g>
         <rect x={C - 54} y={C - 20} width={108} height={40} rx={20} fill="#ff7a45" stroke={INK} strokeWidth={3} />
-        <text x={C} y={C - 2} textAnchor="middle" fontSize={11.5} fontWeight={900} fill="#fff">
-          {shorten(playerStreet.name, 15)}
+        <text x={C} y={C - 3} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffe8a3">
+          {shorten(possessive(playerName), 16)}
         </text>
-        <text x={C} y={C + 13} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff">
-          Deine Straße
+        <text x={C} y={C + 12} textAnchor="middle" fontSize={11.5} fontWeight={900} fill="#fff">
+          {shorten(playerStreet.name, 15)}
         </text>
       </g>
 

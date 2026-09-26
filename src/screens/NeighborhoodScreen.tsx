@@ -9,6 +9,7 @@ export function NeighborhoodScreen() {
   const neighborhood = useGameStore((s) => s.neighborhood);
   const streets = useGameStore((s) => s.neighborStreets);
   const street = useGameStore((s) => s.street)!;
+  const playerName = useGameStore((s) => s.player!.name);
   const markNewsSeen = useGameStore((s) => s.markNewsSeen);
   const navigate = useNavigate();
 
@@ -38,6 +39,7 @@ export function NeighborhoodScreen() {
         <NeighborhoodMap
           neighborhood={neighborhood}
           playerStreet={street}
+          playerName={playerName}
           streets={streets}
           unreadByBot={unreadByBot}
           onSelect={(id) => navigate(routes.neighborStreet(id))}

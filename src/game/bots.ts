@@ -1,7 +1,8 @@
-import { BOTS, partWeight } from "../config/bots";
+import { BOTS, partWeight, personaOf } from "../config/bots";
 import type { Bot, NeighborEvent, Neighborhood, OsmStreetRef, Plot, Street, StreetLocation } from "../model/types";
 import { generatePlots, layoutKey } from "./claimStreet";
 import { createId } from "./ids";
+import { personalName } from "./names";
 import { hashString, seededRandom } from "./random";
 import { randomBuilding } from "./randomBuilding";
 
@@ -55,8 +56,11 @@ function botRandom(bot: Bot) {
   return seededRandom(hashString(`${bot.id}#${bot.actions}`));
 }
 
-const buildFor = (bot: Bot, plot: Plot, random: () => number) =>
-  randomBuilding(plot.size, random, { weight: (part) => partWeight(bot.character, part.id) });
+function buildFor(bot: Bot, plot: Plot, random: () => number) {
+  const building = randomBuilding(plot.size, random, { weight: (part) => partWeight(bot.character, part.id) });
+  const owner = personaOf(bot.character)?.shortName ?? bot.name;
+  return { ...building, name: personalName(owner, building.name) };
+}
 
 /** Eine Aktion eines Bots: Grundstück kaufen und bebauen, ausbauen oder umbauen. */
 export function botAction(

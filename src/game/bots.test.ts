@@ -93,3 +93,13 @@ describe("Simulation", () => {
     expect(chaos.plots.some((p) => p.building!.level > 1)).toBe(true);
   });
 });
+
+describe("Namen der Bot-Gebäude", () => {
+  it("tragen den Vornamen des Bots", () => {
+    const { neighborhood, streets } = createNeighborhood(player, [], 0);
+    const chris = neighborhood.bots.find((b) => b.character === "chaos")!;
+    const names = streets.find((s) => s.ownerId === chris.id)!.plots.flatMap((p) => (p.building ? [p.building.name] : []));
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.every((n) => n.startsWith("Chris’ "))).toBe(true);
+  });
+});

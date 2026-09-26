@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { formatCoins } from "../format";
+import { ownedStreetName } from "../game/names";
 import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
@@ -30,7 +31,7 @@ export function AppLayout() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-street">
-          <span className="topbar-street-name">{street.name}</span>
+          <span className="topbar-street-name">{ownedStreetName(player.name, street.name)}</span>
           <span className="topbar-city">{formatPlace(street)}</span>
         </div>
         <div className="coins" aria-label={`${player.coins} Münzen`}>

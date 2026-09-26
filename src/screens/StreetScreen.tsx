@@ -70,6 +70,7 @@ export function StreetScreen() {
 
       <StreetView
         street={street}
+        ownerName={player.name}
         coins={player.coins}
         priceOf={(plot) => currentPrice(street, plot)}
         onSelect={(plot) => navigate(routes.plot(plot.id))}

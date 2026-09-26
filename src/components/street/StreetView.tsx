@@ -2,6 +2,7 @@ import type { KeyboardEvent } from "react";
 import type { Plot, Street } from "../../model/types";
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
+import { possessive } from "../../game/names";
 import { FacadeSvg } from "../FacadeSvg";
 import { layoutStreet, STREET, type LotBox } from "./layout";
 
@@ -9,6 +10,8 @@ const INK = "#2b2118";
 
 interface Props {
   street: Street;
+  /** Wem die Straße gehört – steht groß auf der Fahrbahn („Kalles Bahnhofstraße“). */
+  ownerName?: string;
   /** Kaufpreis je Grundstück; fehlt bei fremden Straßen. */
   priceOf?: (plot: Plot) => number;
   coins?: number;
@@ -16,10 +19,13 @@ interface Props {
 }
 
 /** Straße von leicht schräg oben: linke Seite oben, Fahrbahn in der Mitte, rechte Seite unten. */
-export function StreetView({ street, priceOf, coins = 0, onSelect }: Props) {
+export function StreetView({ street, ownerName, priceOf, coins = 0, onSelect }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
   const roadMid = (roadTop + roadBottom) / 2;
-  const labelEnd = STREET.padX + 190;
+  const owner = ownerName ? `${possessive(ownerName)} ` : "";
+  const streetLabel = street.name.length > 24 ? `${street.name.slice(0, 23)}…` : street.name;
+  // Grobe Textbreite bei 20px fett – die Mittellinie beginnt hinter dem Namen.
+  const labelEnd = STREET.padX + 8 + (owner.length + streetLabel.length) * 12 + 24;
 
   return (
     <div className="street-scroll">
@@ -43,8 +49,9 @@ export function StreetView({ street, priceOf, coins = 0, onSelect }: Props) {
           strokeWidth={4}
           strokeDasharray="22 18"
         />
-        <text x={STREET.padX + 8} y={roadMid + 7} fontSize={20} fontWeight={900} fill="#fff" opacity={0.9}>
-          {street.name.length > 16 ? `${street.name.slice(0, 15)}…` : street.name}
+        <text x={STREET.padX + 8} y={roadMid + 7} fontSize={20} fontWeight={900} fill="#fff">
+          {owner && <tspan fill="#ffd166">{owner}</tspan>}
+          <tspan>{streetLabel}</tspan>
         </text>
 
         {lots.map((lot) => (
@@ -122,6 +129,8 @@ function Lot({
         <ForSaleSign width={width} groundY={groundY} price={price} affordable={affordable} />
       )}
 
+      {plot.building && <NamePlate width={width} bottom={h} name={plot.building.name} />}
+
       {plot.building && plot.building.level > 1 && (
         <g aria-hidden>
           <rect x={width - 14 - 24 * (plot.building.level - 1) - 8} y={14} width={24 * (plot.building.level - 1) + 8} height={24} rx={12} fill="#ffd166" stroke={INK} strokeWidth={2.5} />
@@ -151,6 +160,59 @@ function Building({ lot, groundY }: { lot: LotBox; groundY: number }) {
       <g transform={`translate(${left} ${groundY - height})`}>
         <FacadeSvg facade={building.facade} size={lot.plot.size} />
       </g>
+    </g>
+  );
+}
+
+/** Geschätzte Breite eines Zeichens (fett) als Anteil der Schriftgröße. */
+const CHAR_EM = 0.62;
+const PLATE_FONT = { max: 12.5, min: 9 };
+
+/** Teilt einen Namen an dem Leerzeichen/Bindestrich, das der Mitte am nächsten liegt. */
+function splitName(name: string): [string, string] | null {
+  let best = -1;
+  for (let i = 1; i < name.length - 1; i++) {
+    if ((name[i] === " " || name[i] === "-") && (best < 0 || Math.abs(i - name.length / 2) < Math.abs(best - name.length / 2))) best = i;
+  }
+  if (best < 0) return null;
+  return name[best] === "-" ? [name.slice(0, best + 1), name.slice(best + 1)] : [name.slice(0, best), name.slice(best + 1)];
+}
+
+/**
+ * Namensschild eines Gebäudes auf der Vorderkante des Grundstücks. Namen werden nicht gekürzt,
+ * solange es irgendwie geht: erst kleinere Schrift, dann zwei Zeilen, erst ganz zuletzt „…“.
+ */
+function NamePlate({ width, bottom, name }: { width: number; bottom: number; name: string }) {
+  const room = width - 22;
+  const fits = (text: string, size: number) => text.length * CHAR_EM * size <= room;
+  const sizeFor = (longest: string) => Math.min(PLATE_FONT.max, room / (longest.length * CHAR_EM));
+
+  let lines: string[] = [name];
+  if (!fits(name, PLATE_FONT.min)) {
+    const split = splitName(name);
+    if (split && split.every((line) => fits(line, PLATE_FONT.min))) lines = split;
+  }
+  const longest = lines.reduce((a, b) => (b.length > a.length ? b : a));
+  let fontSize = Math.max(PLATE_FONT.min, sizeFor(longest));
+  if (!fits(longest, fontSize)) {
+    const maxChars = Math.floor(room / (CHAR_EM * PLATE_FONT.min));
+    lines = lines.map((line) => (line.length > maxChars ? `${line.slice(0, maxChars - 1)}…` : line));
+    fontSize = PLATE_FONT.min;
+  }
+
+  const lineHeight = fontSize + 2;
+  const plateWidth = Math.min(width - 8, Math.max(...lines.map((l) => l.length)) * CHAR_EM * fontSize + 18);
+  const plateHeight = lines.length * lineHeight + 10;
+  const top = bottom + 11 - plateHeight;
+  return (
+    <g>
+      <title>{name}</title>
+      <rect x={(width - plateWidth) / 2} y={top} width={plateWidth} height={plateHeight} rx={11} fill="#fff" stroke={INK} strokeWidth={2.5} />
+      {lines.map((line, i) => (
+        <text key={i} x={width / 2} y={top + 5 + (i + 1) * lineHeight - 3} textAnchor="middle" fontSize={fontSize} fontWeight={800} fill={INK}>
+          {line}
+        </text>
+      ))}
     </g>
   );
 }

@@ -56,6 +56,7 @@ src/
     templates.ts           Vorlagen-Bibliothek (≥3 je Größe, u. a. Gummibärchenschloss)
     randomBuilding.ts      Zufallsgenerator („Würfeln“) nach den Regeln aus Konzept 6.2
     unlock.ts              Bausteine gegen Münzen freischalten
+    names.ts               Besitz-Namen („Kalles Kiosk“, „Hans’ Bahnhofstraße“), Gebäudenamen bereinigen
     bots.ts                Nachbarschaft anlegen, Bot-Aktionen, Simulation seit letztem Besuch
     migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)

@@ -17,7 +17,7 @@ describe("migrateSave", () => {
     expect(migrated.player.pendingRent).toBe(0);
     const gift = migrated.street.plots.find((p) => p.purchasedAt !== undefined)!;
     expect(gift.gifted).toBe(true);
-    expect(gift.building?.name).toBe("Kiosk");
+    expect(gift.building?.name).toBe("Kalles Kiosk");
   });
 
   it("lässt aktuelle Stände unverändert", () => {

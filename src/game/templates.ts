@@ -1,5 +1,6 @@
 import type { Building, Facade, PlacedPart, PlotSize } from "../model/types";
 import { createId } from "./ids";
+import { personalName } from "./names";
 
 export interface Template {
   id: string;
@@ -244,7 +245,8 @@ export function buildingFromTemplate(template: Template): Building {
   };
 }
 
-/** Start-Gebäude auf dem geschenkten Grundstück, damit von Anfang an Miete fließt. */
-export function starterKiosk(): Building {
-  return buildingFromTemplate(TEMPLATES[0]);
+/** Start-Gebäude auf dem geschenkten Grundstück, damit von Anfang an Miete fließt – z. B. „Kalles Kiosk“. */
+export function starterKiosk(ownerName?: string): Building {
+  const building = buildingFromTemplate(TEMPLATES[0]);
+  return ownerName ? { ...building, name: personalName(ownerName, building.name) } : building;
 }

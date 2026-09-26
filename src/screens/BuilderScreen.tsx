@@ -5,6 +5,7 @@ import { PartThumb } from "../components/builder/PartThumb";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
 import { createId } from "../game/ids";
+import { BUILDING_NAME_MAX_LENGTH, cleanBuildingName, personalName } from "../game/names";
 import { isOwned } from "../game/plots";
 import { buildingRentPerMinute } from "../game/rent";
 import type { Building, Facade, Part, PartCategory, Plot } from "../model/types";
@@ -25,7 +26,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "erase", label: "Weg" },
 ];
 
-const NAME_MAX_LENGTH = 24;
 
 export function BuilderScreen() {
   const { plotId } = useParams();
@@ -40,7 +40,7 @@ function Builder({ plot }: { plot: Plot }) {
   const unlock = useGameStore((s) => s.unlockPart);
   const navigate = useNavigate();
 
-  const [name, setName] = useState(plot.building?.name ?? "Mein Haus");
+  const [name, setName] = useState(plot.building?.name ?? personalName(player.name, "Haus"));
   const [facade, setFacade] = useState<Facade>(() => structuredClone(plot.building?.facade ?? starterFacade()));
   const [tab, setTab] = useState<Tab>("door");
   const [toolId, setToolId] = useState<string | null>(null);
@@ -50,7 +50,8 @@ function Builder({ plot }: { plot: Plot }) {
 
   const tool = toolId ? (getPart(toolId) ?? null) : null;
   const errors = validateFacade(facade, plot.size);
-  const draft: Building = { id: createId(), name: name.trim() || "Mein Haus", level: 1, createdBy: "player", facade };
+  const cleanName = cleanBuildingName(name);
+  const draft: Building = { id: createId(), name: cleanName ?? "", level: 1, createdBy: "player", facade };
   const rent = buildingRentPerMinute(plot.size, draft);
   const count = (category: PartCategory) => facade.parts.filter((p) => getPart(p.partId)?.category === category).length;
   const activePart = active ? partAt(facade, active.x, active.y) : undefined;
@@ -103,7 +104,7 @@ function Builder({ plot }: { plot: Plot }) {
   }
 
   async function onBuild() {
-    if (errors.length) return;
+    if (errors.length || !cleanName) return;
     if (await build(plot.id, draft)) navigate(routes.plot(plot.id));
   }
 
@@ -123,7 +124,14 @@ function Builder({ plot }: { plot: Plot }) {
         </Link>
         <label className="field builder-name">
           <span className="sr-only">Name des Gebäudes</span>
-          <input value={name} maxLength={NAME_MAX_LENGTH} onChange={(e) => setName(e.target.value)} aria-label="Name des Gebäudes" />
+          <input
+            value={name}
+            maxLength={BUILDING_NAME_MAX_LENGTH}
+            placeholder="Name am Haus"
+            aria-invalid={!cleanName}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Name des Gebäudes"
+          />
         </label>
       </div>
 
@@ -224,15 +232,16 @@ function Builder({ plot }: { plot: Plot }) {
         )}
       </div>
 
-      {errors.length > 0 && (
+      {(errors.length > 0 || !cleanName) && (
         <ul className="builder-errors">
+          {!cleanName && <li>Gib deinem Haus oben einen Namen.</li>}
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}
         </ul>
       )}
-      <button type="button" className="btn btn-primary btn-wide" disabled={errors.length > 0} onClick={() => void onBuild()}>
-        {plot.building ? `${draft.name} bauen (ersetzt ${plot.building.name})` : `${draft.name} bauen`}
+      <button type="button" className="btn btn-primary btn-wide" disabled={errors.length > 0 || !cleanName} onClick={() => void onBuild()}>
+        {plot.building ? `${draft.name || "Haus"} bauen (ersetzt ${plot.building.name})` : `${draft.name || "Haus"} bauen`}
       </button>
     </div>
   );

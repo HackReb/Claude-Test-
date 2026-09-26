@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
-import { buyPlot, currentPrice, nextUpgrade, plotsBought, upgradePlot } from "./plots";
+import { buyPlot, currentPrice, nextUpgrade, plotsBought, renameBuilding, upgradePlot } from "./plots";
 
 const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
 const free = (street: Street, size: "S" | "M" | "L") =>
@@ -64,5 +64,16 @@ describe("Upgrades", () => {
     if (!bought.ok) throw new Error();
     const empty = bought.street.plots.find((p) => p.purchasedAt === 1)!;
     expect(upgradePlot(bought.player, bought.street, empty.id)).toEqual({ ok: false, reason: "no-building" });
+  });
+});
+
+describe("Umbenennen", () => {
+  it("setzt einen bereinigten Namen, leere Namen werden abgelehnt", () => {
+    const { street } = start();
+    const gift = street.plots.find((p) => p.gifted)!;
+    const renamed = renameBuilding(street, gift.id, "  Kalles   Späti ")!;
+    expect(renamed.plots.find((p) => p.id === gift.id)?.building?.name).toBe("Kalles Späti");
+    expect(renameBuilding(street, gift.id, "   ")).toBeNull();
+    expect(renameBuilding(street, free(street, "S").id, "X")).toBeNull();
   });
 });

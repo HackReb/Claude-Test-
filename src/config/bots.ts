@@ -2,6 +2,8 @@ import type { BotCharacter } from "../model/types";
 
 export interface Persona {
   name: string;
+  /** Vorname für Besitz-Namen, z. B. „Zoes Gummi-Villa“. */
+  shortName: string;
   avatar: string;
   character: BotCharacter;
   /** Straßenname, falls keine echte Nachbarstraße gefunden wird. */
@@ -13,11 +15,11 @@ export interface Persona {
 /** Bot-Nachbarn (Konzept Abschnitt 7) – alle Werte hier anpassbar. */
 export const BOTS = {
   personas: [
-    { name: "Zucker-Zoe", avatar: "🍭", character: "sweet", fallbackStreet: "Zuckerallee", tagline: "Süßigkeiten-Fan" },
-    { name: "Beton-Bernd", avatar: "🧱", character: "concrete", fallbackStreet: "Betonring", tagline: "Beton-Liebhaber" },
-    { name: "Chaos-Chris", avatar: "🌀", character: "chaos", fallbackStreet: "Kuddelmuddelweg", tagline: "Chaot – baut alles durcheinander" },
-    { name: "Palmen-Paula", avatar: "🌴", character: "nature", fallbackStreet: "Palmenweg", tagline: "Mag Holz, Palmen und Spitzdächer" },
-    { name: "Disco-Dieter", avatar: "🪩", character: "party", fallbackStreet: "Discostraße", tagline: "Feiert gern – Neon und Flaggen" },
+    { name: "Zucker-Zoe", shortName: "Zoe", avatar: "🍭", character: "sweet", fallbackStreet: "Zuckerallee", tagline: "Süßigkeiten-Fan" },
+    { name: "Beton-Bernd", shortName: "Bernd", avatar: "🧱", character: "concrete", fallbackStreet: "Betonring", tagline: "Beton-Liebhaber" },
+    { name: "Chaos-Chris", shortName: "Chris", avatar: "🌀", character: "chaos", fallbackStreet: "Kuddelmuddelweg", tagline: "Chaot – baut alles durcheinander" },
+    { name: "Palmen-Paula", shortName: "Paula", avatar: "🌴", character: "nature", fallbackStreet: "Palmenweg", tagline: "Mag Holz, Palmen und Spitzdächer" },
+    { name: "Disco-Dieter", shortName: "Dieter", avatar: "🪩", character: "party", fallbackStreet: "Discostraße", tagline: "Feiert gern – Neon und Flaggen" },
   ] satisfies Persona[],
 
   /** Alle wie viele Stunden ein Bot etwas tut. */

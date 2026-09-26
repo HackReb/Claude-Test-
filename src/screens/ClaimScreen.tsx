@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { StreetSearch } from "../components/StreetSearch";
 import { ECONOMY } from "../config/economy";
 import { NAME_MAX_LENGTH, validateClaim } from "../game/claimStreet";
+import { ownedStreetName } from "../game/names";
 import { formatPlace } from "../geo/streetSearch";
 import type { StreetLocation } from "../model/types";
 import { routes } from "../routes";
@@ -120,7 +121,9 @@ export function ClaimScreen() {
         )}
 
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {street.name.trim() ? `${street.name.trim()} claimen` : "Straße claimen"}
+          {street.name.trim()
+            ? `${playerName.trim() ? ownedStreetName(playerName, street.name.trim()) : street.name.trim()} claimen`
+            : "Straße claimen"}
         </button>
         <p className="hint">
           Startbonus: 🪙 {ECONOMY.startCoins.toLocaleString("de-DE")} Münzen + ein geschenktes{" "}

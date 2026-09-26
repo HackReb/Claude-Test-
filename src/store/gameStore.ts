@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { claimStreet, verifyStreet, type ClaimInput } from "../game/claimStreet";
 import { migrateSave } from "../game/migrate";
 import { createNeighborhood, simulateNeighborhood } from "../game/bots";
-import { buyPlot, placeBuilding, upgradePlot, type BuyResult, type UpgradeResult } from "../game/plots";
+import { buyPlot, placeBuilding, renameBuilding, upgradePlot, type BuyResult, type UpgradeResult } from "../game/plots";
 import { accrueRent, collectRent } from "../game/rent";
 import { unlockPart, type UnlockResult } from "../game/unlock";
 import { findNeighborStreets } from "../geo/neighbors";
@@ -37,6 +37,7 @@ interface GameState {
   upgrade(plotId: string): Promise<UpgradeResult>;
   /** Neuigkeiten aus der Nachbarschaft als gelesen markieren. */
   markNewsSeen(): Promise<void>;
+  renameBuilding(plotId: string, name: string): Promise<boolean>;
   /** Stellt ein Gebäude auf ein eigenes Grundstück. */
   build(plotId: string, building: Building): Promise<boolean>;
   /** Baustein gegen Münzen freischalten. */
@@ -178,6 +179,15 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(upgraded.player, upgraded.street);
         }
         return upgraded;
+      },
+
+      async renameBuilding(plotId, name) {
+        const current = get().street;
+        const street = current && renameBuilding(current, plotId, name);
+        if (!street) return false;
+        set({ street });
+        await repo.saveStreet(street);
+        return true;
       },
 
       async markNewsSeen() {

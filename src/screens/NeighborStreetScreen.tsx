@@ -32,7 +32,7 @@ export function NeighborStreetScreen() {
           </p>
         </div>
       </div>
-      <StreetView street={street} />
+      <StreetView street={street} ownerName={personaOf(bot.character)?.shortName ?? bot.name} />
       <p className="subtle">
         {built} von {street.plots.length} Grundstücken bebaut · verdient ca. 🪙 {formatRate(streetRentPerMinute(street))} pro Minute
       </p>

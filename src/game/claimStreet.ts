@@ -63,7 +63,7 @@ export function claimStreet(input: ClaimInput, now: number): { player: Player; s
 
   const plots = generatePlots(layoutKey({ ...input.street, name: streetName, city }));
   const gift = plots.find((p) => p.size === ECONOMY.giftPlotSize);
-  if (gift) Object.assign(gift, { purchasedAt: now, gifted: true, building: starterKiosk() });
+  if (gift) Object.assign(gift, { purchasedAt: now, gifted: true, building: starterKiosk(input.playerName.trim()) });
 
   const street: Street = {
     id: streetId,
