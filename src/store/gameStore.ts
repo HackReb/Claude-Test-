@@ -3,10 +3,11 @@ import { claimStreet, verifyStreet, type ClaimInput } from "../game/claimStreet"
 import { migrateSave } from "../game/migrate";
 import { createNeighborhood, simulateNeighborhood } from "../game/bots";
 import { buyPlot, placeBuilding, renameBuilding, upgradePlot, type BuyResult, type UpgradeResult } from "../game/plots";
+import { addLitter, buildPlayground, spawnLitter, tapLitter, type AmenityResult, type CleanResult } from "../game/life";
 import { accrueRent, collectRent } from "../game/rent";
 import { unlockPart, type UnlockResult } from "../game/unlock";
 import { findNeighborStreets } from "../geo/neighbors";
-import type { Building, Neighborhood, Player, Street, StreetLocation } from "../model/types";
+import type { Building, LitterItem, LitterKind, Neighborhood, Player, Street, StreetLocation } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import type { Repository } from "../repository/Repository";
 
@@ -38,6 +39,11 @@ interface GameState {
   /** Neuigkeiten aus der Nachbarschaft als gelesen markieren. */
   markNewsSeen(): Promise<void>;
   renameBuilding(plotId: string, name: string): Promise<boolean>;
+  /** Einmal auf Müll/Hundehaufen tippen; beim Wegräumen gibt es ein paar Münzen. */
+  cleanLitter(litterId: string): Promise<CleanResult>;
+  /** Live-Dreck von Hund oder Passant auf dem Bildschirm. */
+  dropLitter(kind: LitterKind, spot: Pick<LitterItem, "pos" | "side">): Promise<void>;
+  buildPlayground(plotId: string): Promise<AmenityResult>;
   /** Stellt ein Gebäude auf ein eigenes Grundstück. */
   build(plotId: string, building: Building): Promise<boolean>;
   /** Baustein gegen Münzen freischalten. */
@@ -122,14 +128,16 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           const migrated = migrateSave(loadedPlayer, loadedStreet);
           const away = clock() - migrated.player.lastSeen;
           const { player, gained } = accrueRent(migrated.player, migrated.street, clock());
-          await save(player, migrated.street);
+          // Danach liegt der Müll herum, der inzwischen entstanden ist – er drückt ab jetzt die Miete.
+          const street = spawnLitter(migrated.street, clock());
+          await save(player, street);
           set({
             status: "ready",
             player,
-            street: migrated.street,
+            street,
             offlineEarnings: away >= OFFLINE_NOTICE_MIN_MS && gained >= 1 ? gained : null,
           });
-          await loadNeighborhood(migrated.street);
+          await loadNeighborhood(street);
         } catch (error) {
           console.error("Spielstand konnte nicht geladen werden", error);
           set({ status: "error" });
@@ -179,6 +187,38 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(upgraded.player, upgraded.street);
         }
         return upgraded;
+      },
+
+      async cleanLitter(litterId) {
+        // Miete bis jetzt mit dem alten Dreck-Stand verbuchen, danach zählt der neue.
+        const result = accrued();
+        if (!result) return null;
+        const cleaned = tapLitter(result.street, litterId);
+        if (!cleaned) return null;
+        const player = { ...result.player, coins: result.player.coins + cleaned.reward };
+        set({ player, street: cleaned.street });
+        await save(player, cleaned.street);
+        return cleaned;
+      },
+
+      async dropLitter(kind, spot) {
+        const result = accrued();
+        if (!result) return;
+        const street = addLitter(result.street, kind, spot);
+        if (street === result.street) return;
+        set({ player: result.player, street });
+        await save(result.player, street);
+      },
+
+      async buildPlayground(plotId) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-allowed" };
+        const built = buildPlayground(result.player, result.street, plotId);
+        if (built.ok) {
+          set({ player: built.player, street: built.street });
+          await save(built.player, built.street);
+        }
+        return built;
       },
 
       async renameBuilding(plotId, name) {

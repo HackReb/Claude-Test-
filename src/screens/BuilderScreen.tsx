@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { sound } from "../audio/sound";
 import { EditorCanvas } from "../components/builder/EditorCanvas";
+import { UsePicker } from "../components/UsePicker";
+import { useOf } from "../game/life";
 import { PartThumb } from "../components/builder/PartThumb";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
@@ -8,7 +11,7 @@ import { createId } from "../game/ids";
 import { BUILDING_NAME_MAX_LENGTH, cleanBuildingName, personalName } from "../game/names";
 import { isOwned } from "../game/plots";
 import { buildingRentPerMinute } from "../game/rent";
-import type { Building, Facade, Part, PartCategory, Plot } from "../model/types";
+import type { Building, BuildingUse, Facade, Part, PartCategory, Plot } from "../model/types";
 import { getPart, isUnlocked, partsOf } from "../parts/catalog";
 import { partAt, placePart, removeAt, setFloors, setText, starterFacade, TEXT_MAX_LENGTH } from "../parts/editor";
 import { FACADE_RULES, validateFacade } from "../parts/rules";
@@ -47,11 +50,12 @@ function Builder({ plot }: { plot: Plot }) {
   const [active, setActive] = useState<{ x: number; y: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [offer, setOffer] = useState<Part | null>(null);
+  const [use, setUse] = useState<BuildingUse>(plot.building ? useOf(plot.building) : "residential");
 
   const tool = toolId ? (getPart(toolId) ?? null) : null;
   const errors = validateFacade(facade, plot.size);
   const cleanName = cleanBuildingName(name);
-  const draft: Building = { id: createId(), name: cleanName ?? "", level: 1, createdBy: "player", facade };
+  const draft: Building = { id: createId(), name: cleanName ?? "", level: 1, createdBy: "player", use, facade };
   const rent = buildingRentPerMinute(plot.size, draft);
   const count = (category: PartCategory) => facade.parts.filter((p) => getPart(p.partId)?.category === category).length;
   const activePart = active ? partAt(facade, active.x, active.y) : undefined;
@@ -61,6 +65,7 @@ function Builder({ plot }: { plot: Plot }) {
   function onCell(x: number, y: number) {
     setMessage(null);
     if (tab === "erase") {
+      sound.pickup();
       setFacade(removeAt(facade, x, y));
       setActive(null);
       return;
@@ -76,8 +81,10 @@ function Builder({ plot }: { plot: Plot }) {
     if (result.ok) {
       setFacade(result.facade);
       setActive({ x, y });
+      sound.tap();
     } else {
       setMessage(result.reason);
+      sound.deny();
     }
   }
 
@@ -99,13 +106,17 @@ function Builder({ plot }: { plot: Plot }) {
 
   async function onUnlock(part: Part) {
     const result = await unlock(part.id);
+    if (result.ok) sound.cash();
     // Direkt auswählen – `player` in diesem Render ist noch der Stand vor dem Freischalten.
     if (result.ok) select(part);
   }
 
   async function onBuild() {
     if (errors.length || !cleanName) return;
-    if (await build(plot.id, draft)) navigate(routes.plot(plot.id));
+    if (await build(plot.id, draft)) {
+      sound.build();
+      navigate(routes.plot(plot.id));
+    }
   }
 
   const selectTab = (next: Tab) => {
@@ -158,6 +169,8 @@ function Builder({ plot }: { plot: Plot }) {
           </div>
         )}
       </div>
+
+      <UsePicker value={use} onChange={setUse} />
 
       {editingText && (
         <label className="field">

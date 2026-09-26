@@ -72,6 +72,8 @@ export function claimStreet(input: ClaimInput, now: number): { player: Player; s
     ...(input.street.osm && { osm: input.street.osm }),
     ownerId: playerId,
     plots,
+    litter: [],
+    litterCheckedAt: now,
   };
   const player: Player = {
     id: playerId,

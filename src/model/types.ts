@@ -10,6 +10,23 @@ export interface Street {
   osm?: OsmStreetRef;
   ownerId: string; // Spieler oder Bot
   plots: Plot[];
+  /** Müll und Hundehaufen auf den Gehwegen. */
+  litter?: LitterItem[];
+  /** Bis wann Müll „nachgewürfelt“ wurde (für die Zeit, in der niemand zugeschaut hat). */
+  litterCheckedAt?: number;
+}
+
+export type LitterKind = "trash" | "poop";
+
+export interface LitterItem {
+  id: string;
+  kind: LitterKind;
+  /** Position entlang der Straße, 0 = links, 1 = rechts. */
+  pos: number;
+  /** Gehweg oben (vor der linken Straßenseite) oder unten. */
+  side: "top" | "bottom";
+  /** Wie oft schon getippt wurde (Hundehaufen brauchen mehrere Tipper). */
+  taps: number;
 }
 
 /** Echte Straße aus OpenStreetMap. */
@@ -45,7 +62,14 @@ export interface Plot {
   purchasedAt?: number;
   /** Start-Geschenk – zählt nicht als Kauf für den Preisanstieg. */
   gifted?: boolean;
+  /** Anlage ohne Gebäude, z. B. ein Spielplatz. */
+  amenity?: Amenity;
 }
+
+export type Amenity = "playground";
+
+/** Nutzung eines Gebäudes: Wohnen bringt Bewohner (Kinder, Hunde), Gewerbe bringt Kundschaft (und Müll). */
+export type BuildingUse = "residential" | "commercial";
 
 export interface Building {
   id: string;
@@ -53,6 +77,8 @@ export interface Building {
   level: 1 | 2 | 3;
   facade: Facade;
   createdBy: "template" | "random" | "player";
+  /** Fehlt bei älteren Spielständen – dann entscheidet `useOf()` anhand der Fassade. */
+  use?: BuildingUse;
 }
 
 export interface Facade {

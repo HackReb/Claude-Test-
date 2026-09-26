@@ -57,6 +57,9 @@ src/
   model/types.ts           Datenmodell aus Konzept Abschnitt 9 (+ OSM-Verweis)
   config/geo.ts            Straßensuche (Photon-URL, Debounce, Timeout, Nachbar-Radius)
   config/bots.ts           Bot-Personas, Tempo, Vorlieben je Charakter
+  config/life.ts           Müll-Raten, Miet-Abzug, Spielplatz, Kundschaft, Belohnungen
+  audio/sound.ts           Soundeffekte + Straßengeräusche (Web Audio, synthetisch)
+  audio/ambience.ts        Geräusch-Mix passend zum sichtbaren Straßenabschnitt
   geo/streetSearch.ts      Photon-Abfrage, Filter auf echte Straßen, Kennung, Zusammenfassen
   geo/neighbors.ts         echte Nachbarstraßen (Photon reverse)
   share/streetImage.ts     Straße als PNG mit Titelzeile
@@ -72,6 +75,7 @@ src/
     randomBuilding.ts      Zufallsgenerator („Würfeln“) nach den Regeln aus Konzept 6.2
     unlock.ts              Bausteine gegen Münzen freischalten
     names.ts               Besitz-Namen („Kalles Kiosk“, „Hans’ Bahnhofstraße“), Gebäudenamen bereinigen
+    life.ts                Wohnen/Gewerbe, Müll & Hundehaufen, Spielplatz, Miet-Modifikatoren, Stimmen der Bewohner
     bots.ts                Nachbarschaft anlegen, Bot-Aktionen, Simulation seit letztem Besuch
     migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)
@@ -87,6 +91,9 @@ src/
     BuildPicker.tsx        Vorlage wählen / Würfeln
     builder/               Editor-Raster (EditorCanvas) und Paletten-Vorschaubilder
     NeighborhoodMap.tsx    Karte mit Bot-Straßen in ihrer Himmelsrichtung
+    street/StreetLife.tsx  Leute, Kinder, Hund auf den Gehwegen (lassen live Dreck fallen)
+    street/Litter.tsx      Müll & Hundehaufen zum Wegtippen
+    Voices.tsx, UsePicker.tsx, SoundToggle.tsx
     RentBar.tsx            Miete bereit + Einsammeln
     StreetSearch.tsx       Suchfeld mit Straßen-Vorschlägen
     AppLayout.tsx          Münzen-Leiste, Bottom-Nav, Miet-Ticker

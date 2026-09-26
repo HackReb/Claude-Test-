@@ -1,4 +1,7 @@
+import { useCallback, useEffect } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { ambienceFor } from "../audio/ambience";
+import { sound } from "../audio/sound";
 import { StreetView } from "../components/street/StreetView";
 import { personaOf } from "../config/bots";
 import { formatRate } from "../format";
@@ -12,6 +15,13 @@ export function NeighborStreetScreen() {
   const { streetId = "" } = useParams();
   const street = useGameStore((s) => s.neighborStreets[streetId]);
   const bot = useGameStore((s) => s.neighborhood?.bots.find((b) => b.streetId === streetId));
+  const onViewport = useCallback(
+    (from: number, to: number) => {
+      if (street) sound.setAmbience(ambienceFor(street, from, to));
+    },
+    [street],
+  );
+  useEffect(() => () => sound.stopAmbience(), []);
   if (!street || !bot) return <Navigate to={routes.neighborhood} replace />;
 
   const built = street.plots.filter((p) => p.building).length;
@@ -32,7 +42,7 @@ export function NeighborStreetScreen() {
           </p>
         </div>
       </div>
-      <StreetView street={street} ownerName={personaOf(bot.character)?.shortName ?? bot.name} />
+      <StreetView street={street} ownerName={personaOf(bot.character)?.shortName ?? bot.name} life onViewport={onViewport} />
       <p className="subtle">
         {built} von {street.plots.length} Grundstücken bebaut · verdient ca. 🪙 {formatRate(streetRentPerMinute(street))} pro Minute
       </p>

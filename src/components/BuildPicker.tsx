@@ -4,11 +4,13 @@ import { randomBuilding } from "../game/randomBuilding";
 import { buildingRentPerMinute } from "../game/rent";
 import { cleanBuildingName, personalName } from "../game/names";
 import { buildingFromTemplate, templatesFor, type Template } from "../game/templates";
-import type { Building, Plot } from "../model/types";
+import type { Building, BuildingUse, Plot } from "../model/types";
 import { isUnlocked } from "../parts/catalog";
 import { useGameStore } from "../store/gameStore";
 import { BuildingNameField } from "./BuildingNameField";
 import { FacadePreview } from "./FacadePreview";
+import { UsePicker } from "./UsePicker";
+import { sound } from "../audio/sound";
 
 export type BuildMode = "template" | "random";
 
@@ -20,9 +22,14 @@ export function BuildPicker({ plot, mode, onDone }: { plot: Plot; mode: BuildMod
 /** Baut das Gebäude mit dem gewählten Namen; ohne gültigen Namen passiert nichts. */
 function useBuild(plot: Plot, onDone: () => void) {
   const build = useGameStore((s) => s.build);
-  return async (building: Building, name: string) => {
+  return async (building: Building, name: string, use: BuildingUse) => {
     const clean = cleanBuildingName(name);
-    if (clean && (await build(plot.id, { ...building, name: clean }))) onDone();
+    if (clean && (await build(plot.id, { ...building, name: clean, use }))) {
+      sound.build();
+      onDone();
+    } else {
+      sound.deny();
+    }
   };
 }
 
@@ -34,6 +41,7 @@ function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
   const templates = templatesFor(plot.size);
   const [chosen, setChosen] = useState<Template | null>(null);
   const [name, setName] = useState("");
+  const [use, setUse] = useState<BuildingUse>("residential");
 
   if (chosen) {
     const building = buildingFromTemplate(chosen);
@@ -49,8 +57,9 @@ function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
           <FacadePreview facade={chosen.facade} size={plot.size} label={chosen.name} maxHeight={200} />
         </div>
         <BuildingNameField value={name} onChange={setName} />
-        <p className="subtle">Bringt 🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute</p>
-        <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name)}>
+        <UsePicker value={use} onChange={setUse} />
+        <p className="subtle">Grundmiete 🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute</p>
+        <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name, use)}>
           Bauen
         </button>
       </section>
@@ -76,6 +85,7 @@ function TemplateList({ plot, onDone }: { plot: Plot; onDone: () => void }) {
               onClick={() => {
                 setChosen(template);
                 setName(personalName(playerName, template.name));
+                setUse(template.use);
               }}
             >
               <FacadePreview facade={template.facade} size={plot.size} label={template.name} maxHeight={120} />
@@ -100,6 +110,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
   const [name, setName] = useState(() => personalName(playerName, building.name));
   // Einen selbst getippten Namen nicht beim nächsten Wurf überschreiben.
   const [nameTouched, setNameTouched] = useState(false);
+  const [use, setUse] = useState<BuildingUse>(building.use ?? "residential");
 
   return (
     <section className="picker" aria-label="Würfeln">
@@ -119,6 +130,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
           setNameTouched(true);
         }}
       />
+      <UsePicker value={use} onChange={setUse} />
       <p className="subtle">
         Bringt 🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute · {building.facade.floors} Stockwerk
         {building.facade.floors > 1 ? "e" : ""}
@@ -129,6 +141,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
           className="btn"
           onClick={() => {
             const next = roll();
+            sound.tap();
             setBuilding(next);
             setRolls((n) => n + 1);
             if (!nameTouched) setName(personalName(playerName, next.name));
@@ -136,7 +149,7 @@ function Dice({ plot, onDone }: { plot: Plot; onDone: () => void }) {
         >
           Nochmal 🎲
         </button>
-        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => void place(building, name)}>
+        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => void place(building, name, use)}>
           Bauen
         </button>
       </div>

@@ -1,4 +1,4 @@
-import type { Building, Facade, PlacedPart, PlotSize } from "../model/types";
+import type { Building, BuildingUse, Facade, PlacedPart, PlotSize } from "../model/types";
 import { createId } from "./ids";
 import { personalName } from "./names";
 
@@ -6,6 +6,8 @@ export interface Template {
   id: string;
   name: string;
   size: PlotSize;
+  /** Vorschlag für die Nutzung – beim Bauen änderbar. */
+  use: BuildingUse;
   facade: Facade;
 }
 
@@ -19,6 +21,7 @@ export const TEMPLATES: Template[] = [
     id: "kiosk",
     name: "Kiosk",
     size: "S",
+    use: "commercial",
     facade: {
       base: { partId: "base-brick" },
       roof: { partId: "roof-flat" },
@@ -30,6 +33,7 @@ export const TEMPLATES: Template[] = [
     id: "imbiss",
     name: "Imbiss",
     size: "S",
+    use: "commercial",
     facade: {
       base: { partId: "base-wood" },
       roof: { partId: "roof-pitched" },
@@ -41,6 +45,7 @@ export const TEMPLATES: Template[] = [
     id: "friseur",
     name: "Friseur",
     size: "S",
+    use: "commercial",
     facade: {
       base: { partId: "base-ice" },
       roof: { partId: "roof-flat" },
@@ -52,6 +57,7 @@ export const TEMPLATES: Template[] = [
     id: "huepfburg",
     name: "Hüpfburg",
     size: "S",
+    use: "commercial",
     facade: {
       base: { partId: "base-gummy" },
       roof: { partId: "roof-battlements" },
@@ -65,6 +71,7 @@ export const TEMPLATES: Template[] = [
     id: "baeckerei",
     name: "Bäckerei",
     size: "M",
+    use: "commercial",
     facade: {
       base: { partId: "base-wood" },
       roof: { partId: "roof-pitched" },
@@ -82,6 +89,7 @@ export const TEMPLATES: Template[] = [
     id: "wohnhaus",
     name: "Wohnhaus",
     size: "M",
+    use: "residential",
     facade: {
       base: { partId: "base-brick" },
       roof: { partId: "roof-pitched" },
@@ -100,6 +108,7 @@ export const TEMPLATES: Template[] = [
     id: "doenerbude",
     name: "Dönerbude",
     size: "M",
+    use: "commercial",
     facade: {
       base: { partId: "base-brick" },
       roof: { partId: "roof-flat" },
@@ -118,6 +127,7 @@ export const TEMPLATES: Template[] = [
     id: "eisdiele",
     name: "Eisdiele",
     size: "M",
+    use: "commercial",
     facade: {
       base: { partId: "base-ice" },
       roof: { partId: "roof-icing" },
@@ -137,6 +147,7 @@ export const TEMPLATES: Template[] = [
     id: "gummibaerchenschloss",
     name: "Gummibärchenschloss",
     size: "L",
+    use: "residential",
     facade: {
       base: { partId: "base-gummy" },
       roof: { partId: "roof-battlements" },
@@ -158,6 +169,7 @@ export const TEMPLATES: Template[] = [
     id: "freizeitpark",
     name: "Freizeitpark",
     size: "L",
+    use: "commercial",
     facade: {
       base: { partId: "base-wood" },
       roof: { partId: "roof-dome" },
@@ -177,6 +189,7 @@ export const TEMPLATES: Template[] = [
     id: "schwimmbad",
     name: "Schwimmbad",
     size: "L",
+    use: "commercial",
     facade: {
       base: { partId: "base-ice" },
       roof: { partId: "roof-flat" },
@@ -196,6 +209,7 @@ export const TEMPLATES: Template[] = [
     id: "klaeranlage",
     name: "Kläranlage",
     size: "L",
+    use: "commercial",
     facade: {
       base: { partId: "base-brick" },
       roof: { partId: "roof-flat" },
@@ -214,6 +228,7 @@ export const TEMPLATES: Template[] = [
     id: "schokofabrik",
     name: "Schokofabrik",
     size: "L",
+    use: "commercial",
     facade: {
       base: { partId: "base-chocolate" },
       roof: { partId: "roof-icing" },
@@ -241,6 +256,7 @@ export function buildingFromTemplate(template: Template): Building {
     name: template.name,
     level: 1,
     createdBy: "template",
+    use: template.use,
     facade: structuredClone(template.facade),
   };
 }

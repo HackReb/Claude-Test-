@@ -38,7 +38,9 @@ export function placeBuilding(street: Street, plotId: string, building: Building
   const plot = street.plots.find((p) => p.id === plotId);
   if (!plot || !isOwned(plot)) return null;
   const placed = plot.building ? { ...building, level: plot.building.level } : building;
-  return { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building: placed } : p)) };
+  // Ein Gebäude ersetzt eine Anlage (z. B. Spielplatz) auf demselben Grundstück.
+  const replace = ({ amenity: _removed, ...p }: Plot): Plot => ({ ...p, building: placed });
+  return { ...street, plots: street.plots.map((p) => (p.id === plotId ? replace(p) : p)) };
 }
 
 export type UpgradeResult =

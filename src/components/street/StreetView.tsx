@@ -1,10 +1,14 @@
-import type { KeyboardEvent } from "react";
-import type { Plot, Street } from "../../model/types";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useOf, type Voice } from "../../game/life";
+import type { LitterItem, LitterKind, Plot, Street } from "../../model/types";
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
 import { possessive } from "../../game/names";
 import { FacadeSvg } from "../FacadeSvg";
 import { layoutStreet, STREET, type LotBox } from "./layout";
+import { Litter } from "./Litter";
+import { Playground } from "./Playground";
+import { StreetLife, type LifeAnchors } from "./StreetLife";
 
 const INK = "#2b2118";
 
@@ -16,11 +20,86 @@ interface Props {
   priceOf?: (plot: Plot) => number;
   coins?: number;
   onSelect?: (plot: Plot) => void;
+  /** Leute, Kinder und Hund auf den Gehwegen zeigen. */
+  life?: boolean;
+  /** Dreck antippen; liefert die Belohnung (0 = noch nicht weg). */
+  onLitterTap?: (item: LitterItem) => Promise<number>;
+  /** Hund/Passant lässt live Dreck fallen. */
+  onDrop?: (kind: LitterKind, spot: Pick<LitterItem, "pos" | "side">) => void;
+  /** Sprechblasen über Grundstücken. */
+  voices?: Voice[];
+  onVoice?: (voice: Voice) => void;
+  /** Sichtbarer Ausschnitt (0–1) – z. B. für passende Straßengeräusche. */
+  onViewport?: (from: number, to: number) => void;
+}
+
+interface Popup {
+  id: number;
+  x: number;
+  y: number;
+  text: string;
 }
 
 /** Straße von leicht schräg oben: linke Seite oben, Fahrbahn in der Mitte, rechte Seite unten. */
-export function StreetView({ street, ownerName, priceOf, coins = 0, onSelect }: Props) {
+export function StreetView({
+  street,
+  ownerName,
+  priceOf,
+  coins = 0,
+  onSelect,
+  life = false,
+  onLitterTap,
+  onDrop,
+  voices = [],
+  onVoice,
+  onViewport,
+}: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
+  const scroller = useRef<HTMLDivElement>(null);
+  const [popups, setPopups] = useState<Popup[]>([]);
+  const litterY = { top: roadTop - 13, bottom: roadBottom + 15 };
+  const walkY = useMemo(() => ({ top: roadTop - 6, bottom: roadBottom + STREET.sidewalk - 6 }), [roadTop, roadBottom]);
+
+  // Wo wohnen Leute, wo wird eingekauft, wo gespielt? (stabil, solange sich daran nichts ändert)
+  const anchorKey = lots
+    .map((l) => `${l.x}:${l.plot.amenity ?? (l.plot.purchasedAt !== undefined && l.plot.building ? useOf(l.plot.building) : "")}`)
+    .join(",");
+  const anchors = useMemo<LifeAnchors>(() => {
+    const center = (l: LotBox) => l.x + l.width / 2;
+    const owned = lots.filter((l) => l.plot.purchasedAt !== undefined);
+    return {
+      homes: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "residential").map(center),
+      shops: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "commercial").map(center),
+      playgrounds: owned.filter((l) => l.plot.amenity === "playground").map(center),
+    };
+  }, [anchorKey]);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !onViewport) return;
+    const report = () => {
+      const svgWidth = el.scrollWidth || 1;
+      onViewport(el.scrollLeft / svgWidth, (el.scrollLeft + el.clientWidth) / svgWidth);
+    };
+    report();
+    el.addEventListener("scroll", report, { passive: true });
+    window.addEventListener("resize", report);
+    return () => {
+      el.removeEventListener("scroll", report);
+      window.removeEventListener("resize", report);
+    };
+  }, [onViewport]);
+
+  async function tapLitter(item: LitterItem) {
+    if (!onLitterTap) return;
+    const reward = await onLitterTap(item);
+    if (reward > 0) {
+      const popup = { id: Date.now() + Math.random(), x: item.pos * width, y: litterY[item.side] - 20, text: `+${reward} 🪙` };
+      setPopups((list) => [...list, popup]);
+      setTimeout(() => setPopups((list) => list.filter((p) => p.id !== popup.id)), 1000);
+    }
+  }
+  const voiceByPlot = new Map(voices.filter((v) => v.plotId).map((v) => [v.plotId!, v]));
   const roadMid = (roadTop + roadBottom) / 2;
   const owner = ownerName ? `${possessive(ownerName)} ` : "";
   const streetLabel = street.name.length > 24 ? `${street.name.slice(0, 23)}…` : street.name;
@@ -28,7 +107,7 @@ export function StreetView({ street, ownerName, priceOf, coins = 0, onSelect }: 
   const labelEnd = STREET.padX + 8 + (owner.length + streetLabel.length) * 12 + 24;
 
   return (
-    <div className="street-scroll">
+    <div className="street-scroll" ref={scroller}>
       <svg
         className="street-svg"
         viewBox={`0 0 ${width} ${height}`}
@@ -61,7 +140,21 @@ export function StreetView({ street, ownerName, priceOf, coins = 0, onSelect }: 
             price={priceOf?.(lot.plot)}
             affordable={priceOf ? coins >= priceOf(lot.plot) : false}
             onSelect={onSelect}
+            voice={voiceByPlot.get(lot.plot.id)}
+            onVoice={onVoice}
           />
+        ))}
+
+        {(street.litter ?? []).map((item) => (
+          <Litter key={item.id} item={item} x={item.pos * width} y={litterY[item.side]} onTap={onLitterTap ? tapLitter : undefined} />
+        ))}
+
+        {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} />}
+
+        {popups.map((p) => (
+          <text key={p.id} x={p.x} y={p.y} textAnchor="middle" fontSize={16} fontWeight={900} fill="#2b2118" className="reward-popup">
+            {p.text}
+          </text>
         ))}
       </svg>
     </div>
@@ -73,11 +166,15 @@ function Lot({
   price,
   affordable,
   onSelect,
+  voice,
+  onVoice,
 }: {
   lot: LotBox;
   price?: number;
   affordable: boolean;
   onSelect?: (plot: Plot) => void;
+  voice?: Voice;
+  onVoice?: (voice: Voice) => void;
 }) {
   const { plot, x, y, width } = lot;
   const h = STREET.lotHeight;
@@ -86,8 +183,10 @@ function Lot({
 
   const label = owned
     ? plot.building
-      ? `${plot.building.name}, Grundstück ${plot.size}, Stufe ${plot.building.level}`
-      : `Dein Bauplatz ${plot.size}`
+      ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}`
+      : plot.amenity === "playground"
+        ? `Spielplatz, Grundstück ${plot.size}`
+        : `Dein Bauplatz ${plot.size}`
     : `Grundstück ${plot.size} zu verkaufen${price !== undefined ? ` für ${price} Münzen` : ""}`;
 
   const select = () => onSelect?.(plot);
@@ -123,6 +222,8 @@ function Lot({
 
       {plot.building ? (
         <Building lot={lot} groundY={groundY} />
+      ) : owned && plot.amenity === "playground" ? (
+        <Playground width={width} groundY={groundY} />
       ) : owned ? (
         <BuildSite width={width} groundY={groundY} />
       ) : (
@@ -130,6 +231,46 @@ function Lot({
       )}
 
       {plot.building && <NamePlate width={width} bottom={h} name={plot.building.name} />}
+      {owned && !plot.building && plot.amenity === "playground" && <NamePlate width={width} bottom={h} name="Spielplatz" />}
+
+      {plot.building && (
+        <g aria-hidden transform="translate(14 42)">
+          <circle r={12} cx={12} cy={12} fill={useOf(plot.building) === "residential" ? "#d8f3dc" : "#ffe3d6"} stroke={INK} strokeWidth={2.5} />
+          <text x={12} y={17} textAnchor="middle" fontSize={13}>
+            {useOf(plot.building) === "residential" ? "🏠" : "🏪"}
+          </text>
+        </g>
+      )}
+
+      {voice && (
+        <g
+          className="voice-bubble"
+          role="button"
+          tabIndex={0}
+          aria-label={`${voice.speaker}: ${voice.quote}`}
+          transform={`translate(${width / 2} 30)`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onVoice?.(voice);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onVoice?.(voice);
+            }
+          }}
+        >
+          <animateTransform attributeName="transform" type="translate" additive="sum" values="0 0; 0 -4; 0 0" dur="1.6s" repeatCount="indefinite" />
+          <path d="M-20 -16 H20 A6 6 0 0 1 26 -10 V6 A6 6 0 0 1 20 12 H4 L-2 20 L-4 12 H-20 A6 6 0 0 1 -26 6 V-10 A6 6 0 0 1 -20 -16 Z" fill="#fff" stroke={INK} strokeWidth={2.5} />
+          <text y={3} textAnchor="middle" fontSize={17}>
+            {voice.emoji}
+          </text>
+          <text x={16} y={-8} textAnchor="middle" fontSize={11} fontWeight={900} fill={voice.tone === "complaint" ? "#d6344f" : "#ff7a45"}>
+            !
+          </text>
+        </g>
+      )}
 
       {plot.building && plot.building.level > 1 && (
         <g aria-hidden>

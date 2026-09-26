@@ -4,6 +4,7 @@ import { formatCoins } from "../format";
 import { ownedStreetName } from "../game/names";
 import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
+import { SoundToggle } from "./SoundToggle";
 import { useGameStore } from "../store/gameStore";
 
 const TICK_MS = 1000;
@@ -34,6 +35,7 @@ export function AppLayout() {
           <span className="topbar-street-name">{ownedStreetName(player.name, street.name)}</span>
           <span className="topbar-city">{formatPlace(street)}</span>
         </div>
+        <SoundToggle />
         <div className="coins" aria-label={`${player.coins} Münzen`}>
           <span aria-hidden>🪙</span> {formatCoins(player.coins)}
         </div>

@@ -1,5 +1,6 @@
 import { creditedMinutes, rentPerMinute } from "../config/economy";
-import type { Building, Player, PlotSize, Street } from "../model/types";
+import type { Building, Player, Plot, PlotSize, Street } from "../model/types";
+import { applyModifiers, rentModifiers, type RentModifiers } from "./life";
 import { getPart } from "../parts/catalog";
 
 export function buildingRentPerMinute(size: PlotSize, building: Building): number {
@@ -11,13 +12,16 @@ export function buildingRentPerMinute(size: PlotSize, building: Building): numbe
   return rentPerMinute({ size, floors: facade.floors, partsBonus, level: building.level });
 }
 
+/** Miete eines Grundstücks in seiner Straße – inklusive Sauberkeit, Spielplatz und Kundschaft. */
+export function plotRentPerMinute(street: Street, plot: Plot, modifiers: RentModifiers = rentModifiers(street)): number {
+  if (plot.purchasedAt === undefined || !plot.building) return 0;
+  return applyModifiers(buildingRentPerMinute(plot.size, plot.building), plot.building, modifiers);
+}
+
 /** Gesamte Miete pro Minute aller eigenen, bebauten Grundstücke. */
 export function streetRentPerMinute(street: Street): number {
-  return street.plots.reduce(
-    (sum, plot) =>
-      plot.purchasedAt !== undefined && plot.building ? sum + buildingRentPerMinute(plot.size, plot.building) : sum,
-    0,
-  );
+  const modifiers = rentModifiers(street);
+  return street.plots.reduce((sum, plot) => sum + plotRentPerMinute(street, plot, modifiers), 0);
 }
 
 /**
