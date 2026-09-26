@@ -12,6 +12,15 @@ function memoryStorage(): KeyValueStorage & { size: () => number } {
   };
 }
 
+describe("LocalRepository ohne localStorage", () => {
+  it("fällt auf In-Memory-Speicher zurück, statt abzustürzen", async () => {
+    const repo = new LocalRepository();
+    const { player } = claimStreet({ playerName: "Kalle", streetName: "Weg", city: "Ulm" }, 1);
+    await repo.savePlayer(player);
+    expect(await repo.loadPlayer()).toEqual(player);
+  });
+});
+
 describe("LocalRepository", () => {
   it("speichert und lädt Spieler und Straße", async () => {
     const storage = memoryStorage();

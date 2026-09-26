@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { HashRouter, MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { RequirePlayer } from "./components/RequirePlayer";
 import { routes } from "./routes";
@@ -10,6 +10,10 @@ import { PlotScreen } from "./screens/PlotScreen";
 import { ShareScreen } from "./screens/ShareScreen";
 import { StreetScreen } from "./screens/StreetScreen";
 import { useGameStore } from "./store/gameStore";
+
+// HashRouter: funktioniert auf jedem statischen Hosting ohne Server-Rewrites.
+// Im Artifact-Build läuft die App in einem Frame, der die URL nicht anfassen soll.
+const Router = import.meta.env.MODE === "artifact" ? MemoryRouter : HashRouter;
 
 export function App() {
   const status = useGameStore((s) => s.status);
@@ -23,9 +27,8 @@ export function App() {
   if (status === "loading") return <div className="splash">Lade deine Straße …</div>;
   if (status === "error") return <div className="splash">Spielstand konnte nicht geladen werden.</div>;
 
-  // HashRouter: funktioniert auf jedem statischen Hosting ohne Server-Rewrites.
   return (
-    <HashRouter>
+    <Router>
       <Routes>
         <Route path={routes.start} element={hasPlayer ? <Navigate to={routes.street} replace /> : <ClaimScreen />} />
         <Route element={<RequirePlayer />}>
@@ -39,6 +42,6 @@ export function App() {
         </Route>
         <Route path="*" element={<Navigate to={hasPlayer ? routes.street : routes.start} replace />} />
       </Routes>
-    </HashRouter>
+    </Router>
   );
 }

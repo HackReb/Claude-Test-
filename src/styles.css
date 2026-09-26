@@ -183,6 +183,20 @@ p {
   color: var(--primary-ink);
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.confirm {
+  width: 100%;
+}
+
+.confirm p {
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+
 .btn-link {
   min-height: 44px;
   border: none;

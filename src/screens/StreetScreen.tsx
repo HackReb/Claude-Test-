@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Placeholder } from "../components/Placeholder";
 import type { Plot } from "../model/types";
@@ -18,13 +19,10 @@ export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
   const player = useGameStore((s) => s.player)!;
   const reset = useGameStore((s) => s.reset);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const side = (s: Plot["side"]) =>
     street.plots.filter((p) => p.side === s).sort((a, b) => a.index - b.index);
-
-  function onReset() {
-    if (confirm("Spielstand wirklich löschen und neu anfangen?")) void reset();
-  }
 
   return (
     <Placeholder title={`Moin, ${player.name}!`} milestone="M2: Straßen-Ansicht als SVG, Kaufen & Miete">
@@ -34,9 +32,24 @@ export function StreetScreen() {
         <div className="street-road" aria-hidden />
         <div className="street-side">{side("right").map((p) => <PlotTile key={p.id} plot={p} />)}</div>
       </div>
-      <button type="button" className="btn btn-link" onClick={onReset}>
-        Spielstand zurücksetzen
-      </button>
+      {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
+      {confirmReset ? (
+        <div className="confirm">
+          <p>Spielstand wirklich löschen und neu anfangen?</p>
+          <div className="actions">
+            <button type="button" className="btn btn-danger" onClick={() => void reset()}>
+              Ja, löschen
+            </button>
+            <button type="button" className="btn" onClick={() => setConfirmReset(false)}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-link" onClick={() => setConfirmReset(true)}>
+          Spielstand zurücksetzen
+        </button>
+      )}
     </Placeholder>
   );
 }

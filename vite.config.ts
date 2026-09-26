@@ -3,12 +3,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig({
+// `--mode artifact`: Vorschau-Build für eine eingebettete Einzelseite (ohne Service Worker, alles in einem Chunk).
+export default defineConfig(({ mode }) => ({
   // Relative base so the build also works from a sub-path (e.g. GitHub Pages).
   base: "./",
   plugins: [
     react(),
     VitePWA({
+      disable: mode === "artifact",
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
@@ -29,7 +31,8 @@ export default defineConfig({
       },
     }),
   ],
+  build: mode === "artifact" ? { outDir: "dist-artifact", cssCodeSplit: false, modulePreload: false } : {},
   test: {
     environment: "node",
   },
-});
+}));

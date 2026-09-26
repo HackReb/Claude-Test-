@@ -9,10 +9,33 @@ const PLAYER_KEY = `${PREFIX}player`;
 const STREET_INDEX_KEY = `${PREFIX}streets`;
 const streetKey = (id: string) => `${PREFIX}street:${id}`;
 
+/** In-Memory-Ersatz, falls localStorage fehlt oder gesperrt ist (privater Modus, eingebettete Frames). */
+export function memoryStorage(): KeyValueStorage {
+  const data = new Map<string, string>();
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => void data.set(key, value),
+    removeItem: (key) => void data.delete(key),
+  };
+}
+
+function defaultStorage(): KeyValueStorage {
+  try {
+    const storage = globalThis.localStorage;
+    const probe = `${PREFIX}probe`;
+    storage.setItem(probe, "1");
+    storage.removeItem(probe);
+    return storage;
+  } catch {
+    console.warn("localStorage nicht verfügbar – Spielstand wird nur im Speicher gehalten.");
+    return memoryStorage();
+  }
+}
+
 export class LocalRepository implements Repository {
   private readonly storage: KeyValueStorage;
 
-  constructor(storage: KeyValueStorage = globalThis.localStorage) {
+  constructor(storage: KeyValueStorage = defaultStorage()) {
     this.storage = storage;
   }
 
