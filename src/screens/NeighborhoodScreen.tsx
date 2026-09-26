@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { NeighborhoodMap } from "../components/NeighborhoodMap";
 import { formatAgo } from "../format";
+import { ownedStreetName } from "../game/names";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 
@@ -12,10 +13,15 @@ export function NeighborhoodScreen() {
   const playerName = useGameStore((s) => s.player!.name);
   const playerId = useGameStore((s) => s.player!.id);
   const markNewsSeen = useGameStore((s) => s.markNewsSeen);
+  const online = useGameStore((s) => s.account?.status === "online");
+  const loadCity = useGameStore((s) => s.loadCity);
   const navigate = useNavigate();
 
   // Beim Verlassen gelten die Neuigkeiten als gelesen – beim Ansehen bleiben sie noch markiert.
   useEffect(() => () => void markNewsSeen(), [markNewsSeen]);
+  useEffect(() => {
+    if (online) void loadCity();
+  }, [online, loadCity]);
 
   if (!neighborhood) {
     return (
@@ -52,6 +58,8 @@ export function NeighborhoodScreen() {
         kaufen und bauen.
       </p>
 
+      {online && <CityPlayers />}
+
       <h2>{unread.length > 0 ? `Seit deinem letzten Besuch (${unread.length})` : "Neuigkeiten"}</h2>
       {neighborhood.news.length === 0 ? (
         <p className="subtle">Noch ruhig hier. Schau später wieder vorbei – deine Nachbarn bauen, während du weg bist.</p>
@@ -74,5 +82,47 @@ export function NeighborhoodScreen() {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Echte Mitspieler im selben Ort – dort kann man sich einkaufen. */
+function CityPlayers() {
+  const ids = useGameStore((s) => s.cityStreetIds);
+  const streets = useGameStore((s) => s.playerStreets);
+  const owners = useGameStore((s) => s.ownerNames);
+  const city = useGameStore((s) => s.street!.city);
+  const playerId = useGameStore((s) => s.player!.id);
+
+  return (
+    <>
+      <h2>Mitspieler in {city}</h2>
+      {ids === null ? (
+        <p className="subtle">Suche Mitspieler …</p>
+      ) : ids.length === 0 ? (
+        <p className="subtle">Noch niemand sonst aus {city} dabei. Schick deinen Freunden das Spiel!</p>
+      ) : (
+        <ul className="city-players">
+          {ids.map((id) => {
+            const street = streets[id];
+            if (!street) return null;
+            const free = street.plots.filter((p) => p.purchasedAt === undefined).length;
+            const mine = street.plots.filter((p) => p.ownerId === playerId).length;
+            return (
+              <li key={id}>
+                <Link className="card city-player" to={routes.neighborStreet(id)}>
+                  <span aria-hidden>🧑</span>
+                  <span>
+                    <strong>{ownedStreetName(owners[id] ?? "", street.name)}</strong>
+                    <small>
+                      {street.plots.filter((p) => p.building).length} Gebäude · {free} frei{mine > 0 ? ` · ${mine} gehören dir` : ""}
+                    </small>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
   );
 }

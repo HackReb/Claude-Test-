@@ -1342,3 +1342,64 @@ h2 {
   color: #fff;
   font-size: 0.65rem;
 }
+
+/* ---------- Server-Konto & Mitspieler ---------- */
+
+.account-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.account-card p {
+  margin: 0;
+}
+
+.account-card.warn {
+  border-color: var(--danger);
+}
+
+.recovery-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.city-players {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.city-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.city-player > span:first-child {
+  font-size: 1.8rem;
+}
+
+.city-player span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.city-player small {
+  color: var(--muted);
+}

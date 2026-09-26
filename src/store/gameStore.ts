@@ -20,7 +20,8 @@ import { buyCar, updateCar, type BuyCarResult } from "../game/cars";
 import { findNeighborStreets } from "../geo/neighbors";
 import type { Building, Car, LitterItem, LitterKind, Neighborhood, Player, Street, StreetLocation } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
-import type { Repository } from "../repository/Repository";
+import { ApiRepository } from "../repository/ApiRepository";
+import type { Account, Repository } from "../repository/Repository";
 
 type Status = "loading" | "ready" | "error";
 
@@ -36,6 +37,14 @@ interface GameState {
   /** Bot-Nachbarn; null, solange sie noch „einziehen“ (Nachbarstraßen werden gesucht). */
   neighborhood: Neighborhood | null;
   neighborStreets: Record<string, Street>;
+  /** Straßen anderer echter Spieler (mit Server): die mit eigenen Grundstücken und die gerade angesehenen. */
+  playerStreets: Record<string, Street>;
+  /** Namen der Besitzer dieser Straßen. */
+  ownerNames: Record<string, string>;
+  /** Straßen-IDs anderer Spieler im eigenen Ort; null = noch nicht geladen. */
+  cityStreetIds: string[] | null;
+  /** Server-Konto; null = ohne Server (nur dieses Gerät). */
+  account: Account | null;
 
   /** Lädt den Spielstand aus dem Repository und verbucht die Offline-Miete (einmal beim App-Start). */
   init(): Promise<void>;
@@ -46,7 +55,7 @@ interface GameState {
   /** Überträgt die angesammelte Miete auf das Konto. */
   collect(): Promise<number>;
   /** Kauft ein Grundstück – in der eigenen Straße oder (mit `streetId`) bei einem Nachbarn. */
-  buyPlot(plotId: string, streetId?: string): Promise<BuyResult & { greeting?: string }>;
+  buyPlot(plotId: string, streetId?: string): Promise<BuyOutcome>;
   upgrade(plotId: string, streetId?: string): Promise<UpgradeResult>;
   /** Neuigkeiten aus der Nachbarschaft als gelesen markieren. */
   markNewsSeen(): Promise<void>;
@@ -67,9 +76,20 @@ interface GameState {
   /** Ungeprüfte Straße mit einer echten Straße aus der Kartensuche bestätigen. */
   verifyStreet(location: StreetLocation): Promise<boolean>;
   dismissOfflineEarnings(): void;
+  /** Frischen Stand vom Server holen: eigene Straße (fremde Käufe) und angesehene Spieler-Straßen. */
+  refresh(): Promise<void>;
+  /** Straße eines anderen Spielers laden (zum Ansehen). */
+  loadPlayerStreet(streetId: string): Promise<boolean>;
+  /** Andere Spieler im eigenen Ort suchen. */
+  loadCity(): Promise<void>;
+  /** Mit Wiederherstellungs-Code weiterspielen. */
+  recover(code: string): Promise<boolean>;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
 }
+
+/** Kauf kann online zu spät sein: ein anderer Spieler war schneller (Geld kommt zurück). */
+export type BuyOutcome = (BuyResult | { ok: false; reason: "taken" }) & { greeting?: string };
 
 export interface StoreDeps {
   /** Sucht echte Nachbarstraßen; austauschbar für Tests. */
@@ -83,30 +103,39 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
   const findNeighbors = deps.findNeighbors ?? defaultFindNeighbors;
 
   return create<GameState>()((set, get) => {
-    async function save(player: Player, street?: Street) {
-      if (street) await repo.saveStreet(street);
+    /**
+     * Speichert Spieler und Straße. Online kommt die Straße zusammengeführt zurück
+     * (andere Spieler können dort gekauft haben) – dann gilt dieser Stand.
+     */
+    async function save(player: Player, street?: Street): Promise<Street | undefined> {
+      const merged = street ? await repo.saveStreet(street) : undefined;
       await repo.savePlayer(player);
+      if (merged) set(streetPatch(merged));
+      return merged ?? street;
     }
 
     /** Eigene Straße + alle Nachbarstraßen (in denen der Spieler Grundstücke haben kann). */
     function allStreets(): Street[] {
-      const { street, neighborStreets } = get();
-      return street ? [street, ...Object.values(neighborStreets)] : [];
+      const { street, neighborStreets, playerStreets } = get();
+      return street ? [street, ...Object.values(neighborStreets), ...Object.values(playerStreets)] : [];
     }
 
     /** Straße nach ID; ohne ID die eigene. */
     function streetById(streetId?: string): Street | null {
-      const { street, neighborStreets } = get();
+      const { street, neighborStreets, playerStreets } = get();
       if (!street) return null;
-      return !streetId || streetId === street.id ? street : (neighborStreets[streetId] ?? null);
+      return !streetId || streetId === street.id ? street : (neighborStreets[streetId] ?? playerStreets[streetId] ?? null);
     }
 
-    /** Zustands-Update für eine geänderte Straße – eigene oder Nachbarstraße. */
+    /** Zustands-Update für eine geänderte Straße – eigene, Bot- oder Spieler-Straße. */
     function streetPatch(changed: Street): Partial<GameState> {
-      return changed.id === get().street?.id
-        ? { street: changed }
-        : { neighborStreets: { ...get().neighborStreets, [changed.id]: changed } };
+      const { street, neighborStreets, playerStreets } = get();
+      if (changed.id === street?.id) return { street: changed };
+      if (playerStreets[changed.id]) return { playerStreets: { ...playerStreets, [changed.id]: changed } };
+      return { neighborStreets: { ...neighborStreets, [changed.id]: changed } };
     }
+
+    const account = () => repo.online?.account() ?? null;
 
     /** Miete bis jetzt verbuchen – vor jeder Aktion, die Münzen oder Einnahmen verändert. */
     function accrued() {
@@ -145,6 +174,10 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       offlineEarnings: null,
       neighborhood: null,
       neighborStreets: {},
+      playerStreets: {},
+      ownerNames: {},
+      cityStreetIds: null,
+      account: null,
 
       async init() {
         try {
@@ -152,7 +185,7 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           const loadedStreet = loadedPlayer ? await repo.loadStreet(loadedPlayer.streetId) : null;
           // Ein Spieler ohne Straße ist kein gültiger Spielstand.
           if (!loadedPlayer || !loadedStreet) {
-            set({ status: "ready", player: null, street: null });
+            set({ status: "ready", player: null, street: null, account: account() });
             return;
           }
           const migrated = migrateSave(loadedPlayer, loadedStreet);
@@ -164,8 +197,18 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
             ? (await Promise.all(hood.bots.map((b) => repo.loadStreet(b.streetId)))).filter((s): s is Street => s !== null)
             : [];
 
+          // Straßen anderer Spieler, in denen man Grundstücke hat – auch dort läuft Miete.
+          const foreign = (await repo.online?.foreignStreets()) ?? [];
+          const playerStreets = Object.fromEntries(foreign.map((f) => [f.street.id, f.street]));
+          const ownerNames = Object.fromEntries(foreign.map((f) => [f.street.id, f.ownerName]));
+          set({ playerStreets, ownerNames, account: account() });
+
           const away = clock() - migrated.player.lastSeen;
-          const { player, gained } = accrueRent(migrated.player, [migrated.street, ...hoodStreets], clock());
+          const { player, gained } = accrueRent(
+            migrated.player,
+            [migrated.street, ...hoodStreets, ...foreign.map((f) => f.street)],
+            clock(),
+          );
           // Danach liegt der Müll herum, der inzwischen entstanden ist – er drückt ab jetzt die Miete.
           const street = spawnLitter(migrated.street, clock());
           await save(player, street);
@@ -195,8 +238,20 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
 
       async claim(input) {
         const { player, street } = claimStreet(input, clock());
+        // Online zuerst anmelden – wirft StreetTakenError, wenn die echte Straße schon jemandem gehört.
+        await repo.online?.register(player, street);
         await save(player, street);
-        set({ player, street, offlineEarnings: null, neighborhood: null, neighborStreets: {} });
+        set({
+          player,
+          street,
+          offlineEarnings: null,
+          neighborhood: null,
+          neighborStreets: {},
+          playerStreets: {},
+          ownerNames: {},
+          cityStreetIds: null,
+          account: account(),
+        });
         void setupNeighborhood(street);
       },
 
@@ -226,7 +281,17 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         if (!bought.ok) return bought;
 
         set({ player: bought.player, ...streetPatch(bought.street) });
-        await save(bought.player, bought.street);
+        const saved = await save(bought.player, bought.street);
+
+        // Online war jemand schneller → Geld zurück.
+        const savedPlot = saved?.plots.find((p) => p.id === plotId);
+        if (saved && savedPlot && !belongsTo(saved, savedPlot, bought.player.id)) {
+          const current = get().player!;
+          const refunded = { ...current, coins: current.coins + price };
+          set({ player: refunded });
+          await repo.savePlayer(refunded);
+          return { ok: false, reason: "taken" };
+        }
 
         // Beim Nachbarn eingekauft → der Bot sagt etwas dazu (steht auch in den Neuigkeiten).
         const neighborhood = get().neighborhood;
@@ -357,12 +422,83 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         set({ offlineEarnings: null });
       },
 
+      async refresh() {
+        const online = repo.online;
+        const { street, playerStreets } = get();
+        if (!online || !street) return;
+        try {
+          for (const id of [street.id, ...Object.keys(playerStreets)]) {
+            const entry = await online.fetchStreet(id);
+            if (!entry || !get().street) continue;
+            // Miete bis jetzt mit dem alten Stand verbuchen, dann den neuen übernehmen.
+            const result = accrued();
+            set({ ...(result ? { player: result.player } : {}), ...streetPatch(entry.street) });
+          }
+        } catch (error) {
+          console.warn("Aktualisieren fehlgeschlagen", error);
+        }
+        set({ account: account() });
+      },
+
+      async loadPlayerStreet(streetId) {
+        if (streetById(streetId)) return true;
+        const entry = await repo.online?.fetchStreet(streetId).catch(() => null);
+        if (!entry || entry.ownerName === null) return false;
+        set({
+          playerStreets: { ...get().playerStreets, [streetId]: entry.street },
+          ownerNames: { ...get().ownerNames, [streetId]: entry.ownerName },
+        });
+        return true;
+      },
+
+      async loadCity() {
+        const { street } = get();
+        if (!repo.online || !street) return;
+        try {
+          const found = await repo.online.cityStreets(street.city);
+          const { playerStreets, ownerNames } = get();
+          set({
+            cityStreetIds: found.map((f) => f.street.id),
+            playerStreets: { ...playerStreets, ...Object.fromEntries(found.map((f) => [f.street.id, f.street])) },
+            ownerNames: { ...ownerNames, ...Object.fromEntries(found.map((f) => [f.street.id, f.ownerName])) },
+          });
+        } catch (error) {
+          console.warn("Mitspieler konnten nicht geladen werden", error);
+          set({ cityStreetIds: get().cityStreetIds ?? [] });
+        }
+      },
+
+      async recover(code) {
+        if (!repo.online || !(await repo.online.recover(code))) return false;
+        set({ status: "loading", neighborhood: null, neighborStreets: {}, playerStreets: {}, ownerNames: {}, cityStreetIds: null });
+        await get().init();
+        return true;
+      },
+
       async reset() {
         await repo.reset();
-        set({ player: null, street: null, offlineEarnings: null, neighborhood: null, neighborStreets: {} });
+        set({
+          player: null,
+          street: null,
+          offlineEarnings: null,
+          neighborhood: null,
+          neighborStreets: {},
+          playerStreets: {},
+          ownerNames: {},
+          cityStreetIds: null,
+          account: account(),
+        });
       },
     };
   });
 }
 
-export const useGameStore = createGameStore(new LocalRepository());
+/** Mit VITE_API_URL (z. B. https://babo.example.de) speichert das Spiel beim Server, sonst nur auf dem Gerät. */
+function defaultRepository(): Repository {
+  const local = new LocalRepository();
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (!apiUrl || import.meta.env.MODE === "artifact") return local;
+  return new ApiRepository(apiUrl, local, local.storage);
+}
+
+export const useGameStore = createGameStore(defaultRepository());

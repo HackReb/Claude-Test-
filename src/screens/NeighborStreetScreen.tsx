@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ambienceFor } from "../audio/ambience";
 import { sound } from "../audio/sound";
@@ -13,11 +13,14 @@ import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 
-/** Straße eines Bot-Nachbarn – nur ansehen. */
+/** Straße eines Nachbarn – Bot oder echter Mitspieler. Freie Grundstücke kann man kaufen. */
 export function NeighborStreetScreen() {
   const { streetId = "" } = useParams();
-  const street = useGameStore((s) => s.neighborStreets[streetId]);
+  const street = useGameStore((s) => s.neighborStreets[streetId] ?? s.playerStreets[streetId]);
   const bot = useGameStore((s) => s.neighborhood?.bots.find((b) => b.streetId === streetId));
+  const realOwner = useGameStore((s) => s.ownerNames[streetId]);
+  const loadPlayerStreet = useGameStore((s) => s.loadPlayerStreet);
+  const [lookup, setLookup] = useState<"loading" | "done">(street ? "done" : "loading");
   const player = useGameStore((s) => s.player)!;
   const allStreets = useAllStreets();
   const navigate = useNavigate();
@@ -28,7 +31,18 @@ export function NeighborStreetScreen() {
     [street],
   );
   useEffect(() => () => sound.stopAmbience(), []);
-  if (!street || !bot) return <Navigate to={routes.neighborhood} replace />;
+  // Straße eines Mitspielers (z. B. per Link) erst vom Server holen.
+  useEffect(() => {
+    if (lookup === "loading") void loadPlayerStreet(streetId).finally(() => setLookup("done"));
+  }, [lookup, loadPlayerStreet, streetId]);
+
+  if (!street && lookup === "loading") return <p className="subtle">Straße wird geladen …</p>;
+  const owner = bot
+    ? { avatar: bot.avatar, name: bot.name, shortName: personaOf(bot.character)?.shortName ?? bot.name, about: personaOf(bot.character)?.tagline }
+    : realOwner
+      ? { avatar: "🧑", name: realOwner, shortName: realOwner, about: "echter Mitspieler" }
+      : null;
+  if (!street || !owner) return <Navigate to={routes.neighborhood} replace />;
 
   const built = street.plots.filter((p) => p.building).length;
   const mine = street.plots.filter((p) => p.ownerId === player.id);
@@ -41,18 +55,18 @@ export function NeighborStreetScreen() {
       </Link>
       <div className="neighbor-head">
         <span className="neighbor-avatar" aria-hidden>
-          {bot.avatar}
+          {owner.avatar}
         </span>
         <div>
           <h1>{street.name}</h1>
           <p className="subtle">
-            {formatPlace(street)} · gehört {bot.name} ({personaOf(bot.character)?.tagline})
+            {formatPlace(street)} · gehört {owner.name} ({owner.about})
           </p>
         </div>
       </div>
       <StreetView
         street={street}
-        ownerName={personaOf(bot.character)?.shortName ?? bot.name}
+        ownerName={owner.shortName}
         life
         onViewport={onViewport}
         mineId={player.id}
@@ -79,7 +93,7 @@ export function NeighborStreetScreen() {
         )
       )}
       <p className="subtle">
-        {built} von {street.plots.length} Grundstücken bebaut, {free} frei · {bot.name} verdient ca. 🪙 {formatRate(streetRentPerMinute(street))} pro
+        {built} von {street.plots.length} Grundstücken bebaut, {free} frei · {owner.name} verdient ca. 🪙 {formatRate(streetRentPerMinute(street))} pro
         Minute
       </p>
     </div>

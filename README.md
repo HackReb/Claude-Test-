@@ -29,6 +29,23 @@ Installieren: Android/Chrome → Menü „App installieren“; iPhone/Safari →
 App-Icons neu erzeugen (nach Änderungen an `public/icon*.svg`):
 `npx -y -p playwright node scripts/generate-icons.mjs`
 
+## Server (Mitspieler & Speichern)
+
+Ohne Server speichert das Spiel nur auf dem Gerät. Mit dem Symfony-Server in [`server/`](./server/README.md)
+teilen alle Spieler eine Welt:
+
+- **Anmelden ohne Passwort:** Beim Claimen bekommt das Gerät einen geheimen Schlüssel, dazu einen
+  Wiederherstellungs-Code (`BABO-XXXX-XXXX-XXXX`, unter *Straße → Auf anderem Gerät weiterspielen*).
+- **Wer zuerst kommt:** Jede echte Straße (OSM-Kennung) gehört nur einem Spieler.
+- **Einkaufen bei Mitspielern:** Unter *Nachbarn → Mitspieler in <Ort>* kauft man freie Grundstücke
+  in Straßen anderer Spieler. Der Server lässt niemanden fremdes Eigentum überschreiben; wer zu spät
+  kauft, bekommt sein Geld zurück.
+- **Offline:** Alles landet zuerst lokal und wird nachgeschickt. Alte lokale Spielstände werden beim
+  ersten Start mit Server automatisch angemeldet.
+
+Die PWA nutzt den Server, wenn sie mit `VITE_API_URL` gebaut wird (GitHub Pages: Repository-Variable
+`API_URL`). Einrichten des Servers: [server/README.md](./server/README.md).
+
 ## Stack
 
 React 19 + TypeScript + Vite, PWA via `vite-plugin-pwa`, State mit Zustand,
@@ -65,8 +82,9 @@ src/
   geo/neighbors.ts         echte Nachbarstraßen (Photon reverse)
   share/streetImage.ts     Straße als PNG mit Titelzeile
   repository/
-    Repository.ts          Persistenz-Interface (async, später ApiRepository/Symfony)
+    Repository.ts          Persistenz-Interface (async) + Online-Funktionen
     LocalRepository.ts     Implementierung über localStorage
+    ApiRepository.ts       Symfony-Server: lokaler Zwischenspeicher, Offline-Warteschlange, Anmeldung, Code
   store/gameStore.ts       Zustand-Store: init / claim / tick / collect / buyPlot / build … – für jede Straße
   store/useStreetContext.ts  „In welcher Straße bin ich?“ (eigene oder Nachbarstraße) für Screens
   game/

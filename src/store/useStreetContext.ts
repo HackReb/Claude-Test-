@@ -22,7 +22,8 @@ export interface StreetContext {
 
 export function useStreetContext(streetId?: string): StreetContext | null {
   const own = useGameStore((s) => s.street);
-  const neighbor = useGameStore((s) => (streetId ? s.neighborStreets[streetId] : undefined));
+  const neighbor = useGameStore((s) => (streetId ? (s.neighborStreets[streetId] ?? s.playerStreets[streetId]) : undefined));
+  const realOwner = useGameStore((s) => (streetId ? s.ownerNames[streetId] : undefined));
   const bot = useGameStore((s) => (streetId ? s.neighborhood?.bots.find((b) => b.streetId === streetId) : undefined));
   const playerName = useGameStore((s) => s.player?.name ?? "");
 
@@ -45,18 +46,19 @@ export function useStreetContext(streetId?: string): StreetContext | null {
       streetId,
       own: false,
       bot,
-      ownerName: (bot && personaOf(bot.character)?.shortName) ?? bot?.name ?? "",
+      ownerName: (bot && personaOf(bot.character)?.shortName) ?? bot?.name ?? realOwner ?? "",
       plotRoute: (plotId: string) => routes.neighborPlot(streetId, plotId),
       builderRoute: (plotId: string) => routes.neighborBuilder(streetId, plotId),
       backRoute: routes.neighborStreet(streetId),
       backLabel: `← Zur ${neighbor.name}`,
     };
-  }, [own, neighbor, bot, streetId, playerName]);
+  }, [own, neighbor, bot, realOwner, streetId, playerName]);
 }
 
-/** Eigene Straße + Nachbarstraßen – für Preise und Gesamtmiete. */
+/** Eigene Straße + Nachbarstraßen + Straßen anderer Spieler – für Preise und Gesamtmiete. */
 export function useAllStreets(): Street[] {
   const own = useGameStore((s) => s.street);
   const neighbors = useGameStore((s) => s.neighborStreets);
-  return useMemo(() => (own ? [own, ...Object.values(neighbors)] : []), [own, neighbors]);
+  const players = useGameStore((s) => s.playerStreets);
+  return useMemo(() => (own ? [own, ...Object.values(neighbors), ...Object.values(players)] : []), [own, neighbors, players]);
 }

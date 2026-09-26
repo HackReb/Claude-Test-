@@ -1,0 +1,96 @@
+# Spielt den Babo-Server (Ordner server/) per SSH auf den eigenen Webspace.
+#
+# Einmalig einrichten (Settings → Secrets and variables → Actions):
+#   Secrets:   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY (privater Schlüssel, der auf dem Server erlaubt ist)
+#              optional SSH_PORT (Standard 22)
+#   Variables: DEPLOY_PATH  – Zielordner auf dem Server, z. B. /var/www/babo-api
+#              API_URL      – öffentliche Adresse, z. B. https://babo.example.de (auch für die PWA)
+#              PAGES_ORIGIN – optional, Standard https://<owner>.github.io
+#              WEB_USER     – optional, Benutzer von PHP-FPM (Standard www-data)
+#
+# Der Workflow legt beim ersten Mal .env.local auf dem Server an (APP_ENV=prod, zufälliges
+# APP_SECRET, SQLite-Datenbank) – nichts davon steht im Repo. Andere Dateien auf dem Server bleiben unberührt.
+# Webserver + HTTPS einmalig mit deploy/setup-nginx.sh einrichten (siehe server/README.md).
+name: Deploy Server
+
+on:
+  push:
+    branches: [main, Main]
+    paths: [server/**, .github/workflows/deploy-server.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONFIGURED: ${{ secrets.SSH_PRIVATE_KEY != '' && vars.DEPLOY_PATH != '' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PAGES_ORIGIN: ${{ vars.PAGES_ORIGIN || format('https://{0}.github.io', github.repository_owner) }}
+      WEB_USER: ${{ vars.WEB_USER || 'www-data' }}
+    steps:
+      - name: Noch nicht eingerichtet?
+        if: env.CONFIGURED != 'true'
+        run: echo "::notice::Server-Deploy übersprungen – Secrets SSH_HOST/SSH_USER/SSH_PRIVATE_KEY und Variable DEPLOY_PATH fehlen."
+
+      - uses: actions/checkout@v4
+        if: env.CONFIGURED == 'true'
+
+      - uses: shivammathur/setup-php@v2
+        if: env.CONFIGURED == 'true'
+        with:
+          php-version: "8.2"
+          tools: composer
+
+      - name: Abhängigkeiten (ohne Entwickler-Pakete)
+        if: env.CONFIGURED == 'true'
+        working-directory: server
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts
+
+      - name: SSH vorbereiten
+        if: env.CONFIGURED == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          printf 'Host deploy\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n' \
+            "$SSH_HOST" "$SSH_PORT" "${{ secrets.SSH_USER }}" > ~/.ssh/config
+
+      - name: Hochladen
+        if: env.CONFIGURED == 'true'
+        run: |
+          ssh deploy "mkdir -p '$DEPLOY_PATH'"
+          # var/ (Datenbank, Cache) und .env.local bleiben auf dem Server.
+          rsync -az --delete \
+            --exclude /var/ --exclude /.env.local --exclude /tests/ --exclude /.phpunit.cache/ \
+            server/ "deploy:$DEPLOY_PATH/"
+
+      - name: Einrichten und Datenbank aktualisieren
+        if: env.CONFIGURED == 'true'
+        run: |
+          # Browser schicken den Origin klein geschrieben (https://hackreb.github.io).
+          ORIGIN="${PAGES_ORIGIN,,}"
+          ssh deploy "cd '$DEPLOY_PATH' && \
+            if [ ! -f .env.local ]; then \
+              printf 'APP_ENV=prod\nAPP_DEBUG=0\nAPP_SECRET=%s\nCORS_ALLOW_ORIGIN=%s\n' \"\$(openssl rand -hex 16)\" '$ORIGIN' > .env.local; \
+              chmod 640 .env.local; \
+            fi && \
+            mkdir -p var && \
+            php bin/console cache:clear --no-warmup && \
+            php bin/console cache:warmup && \
+            php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration && \
+            if id '$WEB_USER' >/dev/null 2>&1; then \
+              chown -R '$WEB_USER:$WEB_USER' var && chgrp '$WEB_USER' .env.local; \
+            fi"
+
+      - name: Läuft er?
+        if: env.CONFIGURED == 'true' && vars.API_URL != ''
+        run: curl -fsS "${{ vars.API_URL }}/api/health"

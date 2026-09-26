@@ -258,6 +258,7 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
   const buyPlot = useGameStore((s) => s.buyPlot);
   const collect = useGameStore((s) => s.collect);
   const [busy, setBusy] = useState(false);
+  const [tooLate, setTooLate] = useState(false);
 
   const price = currentPrice(streets, ctx.street, plot, player.id);
   const missing = price - player.coins;
@@ -275,7 +276,10 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
           onGreeting(result.greeting);
           sound.bubble();
         }
-      } else sound.deny();
+      } else {
+        sound.deny();
+        if (result.reason === "taken") setTooLate(true);
+      }
     } finally {
       setBusy(false);
     }
@@ -303,6 +307,11 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
       <button type="button" className="btn btn-primary btn-wide" disabled={missing > 0 || busy} onClick={onBuy}>
         Kaufen für 🪙 {formatCoins(price)}
       </button>
+      {tooLate && (
+        <p className="error" role="status">
+          Zu spät – jemand war schneller! Dein Geld hast du zurück.
+        </p>
+      )}
 
       {missing > 0 && (
         <div className="missing">

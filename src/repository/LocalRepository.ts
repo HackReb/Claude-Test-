@@ -4,7 +4,7 @@ import type { Repository } from "./Repository";
 /** Minimaler Ausschnitt der Web-Storage-API, damit Tests einen In-Memory-Storage einsetzen können. */
 export type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-const PREFIX = "babo:v1:";
+export const PREFIX = "babo:v1:";
 const PLAYER_KEY = `${PREFIX}player`;
 const STREET_INDEX_KEY = `${PREFIX}streets`;
 const NEIGHBORHOOD_KEY = `${PREFIX}neighborhood`;
@@ -34,7 +34,7 @@ function defaultStorage(): KeyValueStorage {
 }
 
 export class LocalRepository implements Repository {
-  private readonly storage: KeyValueStorage;
+  readonly storage: KeyValueStorage;
 
   constructor(storage: KeyValueStorage = defaultStorage()) {
     this.storage = storage;
@@ -52,7 +52,7 @@ export class LocalRepository implements Repository {
     return this.read<Street>(streetKey(id));
   }
 
-  async saveStreet(street: Street): Promise<void> {
+  async saveStreet(street: Street): Promise<Street | void> {
     this.write(streetKey(street.id), street);
     const index = this.streetIndex();
     if (!index.includes(street.id)) {
