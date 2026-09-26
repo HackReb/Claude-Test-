@@ -6,5 +6,7 @@ export const routes = {
   builder: (plotId: string) => `/builder/${plotId}`,
   neighborhood: "/neighborhood",
   neighborStreet: (streetId: string) => `/neighborhood/${streetId}`,
+  neighborPlot: (streetId: string, plotId: string) => `/neighborhood/${streetId}/plot/${plotId}`,
+  neighborBuilder: (streetId: string, plotId: string) => `/neighborhood/${streetId}/builder/${plotId}`,
   share: "/share",
 } as const;

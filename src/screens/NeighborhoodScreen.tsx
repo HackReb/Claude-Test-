@@ -10,6 +10,7 @@ export function NeighborhoodScreen() {
   const streets = useGameStore((s) => s.neighborStreets);
   const street = useGameStore((s) => s.street)!;
   const playerName = useGameStore((s) => s.player!.name);
+  const playerId = useGameStore((s) => s.player!.id);
   const markNewsSeen = useGameStore((s) => s.markNewsSeen);
   const navigate = useNavigate();
 
@@ -40,13 +41,15 @@ export function NeighborhoodScreen() {
           neighborhood={neighborhood}
           playerStreet={street}
           playerName={playerName}
+          playerId={playerId}
           streets={streets}
           unreadByBot={unreadByBot}
           onSelect={(id) => navigate(routes.neighborStreet(id))}
         />
       </div>
       <p className="hint left">
-        {realNeighbors ? "Echte Nachbarstraßen, grob in ihrer echten Richtung. " : ""}Tipp eine Straße an, um sie dir anzusehen.
+        {realNeighbors ? "Echte Nachbarstraßen, grob in ihrer echten Richtung. " : ""}Tipp eine Straße an – dort kannst du freie Grundstücke
+        kaufen und bauen.
       </p>
 
       <h2>{unread.length > 0 ? `Seit deinem letzten Besuch (${unread.length})` : "Neuigkeiten"}</h2>

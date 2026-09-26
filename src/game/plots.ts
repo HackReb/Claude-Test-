@@ -1,35 +1,49 @@
-import { plotPrice, upgradeCost } from "../config/economy";
+import { ECONOMY, plotPrice, upgradeCost } from "../config/economy";
 import type { Building, Player, Plot, Street } from "../model/types";
 import { cleanBuildingName } from "./names";
 
+/** Ist das Grundstück verkauft (egal an wen)? */
 export const isOwned = (plot: Plot) => plot.purchasedAt !== undefined;
 
-/** Anzahl gekaufter Grundstücke (Geschenke zählen nicht). */
-export function plotsBought(street: Street): number {
-  return street.plots.filter((p) => isOwned(p) && !p.gifted).length;
+/** Gehört das Grundstück `ownerId` – als Besitzer der Straße oder als Käufer in einer fremden Straße? */
+export function belongsTo(street: Street, plot: Plot, ownerId: string): boolean {
+  if (!isOwned(plot)) return false;
+  return plot.ownerId ? plot.ownerId === ownerId : street.ownerId === ownerId;
 }
 
-/** Aktueller Kaufpreis dieses Grundstücks inkl. Preisanstieg. */
-export function currentPrice(street: Street, plot: Plot): number {
-  return plotPrice(plot.size, plotsBought(street));
+/** Anzahl gekaufter Grundstücke eines Spielers in allen Straßen (Geschenke zählen nicht). */
+export function plotsBought(streets: Street[], playerId: string): number {
+  return streets.reduce((sum, s) => sum + s.plots.filter((p) => belongsTo(s, p, playerId) && !p.gifted).length, 0);
+}
+
+/** Kaufpreis inkl. Preisanstieg über alle Straßen und Aufpreis in fremden Straßen. */
+export function currentPrice(streets: Street[], street: Street, plot: Plot, playerId: string): number {
+  const base = plotPrice(plot.size, plotsBought(streets, playerId));
+  return street.ownerId === playerId ? base : Math.round(base * ECONOMY.neighborPriceFactor);
 }
 
 export type BuyResult =
   | { ok: true; player: Player; street: Street; price: number }
   | { ok: false; reason: "not-found" | "owned" | "too-expensive" };
 
-export function buyPlot(player: Player, street: Street, plotId: string, now: number): BuyResult {
+/**
+ * Kauft ein freies Grundstück. In einer fremden Straße wird der Spieler als Käufer eingetragen.
+ * `price` ohne Angabe: Preis, als gäbe es nur diese eine Straße.
+ */
+export function buyPlot(player: Player, street: Street, plotId: string, now: number, price?: number): BuyResult {
   const plot = street.plots.find((p) => p.id === plotId);
   if (!plot) return { ok: false, reason: "not-found" };
   if (isOwned(plot)) return { ok: false, reason: "owned" };
-  const price = currentPrice(street, plot);
-  if (player.coins < price) return { ok: false, reason: "too-expensive" };
+  const cost = price ?? currentPrice([street], street, plot, player.id);
+  if (player.coins < cost) return { ok: false, reason: "too-expensive" };
 
+  const foreign = street.ownerId !== player.id;
+  const bought: Plot = { ...plot, purchasedAt: now, ...(foreign && { ownerId: player.id }) };
   return {
     ok: true,
-    price,
-    player: { ...player, coins: player.coins - price },
-    street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, purchasedAt: now } : p)) },
+    price: cost,
+    player: { ...player, coins: player.coins - cost },
+    street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? bought : p)) },
   };
 }
 

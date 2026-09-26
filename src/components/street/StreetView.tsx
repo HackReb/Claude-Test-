@@ -31,6 +31,8 @@ interface Props {
   onVoice?: (voice: Voice) => void;
   /** Sichtbarer Ausschnitt (0–1) – z. B. für passende Straßengeräusche. */
   onViewport?: (from: number, to: number) => void;
+  /** Spieler-ID: seine Grundstücke in fremden Straßen werden hervorgehoben. */
+  mineId?: string;
 }
 
 interface Popup {
@@ -53,6 +55,7 @@ export function StreetView({
   voices = [],
   onVoice,
   onViewport,
+  mineId,
 }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
   const scroller = useRef<HTMLDivElement>(null);
@@ -142,6 +145,7 @@ export function StreetView({
             onSelect={onSelect}
             voice={voiceByPlot.get(lot.plot.id)}
             onVoice={onVoice}
+            mine={!!mineId && lot.plot.ownerId === mineId}
           />
         ))}
 
@@ -168,6 +172,7 @@ function Lot({
   onSelect,
   voice,
   onVoice,
+  mine = false,
 }: {
   lot: LotBox;
   price?: number;
@@ -175,19 +180,21 @@ function Lot({
   onSelect?: (plot: Plot) => void;
   voice?: Voice;
   onVoice?: (voice: Voice) => void;
+  /** Dein Grundstück in einer fremden Straße. */
+  mine?: boolean;
 }) {
   const { plot, x, y, width } = lot;
   const h = STREET.lotHeight;
   const owned = plot.purchasedAt !== undefined;
   const groundY = h - 16;
 
-  const label = owned
+  const label = (mine ? "Dein Grundstück: " : "") + (owned
     ? plot.building
       ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}`
       : plot.amenity === "playground"
         ? `Spielplatz, Grundstück ${plot.size}`
         : `Dein Bauplatz ${plot.size}`
-    : `Grundstück ${plot.size} zu verkaufen${price !== undefined ? ` für ${price} Münzen` : ""}`;
+    : `Grundstück ${plot.size} zu verkaufen${price !== undefined ? ` für ${price} Münzen` : ""}`);
 
   const select = () => onSelect?.(plot);
   const onKeyDown = (e: KeyboardEvent) => {
@@ -215,10 +222,18 @@ function Lot({
         height={h}
         rx={14}
         fill={owned ? "#8fd694" : "#d4ebcc"}
-        stroke={INK}
-        strokeWidth={3}
+        stroke={mine ? "#ff7a45" : INK}
+        strokeWidth={mine ? 6 : 3}
         strokeDasharray={owned ? undefined : "10 8"}
       />
+      {mine && (
+        <g aria-hidden>
+          <rect x={width / 2 - 26} y={-9} width={52} height={18} rx={9} fill="#ff7a45" stroke={INK} strokeWidth={2} />
+          <text x={width / 2} y={4.5} textAnchor="middle" fontSize={11} fontWeight={900} fill="#fff">
+            DEINS
+          </text>
+        </g>
+      )}
 
       {plot.building ? (
         <Building lot={lot} groundY={groundY} />

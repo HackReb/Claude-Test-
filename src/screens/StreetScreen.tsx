@@ -12,6 +12,7 @@ import { formatCoins } from "../format";
 import { currentPrice } from "../game/plots";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
+import { useAllStreets } from "../store/useStreetContext";
 
 export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
@@ -23,6 +24,7 @@ export function StreetScreen() {
   const navigate = useNavigate();
   const verifyStreet = useGameStore((s) => s.verifyStreet);
   const cleanLitter = useGameStore((s) => s.cleanLitter);
+  const allStreets = useAllStreets();
   const dropLitter = useGameStore((s) => s.dropLitter);
   const [confirmReset, setConfirmReset] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -129,7 +131,7 @@ export function StreetScreen() {
         street={street}
         ownerName={player.name}
         coins={player.coins}
-        priceOf={(plot) => currentPrice(street, plot)}
+        priceOf={(plot) => currentPrice(allStreets, street, plot, player.id)}
         onSelect={(plot) => {
           sound.tap();
           navigate(routes.plot(plot.id));

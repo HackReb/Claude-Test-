@@ -39,6 +39,8 @@ export function App() {
             <Route path="/builder/:plotId" element={<BuilderScreen />} />
             <Route path={routes.neighborhood} element={<NeighborhoodScreen />} />
             <Route path="/neighborhood/:streetId" element={<NeighborStreetScreen />} />
+            <Route path="/neighborhood/:streetId/plot/:plotId" element={<PlotScreen />} />
+            <Route path="/neighborhood/:streetId/builder/:plotId" element={<BuilderScreen />} />
             <Route path={routes.share} element={<ShareScreen />} />
           </Route>
         </Route>

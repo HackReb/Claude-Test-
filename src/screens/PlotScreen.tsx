@@ -7,46 +7,78 @@ import { Playground } from "../components/street/Playground";
 import { sound } from "../audio/sound";
 import { LIFE } from "../config/life";
 import { rentModifiers, useOf } from "../game/life";
+import { possessive } from "../game/names";
 import { FacadePreview } from "../components/FacadePreview";
 import { ECONOMY } from "../config/economy";
 import { formatCoins, formatRate } from "../format";
-import { currentPrice, isOwned, nextUpgrade } from "../game/plots";
-import { buildingRentPerMinute, plotRentPerMinute, streetRentPerMinute } from "../game/rent";
+import { belongsTo, currentPrice, isOwned, nextUpgrade } from "../game/plots";
+import { buildingRentPerMinute, playerRentPerMinute, plotRentPerMinute } from "../game/rent";
 import type { BuildingUse, Plot, Street } from "../model/types";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
+import { useAllStreets, useStreetContext, type StreetContext } from "../store/useStreetContext";
 
 export function PlotScreen() {
-  const { plotId } = useParams();
-  const street = useGameStore((s) => s.street)!;
-  const plot = street.plots.find((p) => p.id === plotId);
-  if (!plot) return <Navigate to={routes.street} replace />;
+  const { plotId, streetId } = useParams();
+  const ctx = useStreetContext(streetId);
+  const playerId = useGameStore((s) => s.player!.id);
+  const [greeting, setGreeting] = useState<string | null>(null);
+  const plot = ctx?.street.plots.find((p) => p.id === plotId);
+  if (!ctx || !plot) return <Navigate to={ctx?.backRoute ?? routes.street} replace />;
 
   const cfg = ECONOMY.plotSizes[plot.size];
   const where = `${plot.side === "left" ? "Obere" : "Untere"} Straßenseite, Platz ${plot.index + 1}`;
+  const mine = belongsTo(ctx.street, plot, playerId);
+  const titleText = plot.building?.name ?? (isOwned(plot) && plot.amenity === "playground" ? "Spielplatz" : `Grundstück ${plot.size}`);
 
   return (
     <div className="plot-screen">
-      <Link className="btn btn-link back" to={routes.street}>
-        ← Zur Straße
+      <Link className="btn btn-link back" to={ctx.backRoute}>
+        {ctx.backLabel}
       </Link>
-      {plot.building ? (
-        <BuildingTitle plotId={plot.id} name={plot.building.name} />
-      ) : (
-        <h1>{isOwned(plot) && plot.amenity === "playground" ? "Spielplatz" : `Grundstück ${plot.size}`}</h1>
-      )}
+      {plot.building && mine ? <BuildingTitle plotId={plot.id} name={plot.building.name} streetId={ctx.streetId} /> : <h1>{titleText}</h1>}
       <p className="subtle">
+        {!ctx.own && `${ctx.street.name} (${ctx.bot?.name ?? "Nachbar"}) · `}
         {where} · {cfg.tiles} Kachel{cfg.tiles > 1 ? "n" : ""} breit · bis {cfg.maxFloors} Stockwerk
         {cfg.maxFloors > 1 ? "e" : ""}
       </p>
 
-      {isOwned(plot) ? <OwnedPlot plot={plot} /> : <PlotForSale plot={plot} />}
+      {greeting && (
+        <div className="notice card greeting" role="status">
+          <p>{greeting}</p>
+        </div>
+      )}
+
+      {mine ? (
+        <OwnedPlot plot={plot} ctx={ctx} />
+      ) : isOwned(plot) ? (
+        <ForeignPlot plot={plot} ctx={ctx} />
+      ) : (
+        <PlotForSale plot={plot} ctx={ctx} onGreeting={setGreeting} />
+      )}
     </div>
   );
 }
 
+/** Grundstück, das einem Nachbarn gehört – nur ansehen. */
+function ForeignPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
+  return (
+    <>
+      {plot.building && (
+        <div className="card plot-preview">
+          <FacadePreview facade={plot.building.facade} size={plot.size} label={plot.building.name} maxHeight={220} />
+        </div>
+      )}
+      <p>
+        Gehört <strong>{ctx.bot ? `${ctx.bot.avatar} ${ctx.bot.name}` : "deinem Nachbarn"}</strong> und ist nicht zu verkaufen. Freie
+        Grundstücke in dieser Straße kannst du kaufen und selbst bebauen.
+      </p>
+    </>
+  );
+}
+
 /** Gebäudename als Überschrift, per Stift umbenennbar. */
-function BuildingTitle({ plotId, name }: { plotId: string; name: string }) {
+function BuildingTitle({ plotId, name, streetId }: { plotId: string; name: string; streetId?: string }) {
   const rename = useGameStore((s) => s.renameBuilding);
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -65,7 +97,7 @@ function BuildingTitle({ plotId, name }: { plotId: string; name: string }) {
       className="rename"
       onSubmit={async (e) => {
         e.preventDefault();
-        if (await rename(plotId, draft)) setDraft(null);
+        if (await rename(plotId, draft, streetId)) setDraft(null);
       }}
     >
       <BuildingNameField value={draft} onChange={setDraft} />
@@ -81,12 +113,12 @@ function BuildingTitle({ plotId, name }: { plotId: string; name: string }) {
   );
 }
 
-function OwnedPlot({ plot }: { plot: Plot }) {
-  const street = useGameStore((s) => s.street)!;
+function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
+  const street = ctx.street;
   const [mode, setMode] = useState<BuildMode | null>(null);
   const building = plot.building;
 
-  if (mode) return <BuildPicker plot={plot} mode={mode} onDone={() => setMode(null)} />;
+  if (mode) return <BuildPicker plot={plot} mode={mode} streetId={ctx.streetId} onDone={() => setMode(null)} />;
 
   const buildActions = (
     <div className="actions">
@@ -96,7 +128,7 @@ function OwnedPlot({ plot }: { plot: Plot }) {
       <button type="button" className="btn" onClick={() => setMode("random")}>
         Würfeln 🎲
       </button>
-      <Link className="btn btn-primary" to={routes.builder(plot.id)}>
+      <Link className="btn btn-primary" to={ctx.builderRoute(plot.id)}>
         Selbst bauen
       </Link>
     </div>
@@ -120,7 +152,7 @@ function OwnedPlot({ plot }: { plot: Plot }) {
           </li>
           <li>Stufe {building.level} von 3</li>
         </ul>
-        <UpgradeSection plot={plot} />
+        <UpgradeSection plot={plot} streetId={ctx.streetId} />
         <h2>Umbauen</h2>
         <p className="subtle">Ersetzt {building.name}. Die Upgrade-Stufe bleibt erhalten.</p>
         {buildActions}
@@ -149,11 +181,12 @@ function OwnedPlot({ plot }: { plot: Plot }) {
   return (
     <>
       <p>
-        Dein Bauplatz ist bereit. Ein Gebäude hier bringt ab{" "}
+        {ctx.own ? "Dein Bauplatz ist bereit." : `Dein Bauplatz in ${possessive(ctx.ownerName)} ${street.name} ist bereit.`} Ein Gebäude hier
+        bringt ab{" "}
         <strong>🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</strong>.
       </p>
       {buildActions}
-      <PlaygroundOffer plot={plot} />
+      {ctx.own && <PlaygroundOffer plot={plot} />}
     </>
   );
 }
@@ -193,7 +226,7 @@ function PlaygroundOffer({ plot }: { plot: Plot }) {
   );
 }
 
-function UpgradeSection({ plot }: { plot: Plot }) {
+function UpgradeSection({ plot, streetId }: { plot: Plot; streetId?: string }) {
   const coins = useGameStore((s) => s.player!.coins);
   const upgrade = useGameStore((s) => s.upgrade);
   const next = nextUpgrade(plot);
@@ -210,7 +243,7 @@ function UpgradeSection({ plot }: { plot: Plot }) {
         Minute
       </p>
       <button type="button" className="btn btn-primary" disabled={coins < next.cost} onClick={async () => {
-          if ((await upgrade(plot.id)).ok) sound.upgrade();
+          if ((await upgrade(plot.id, streetId)).ok) sound.upgrade();
         }}>
         Ausbauen für 🪙 {formatCoins(next.cost)}
       </button>
@@ -219,25 +252,30 @@ function UpgradeSection({ plot }: { plot: Plot }) {
   );
 }
 
-function PlotForSale({ plot }: { plot: Plot }) {
-  const street = useGameStore((s) => s.street)!;
+function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext; onGreeting: (text: string) => void }) {
+  const streets = useAllStreets();
   const player = useGameStore((s) => s.player)!;
   const buyPlot = useGameStore((s) => s.buyPlot);
   const collect = useGameStore((s) => s.collect);
   const [busy, setBusy] = useState(false);
 
-  const price = currentPrice(street, plot);
+  const price = currentPrice(streets, ctx.street, plot, player.id);
   const missing = price - player.coins;
   const pending = Math.floor(player.pendingRent);
-  const rate = streetRentPerMinute(street);
+  const rate = playerRentPerMinute(streets, player.id);
   const basePrice = ECONOMY.plotSizes[plot.size].price;
 
   async function onBuy() {
     setBusy(true);
     try {
-      const result = await buyPlot(plot.id);
-      if (result.ok) sound.cash();
-      else sound.deny();
+      const result = await buyPlot(plot.id, ctx.streetId);
+      if (result.ok) {
+        sound.cash();
+        if (result.greeting) {
+          onGreeting(result.greeting);
+          sound.bubble();
+        }
+      } else sound.deny();
     } finally {
       setBusy(false);
     }
@@ -251,6 +289,12 @@ function PlotForSale({ plot }: { plot: Plot }) {
         {price > basePrice && (
           <span className="subtle">
             Startpreis {formatCoins(basePrice)}, +{Math.round(ECONOMY.plotPriceIncrease * 100)} % je gekauftem Grundstück
+            {!ctx.own && `, +${Math.round((ECONOMY.neighborPriceFactor - 1) * 100)} % Aufpreis beim Nachbarn`}
+          </span>
+        )}
+        {!ctx.own && (
+          <span className="subtle">
+            Gehört dann dir – mitten in {possessive(ctx.ownerName)} {ctx.street.name}. Die Miete geht an dich.
           </span>
         )}
         <span className="subtle">Miete mit Gebäude: ab 🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</span>

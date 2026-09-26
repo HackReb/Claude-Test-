@@ -1,6 +1,7 @@
 import { creditedMinutes, rentPerMinute } from "../config/economy";
 import type { Building, Player, Plot, PlotSize, Street } from "../model/types";
 import { applyModifiers, rentModifiers, type RentModifiers } from "./life";
+import { belongsTo } from "./plots";
 import { getPart } from "../parts/catalog";
 
 export function buildingRentPerMinute(size: PlotSize, building: Building): number {
@@ -18,18 +19,27 @@ export function plotRentPerMinute(street: Street, plot: Plot, modifiers: RentMod
   return applyModifiers(buildingRentPerMinute(plot.size, plot.building), plot.building, modifiers);
 }
 
-/** Gesamte Miete pro Minute aller eigenen, bebauten Grundstücke. */
-export function streetRentPerMinute(street: Street): number {
+/** Miete pro Minute, die `ownerId` in dieser Straße verdient (Standard: der Besitzer der Straße). */
+export function streetRentPerMinute(street: Street, ownerId: string = street.ownerId): number {
   const modifiers = rentModifiers(street);
-  return street.plots.reduce((sum, plot) => sum + plotRentPerMinute(street, plot, modifiers), 0);
+  return street.plots.reduce(
+    (sum, plot) => (belongsTo(street, plot, ownerId) ? sum + plotRentPerMinute(street, plot, modifiers) : sum),
+    0,
+  );
+}
+
+/** Gesamte Miete eines Spielers über alle Straßen (eigene + Grundstücke bei Nachbarn). */
+export function playerRentPerMinute(streets: Street[], playerId: string): number {
+  return streets.reduce((sum, s) => sum + streetRentPerMinute(s, playerId), 0);
 }
 
 /**
- * Verbucht die Miete seit `player.lastSeen` in `pendingRent`.
+ * Verbucht die Miete seit `player.lastSeen` in `pendingRent` – aus allen Straßen, in denen er Grundstücke hat.
  * Lücken über der maximalen Offline-Zeit werden gedeckelt.
  */
-export function accrueRent(player: Player, street: Street, now: number): { player: Player; gained: number } {
-  const gained = creditedMinutes(player.lastSeen, now) * streetRentPerMinute(street);
+export function accrueRent(player: Player, streets: Street | Street[], now: number): { player: Player; gained: number } {
+  const all = Array.isArray(streets) ? streets : [streets];
+  const gained = creditedMinutes(player.lastSeen, now) * playerRentPerMinute(all, player.id);
   return {
     player: { ...player, pendingRent: player.pendingRent + gained, lastSeen: Math.max(player.lastSeen, now) },
     gained,

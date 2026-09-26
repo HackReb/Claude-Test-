@@ -71,7 +71,8 @@ export function botAction(
 ): { bot: Bot; street: Street; event: NeighborEvent } {
   const random = botRandom(bot);
   const free = street.plots.filter((p) => p.purchasedAt === undefined);
-  const owned = street.plots.filter((p) => p.purchasedAt !== undefined && p.building);
+  // Nur eigene Häuser – Grundstücke, die der Spieler hier gekauft hat, sind tabu.
+  const owned = street.plots.filter((p) => p.purchasedAt !== undefined && p.building && !p.ownerId);
   const upgradable = owned.filter((p) => p.building!.level < 3);
   const roll = random();
   const pickPlot = (plots: Plot[]) => plots[Math.floor(random() * plots.length)];

@@ -66,7 +66,8 @@ src/
   repository/
     Repository.ts          Persistenz-Interface (async, später ApiRepository/Symfony)
     LocalRepository.ts     Implementierung über localStorage
-  store/gameStore.ts       Zustand-Store: init / claim / tick / collect / buyPlot / reset
+  store/gameStore.ts       Zustand-Store: init / claim / tick / collect / buyPlot / build … – für jede Straße
+  store/useStreetContext.ts  „In welcher Straße bin ich?“ (eigene oder Nachbarstraße) für Screens
   game/
     claimStreet.ts         Straße + Spieler anlegen, Validierung, Grundstücks-Layout
     plots.ts               Kauf-Logik, Preisanstieg
@@ -107,5 +108,6 @@ src/
 | Grundstück | `#/plot/:plotId` | Kaufen, Bauen per Vorlage oder Würfeln, Umbauen, Ausbauen (Stufe 1–3) |
 | Baukasten | `#/builder/:plotId` | Fassaden-Editor, Schild-Text, Live-Miete, Bausteine freischalten |
 | Nachbarschaft | `#/neighborhood` | Karte mit 5 Bot-Straßen, Neuigkeiten seit letztem Besuch |
-| Bot-Straße | `#/neighborhood/:streetId` | Straße eines Nachbarn ansehen |
+| Bot-Straße | `#/neighborhood/:streetId` | Straße eines Nachbarn ansehen, freie Grundstücke kaufen |
+| Grundstück beim Nachbarn | `#/neighborhood/:streetId/plot/:plotId` | Kaufen (+25 %), bauen, ausbauen, umbenennen |
 | Teilen | `#/share` | Straße als Bild, Web-Share bzw. Speichern |

@@ -103,3 +103,21 @@ describe("Namen der Bot-Gebäude", () => {
     expect(names.every((n) => n.startsWith("Chris’ "))).toBe(true);
   });
 });
+
+describe("Bots und Grundstücke des Spielers", () => {
+  it("bebauen, erweitern und reißen nie Grundstücke ab, die der Spieler bei ihnen gekauft hat", () => {
+    const start = createNeighborhood(player, [], 0);
+    // Spieler kauft in jeder Bot-Straße zwei freie Grundstücke
+    const streets = start.streets.map((s) => {
+      let n = 0;
+      return { ...s, plots: s.plots.map((p) => (p.purchasedAt === undefined && n++ < 2 ? { ...p, purchasedAt: 1, ownerId: "spieler" } : p)) };
+    });
+    let state = { neighborhood: start.neighborhood, streets };
+    for (let day = 1; day <= 20; day++) state = simulateNeighborhood(state.neighborhood, state.streets, day * 24 * HOUR);
+    for (const street of state.streets) {
+      const mine = street.plots.filter((p) => p.ownerId === "spieler");
+      expect(mine).toHaveLength(2);
+      expect(mine.every((p) => !p.building)).toBe(true);
+    }
+  });
+});
