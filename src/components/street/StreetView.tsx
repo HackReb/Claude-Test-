@@ -9,6 +9,9 @@ import { layoutStreet, STREET, type LotBox } from "./layout";
 import { Litter } from "./Litter";
 import { Playground } from "./Playground";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
+import { Traffic } from "./Traffic";
+import { CARS, type CarModel } from "../../config/cars";
+import type { Car } from "../../model/types";
 
 const INK = "#2b2118";
 
@@ -33,6 +36,10 @@ interface Props {
   onViewport?: (from: number, to: number) => void;
   /** Spieler-ID: seine Grundstücke in fremden Straßen werden hervorgehoben. */
   mineId?: string;
+  /** Eigene Autos, die hier fahren. */
+  cars?: Car[];
+  /** Auto antippen (hupen). */
+  onCarTap?: (vehicle: { model: CarModel; car?: Car }) => void;
 }
 
 interface Popup {
@@ -56,12 +63,16 @@ export function StreetView({
   onVoice,
   onViewport,
   mineId,
+  cars = [],
+  onCarTap,
 }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
   const scroller = useRef<HTMLDivElement>(null);
   const [popups, setPopups] = useState<Popup[]>([]);
   const litterY = { top: roadTop - 13, bottom: roadBottom + 15 };
   const walkY = useMemo(() => ({ top: roadTop - 6, bottom: roadBottom + STREET.sidewalk - 6 }), [roadTop, roadBottom]);
+  // Rechtsverkehr: obere Spur fährt nach links, untere nach rechts
+  const laneY = useMemo(() => ({ top: (roadTop + roadBottom) / 2 - 3, bottom: roadBottom - 3 }), [roadTop, roadBottom]);
 
   // Wo wohnen Leute, wo wird eingekauft, wo gespielt? (stabil, solange sich daran nichts ändert)
   const anchorKey = lots
@@ -152,6 +163,17 @@ export function StreetView({
         {(street.litter ?? []).map((item) => (
           <Litter key={item.id} item={item} x={item.pos * width} y={litterY[item.side]} onTap={onLitterTap ? tapLitter : undefined} />
         ))}
+
+        {life && (
+          <Traffic
+            seed={street.id}
+            width={width}
+            laneY={laneY}
+            cars={cars}
+            trafficCount={CARS.trafficBase + anchors.shops.length}
+            onTap={onCarTap}
+          />
+        )}
 
         {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} />}
 
@@ -263,7 +285,8 @@ function Lot({
           role="button"
           tabIndex={0}
           aria-label={`${voice.speaker}: ${voice.quote}`}
-          transform={`translate(${width / 2} 30)`}
+          // Auf schmalen Grundstücken unter Größe/Nutzung, sonst oben mittig
+          transform={`translate(${width / 2} ${width < 150 ? 86 : 30})`}
           onClick={(e) => {
             e.stopPropagation();
             onVoice?.(voice);

@@ -58,6 +58,7 @@ src/
   config/geo.ts            Straßensuche (Photon-URL, Debounce, Timeout, Nachbar-Radius)
   config/bots.ts           Bot-Personas, Tempo, Vorlieben je Charakter
   config/life.ts           Müll-Raten, Miet-Abzug, Spielplatz, Kundschaft, Belohnungen
+  config/cars.ts           Autohaus: 8 Fantasie-Modelle (keine echten Marken), Farben, Verkehr
   audio/sound.ts           Soundeffekte + Straßengeräusche (Web Audio, synthetisch)
   audio/ambience.ts        Geräusch-Mix passend zum sichtbaren Straßenabschnitt
   geo/streetSearch.ts      Photon-Abfrage, Filter auf echte Straßen, Kennung, Zusammenfassen
@@ -77,6 +78,7 @@ src/
     unlock.ts              Bausteine gegen Münzen freischalten
     names.ts               Besitz-Namen („Kalles Kiosk“, „Hans’ Bahnhofstraße“), Gebäudenamen bereinigen
     life.ts                Wohnen/Gewerbe, Müll & Hundehaufen, Spielplatz, Miet-Modifikatoren, Stimmen der Bewohner
+    cars.ts                Autos kaufen, Name/Nummernschild/Farbe ändern
     bots.ts                Nachbarschaft anlegen, Bot-Aktionen, Simulation seit letztem Besuch
     migrate.ts             hebt ältere Spielstände an
     random.ts              seedbarer Zufall (gleiche Straße → gleiches Layout)
@@ -94,6 +96,8 @@ src/
     NeighborhoodMap.tsx    Karte mit Bot-Straßen in ihrer Himmelsrichtung
     street/StreetLife.tsx  Leute, Kinder, Hund auf den Gehwegen (lassen live Dreck fallen)
     street/Litter.tsx      Müll & Hundehaufen zum Wegtippen
+    street/Traffic.tsx     Verkehr: eigene Autos (mit Namen) + fremde, Rechtsverkehr, Hupen
+    cars/CarSvg.tsx        8 Karosserieformen in Seitenansicht mit Nummernschild
     Voices.tsx, UsePicker.tsx, SoundToggle.tsx
     RentBar.tsx            Miete bereit + Einsammeln
     StreetSearch.tsx       Suchfeld mit Straßen-Vorschlägen
@@ -111,3 +115,4 @@ src/
 | Bot-Straße | `#/neighborhood/:streetId` | Straße eines Nachbarn ansehen, freie Grundstücke kaufen |
 | Grundstück beim Nachbarn | `#/neighborhood/:streetId/plot/:plotId` | Kaufen (+25 %), bauen, ausbauen, umbenennen |
 | Teilen | `#/share` | Straße als Bild, Web-Share bzw. Speichern |
+| Autohaus | `#/garage` | Autos kaufen, Farbe, Name & Nummernschild |

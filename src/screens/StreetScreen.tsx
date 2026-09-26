@@ -4,7 +4,7 @@ import { sound } from "../audio/sound";
 import { Voices } from "../components/Voices";
 import { residentVoices, type Voice } from "../game/life";
 import type { LitterItem } from "../model/types";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { RentBar } from "../components/RentBar";
 import { StreetSearch } from "../components/StreetSearch";
 import { StreetView } from "../components/street/StreetView";
@@ -29,6 +29,7 @@ export function StreetScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [honk, setHonk] = useState<string | null>(null);
 
   const voices = useMemo(() => residentVoices(street), [street]);
 
@@ -142,10 +143,33 @@ export function StreetScreen() {
         voices={voices}
         onVoice={onVoice}
         onViewport={onViewport}
+        cars={player.cars}
+        onCarTap={({ model, car }) => {
+          sound.horn(model.horn);
+          setHonk(car ? `📯 ${car.name} (${car.plate}) hupt!` : `📯 ${model.brand} ${model.model} hupt zurück!`);
+          setTimeout(() => setHonk(null), 2200);
+        }}
       />
+      {honk && (
+        <p className="honk" role="status">
+          {honk}
+        </p>
+      )}
       <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an · Müll und 💩 wegtippen!</p>
 
       <RentBar />
+
+      <Link className="card garage-link" to={routes.garage}>
+        <span aria-hidden>🚗</span>
+        <span>
+          <strong>Autohaus Babo</strong>
+          <small>
+            {player.cars?.length
+              ? `${player.cars.length} Auto${player.cars.length > 1 ? "s" : ""} in deiner Garage`
+              : "Kauf dir dein erstes Auto – mit eigenem Nummernschild"}
+          </small>
+        </span>
+      </Link>
 
       <Voices voices={voices} highlight={highlight} />
 

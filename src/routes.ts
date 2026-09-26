@@ -9,4 +9,5 @@ export const routes = {
   neighborPlot: (streetId: string, plotId: string) => `/neighborhood/${streetId}/plot/${plotId}`,
   neighborBuilder: (streetId: string, plotId: string) => `/neighborhood/${streetId}/builder/${plotId}`,
   share: "/share",
+  garage: "/garage",
 } as const;

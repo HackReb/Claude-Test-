@@ -150,6 +150,38 @@ class SoundEngine {
     });
   }
 
+  /** Hupe – je Automodell anders. */
+  horn(kind: "meep" | "honk" | "troet" | "vroom" | "surr" | "knatter") {
+    this.play((t) => {
+      switch (kind) {
+        case "meep":
+          this.tone(880, t, 0.12, "square", 0.08);
+          this.tone(880, t + 0.16, 0.12, "square", 0.08);
+          break;
+        case "honk":
+          this.tone(392, t, 0.35, "sawtooth", 0.06, undefined, 1800);
+          this.tone(494, t, 0.35, "sawtooth", 0.06, undefined, 1800);
+          break;
+        case "troet":
+          this.tone(233, t, 0.6, "sawtooth", 0.07, 220, 1400);
+          this.tone(294, t, 0.6, "sawtooth", 0.05, 280, 1400);
+          break;
+        case "vroom":
+          this.tone(90, t, 0.9, "sawtooth", 0.12, 260, 900);
+          this.noiseBurst(t, 0.9, "lowpass", 400, 0.8, 0.15, 1400);
+          break;
+        case "surr":
+          this.tone(440, t, 0.5, "sine", 0.06, 1320);
+          this.tone(660, t + 0.05, 0.45, "sine", 0.03, 1980);
+          break;
+        case "knatter":
+          for (let i = 0; i < 7; i++) this.noiseBurst(t + i * 0.07, 0.05, "lowpass", 500, 1, 0.3);
+          this.tone(320, t + 0.5, 0.25, "square", 0.05, 260);
+          break;
+      }
+    });
+  }
+
   tap() {
     this.play((t) => this.tone(1200, t, 0.03, "square", 0.04));
   }
