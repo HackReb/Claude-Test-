@@ -6,6 +6,7 @@ import { useLabel } from "../components/UsePicker";
 import { Playground } from "../components/street/Playground";
 import { sound } from "../audio/sound";
 import { MISCHIEF } from "../config/badboys";
+import { CAR_OUTINGS } from "../config/pets";
 import { LIFE } from "../config/life";
 import { occupancyOf, streetNeeds, targetOccupancy, useOf } from "../game/life";
 import { possessive } from "../game/names";
@@ -155,7 +156,7 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
             <span className="subtle"> · Kosten 🪙 {formatRate(plotUpkeepPerHour(plot))}/Std.</span>
           </li>
         </ul>
-        {ctx.own && (building.graffiti || building.damaged) && <DamageSection plot={plot} />}
+        {ctx.own && (building.graffiti || building.damaged || !!building.soot) && <DamageSection plot={plot} />}
         <UpgradeSection plot={plot} streetId={ctx.streetId} />
         <h2>Umbauen</h2>
         <p className="subtle">Ersetzt {building.name}. Die Upgrade-Stufe bleibt erhalten.</p>
@@ -255,6 +256,7 @@ function PlaygroundOffer({ plot }: { plot: Plot }) {
 function DamageSection({ plot }: { plot: Plot }) {
   const coins = useGameStore((s) => s.player!.coins);
   const scrub = useGameStore((s) => s.scrubGraffiti);
+  const wash = useGameStore((s) => s.washFacade);
   const repair = useGameStore((s) => s.repair);
   const building = plot.building!;
   const repairCost = MISCHIEF.repairCost[plot.size];
@@ -275,6 +277,24 @@ function DamageSection({ plot }: { plot: Plot }) {
             }}
           >
             🧽 Wegschrubben für 🪙 {formatCoins(MISCHIEF.scrubCost)}
+          </button>
+        </>
+      )}
+      {!!building.soot && (
+        <>
+          <p>
+            💨 Die Fassade ist voller Ruß ({building.soot}× – stört wie so viel Dreck). Da sind wohl Nachbarn mit ihren Stinkern durchgefahren.
+          </p>
+          <button
+            type="button"
+            className="btn"
+            disabled={coins < CAR_OUTINGS.washCost}
+            onClick={async () => {
+              if ((await wash(plot.id)).ok) sound.sparkle();
+              else sound.deny();
+            }}
+          >
+            🚿 Fassade waschen für 🪙 {formatCoins(CAR_OUTINGS.washCost)}
           </button>
         </>
       )}

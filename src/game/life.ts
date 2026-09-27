@@ -1,6 +1,7 @@
 import { capacityOf, ECONOMY } from "../config/economy";
 import { MISCHIEF } from "../config/badboys";
 import { LIFE } from "../config/life";
+import { CAR_OUTINGS } from "../config/pets";
 import type { Building, BuildingUse, LitterItem, LitterKind, Player, Plot, Street } from "../model/types";
 import { getPart } from "../parts/catalog";
 import { createId } from "./ids";
@@ -25,6 +26,8 @@ export interface StreetStats {
   litter: number;
   graffiti: number;
   damaged: number;
+  /** Ruß-Stufen an allen Fassaden zusammen. */
+  soot: number;
 }
 
 export function streetStats(street: Street): StreetStats {
@@ -36,6 +39,7 @@ export function streetStats(street: Street): StreetStats {
     litter: street.litter?.length ?? 0,
     graffiti: buildings.filter((p) => p.building.graffiti).length,
     damaged: buildings.filter((p) => p.building.damaged).length,
+    soot: buildings.reduce((sum, p) => sum + (p.building.soot ?? 0), 0),
   };
 }
 
@@ -58,9 +62,11 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 export function streetNeeds(street: Street): Need[] {
   const stats = streetStats(street);
   // Graffiti stört wie mehrere Dreck-Teile.
-  const dirt = stats.litter + stats.graffiti * MISCHIEF.graffitiAsLitter;
+  const dirt = stats.litter + stats.graffiti * MISCHIEF.graffitiAsLitter + stats.soot * CAR_OUTINGS.sootAsLitter;
   const cleanliness = Math.max(LIFE.minCleanliness, 1 - dirt * LIFE.litterComfortLoss);
-  const what = [stats.litter > 0 && `${stats.litter}× Dreck`, stats.graffiti > 0 && `${stats.graffiti}× Graffiti`].filter(Boolean).join(", ");
+  const what = [stats.litter > 0 && `${stats.litter}× Dreck`, stats.graffiti > 0 && `${stats.graffiti}× Graffiti`, stats.soot > 0 && `${stats.soot}× Ruß`]
+    .filter(Boolean)
+    .join(", ");
   return [
     {
       id: "clean",

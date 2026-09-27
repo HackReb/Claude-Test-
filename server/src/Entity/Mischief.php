@@ -35,6 +35,9 @@ class Mischief
         private string $badBoy,
         #[ORM\Column]
         private bool $blocked,
+        /** Anzeigename bei Tieren und Autos, z. B. „Maxims Elefant Benjamin“. */
+        #[ORM\Column(length: 60, nullable: true)]
+        private ?string $label = null,
     ) {
         $this->createdAt = new \DateTimeImmutable();
     }
@@ -63,6 +66,6 @@ class Mischief
             'at' => (int) $this->createdAt->format('Uv'),
             'blocked' => $this->blocked,
             'senderName' => $this->senderName,
-        ];
+        ] + (null !== $this->label ? ['label' => $this->label] : []);
     }
 }

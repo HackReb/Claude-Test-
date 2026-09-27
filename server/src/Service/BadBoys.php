@@ -16,6 +16,15 @@ final class BadBoys
     /** Eine Straße verträgt höchstens so viele Bad Boys pro Tag (von allen zusammen). */
     public const MAX_PER_STREET_PER_DAY = 10;
 
+    /** Tiere und Autos eines Spielers: höchstens so viele Ausflüge pro Tag in dieselbe Straße. */
+    public const MAX_VISITS_PER_SENDER_PER_DAY = 12;
+
+    /** Tiere („tier-elefant“) und Autos („auto-mottenwerke-xprotz“) auf Ausflug – kein Bad Boy. */
+    public static function isVisitor(string $id): bool
+    {
+        return 1 === preg_match('/^(tier|auto)-[a-z0-9-]{2,40}$/', $id);
+    }
+
     public static function blocked(array $streetData): bool
     {
         $chance = self::BLOCK_CHANCE[(int) ($streetData['security'] ?? 0)] ?? 0.0;

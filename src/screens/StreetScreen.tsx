@@ -156,6 +156,7 @@ export function StreetScreen() {
         onVoice={onVoice}
         onViewport={onViewport}
         cars={player.cars}
+        pets={player.pets}
         onCarTap={({ model, car }) => {
           sound.horn(model.horn);
           setHonk(car ? `📯 ${car.name} (${car.plate}) hupt!` : `📯 ${model.brand} ${model.model} hupt zurück!`);
@@ -190,6 +191,18 @@ export function StreetScreen() {
             {player.cars?.length
               ? `${player.cars.length} Auto${player.cars.length > 1 ? "s" : ""} in deiner Garage`
               : "Kauf dir dein erstes Auto – mit eigenem Nummernschild"}
+          </small>
+        </span>
+      </Link>
+
+      <Link className="card garage-link" to={routes.pets}>
+        <span aria-hidden>🐾</span>
+        <span>
+          <strong>Tierhandlung</strong>
+          <small>
+            {player.pets?.length
+              ? `${player.pets.map((p) => p.name).join(", ")} ${player.pets.length > 1 ? "gehen" : "geht"} bei den Nachbarn spazieren`
+              : "Vom Dackel bis zum Elefanten – sie lassen bei den Nachbarn was liegen"}
           </small>
         </span>
       </Link>

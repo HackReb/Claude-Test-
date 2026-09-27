@@ -1,7 +1,9 @@
-import { badBoy, BAD_BOYS, BOT_MISCHIEF, GRAFFITI_TAGS, MISCHIEF, SECURITY, securityOf, type BadBoy } from "../config/badboys";
+import { badBoy, BAD_BOYS, BOT_MISCHIEF, GRAFFITI_TAGS, MISCHIEF, SECURITY, securityOf, type MischiefKind } from "../config/badboys";
+import { carModel } from "../config/cars";
+import { CAR_OUTINGS, species } from "../config/pets";
 import type { Building, Incident, Mischief, Neighborhood, Player, Plot, Street } from "../model/types";
 import { addLitter } from "./life";
-import { inStreet } from "./names";
+import { inStreet, possessive } from "./names";
 import { hashString, seededRandom } from "./random";
 
 const HOUR = 3_600_000;
@@ -14,6 +16,33 @@ const withBuilding = (street: Street, plotId: string, change: Partial<Building>)
   plots: street.plots.map((p) => (p.id === plotId && p.building ? { ...p, building: { ...p.building, ...change } } : p)),
 });
 
+/** Wer da kommt: ein Bad Boy, ein Tier auf Ausflug oder ein Auto auf Durchfahrt. */
+interface Actor {
+  id: string;
+  name: string;
+  emoji: string;
+  kind: MischiefKind;
+  amount: number;
+  /** Tiere und Autos sind ganz offen unterwegs – kein Wachschutz, jeder sieht, wem sie gehören. */
+  visitor: boolean;
+}
+
+export const isVisitorId = (id: string) => id.startsWith("tier-") || id.startsWith("auto-");
+
+export function actorOf(mischief: Pick<Mischief, "badBoyId" | "label">): Actor {
+  const id = mischief.badBoyId;
+  if (id.startsWith("tier-")) {
+    const sp = species(id.slice(5));
+    if (sp) return { id, name: mischief.label ?? `Ein ${sp.name}`, emoji: sp.emoji, kind: "poop", amount: sp.poopPerOuting, visitor: true };
+  }
+  if (id.startsWith("auto-")) {
+    const model = carModel(id.slice(5));
+    if (model) return { id, name: mischief.label ?? `Ein ${model.brand} ${model.model}`, emoji: "🚗", kind: "soot", amount: model.soot, visitor: true };
+  }
+  const bb = badBoy(id) ?? BAD_BOYS[0];
+  return { ...bb, visitor: false };
+}
+
 /** Fängt der Wachschutz der Straße diesen Bad Boy ab? Reproduzierbar über die ID des Streichs. */
 export function rollBlocked(street: Street, mischiefId: string): boolean {
   const guard = securityOf(street.security);
@@ -21,7 +50,12 @@ export function rollBlocked(street: Street, mischiefId: string): boolean {
 }
 
 /** Text für Neuigkeiten und Zeitung – mit den Namen der Häuser. */
-function describe(bb: BadBoy, mischief: Mischief, street: Street, detail: { count?: number; tag?: string; building?: string }): string {
+function describe(bb: Actor, mischief: Mischief, street: Street, detail: { count?: number; tag?: string; building?: string }): string {
+  if (bb.visitor && bb.kind === "poop") return `${bb.name} war ${inStreet(street.name)} spazieren: ${detail.count} Haufen. Igitt!`;
+  if (bb.kind === "soot")
+    return detail.building
+      ? `${bb.name} ist ${inStreet(street.name)} durchgebraust – Ruß an ${detail.building}.`
+      : `${bb.name} ist ${inStreet(street.name)} durchgebraust.`;
   if (mischief.blocked) {
     const guard = securityOf(street.security)?.name ?? "Der Wachschutz";
     return `${guard} hat ${bb.name} erwischt${mischief.senderName ? ` – geschickt von ${mischief.senderName}!` : "!"}`;
@@ -46,7 +80,9 @@ function describe(bb: BadBoy, mischief: Mischief, street: Street, detail: { coun
  */
 export function applyMischief(street: Street, mischief: Mischief): { street: Street; incident: Incident | null } {
   if (street.incidents?.some((i) => i.id === mischief.id)) return { street, incident: null };
-  const bb = badBoy(mischief.badBoyId) ?? BAD_BOYS[0];
+  const bb = actorOf(mischief);
+  // Tiere und Autos lässt jeder Wachschutz durch.
+  if (bb.visitor) mischief = { ...mischief, blocked: false };
   const random = seededRandom(hashString(mischief.id));
   const spot = () => ({ pos: 0.04 + random() * 0.92, side: random() < 0.5 ? ("top" as const) : ("bottom" as const) });
   let result = street;
@@ -69,6 +105,12 @@ export function applyMischief(street: Street, mischief: Mischief): { street: Str
       } else {
         for (let i = 0; i < 2; i++) result = addLitter(result, "trash", spot());
       }
+    } else if (bb.kind === "soot") {
+      const target = pick(buildings);
+      if (target && bb.amount > 0) {
+        detail.building = target.building.name;
+        result = withBuilding(result, target.id, { soot: Math.min(CAR_OUTINGS.maxSoot, (target.building.soot ?? 0) + bb.amount) });
+      }
     } else {
       const whole = buildings.filter((p) => !p.building.damaged);
       const target = pick(whole);
@@ -85,8 +127,8 @@ export function applyMischief(street: Street, mischief: Mischief): { street: Str
     badBoyId: bb.id,
     blocked: mischief.blocked,
     text: describe(bb, mischief, street, detail),
-    // Wer ihn geschickt hat, kommt nur raus, wenn er erwischt wurde.
-    ...(mischief.blocked && mischief.senderName && { senderName: mischief.senderName }),
+    // Wer ihn geschickt hat, kommt nur raus, wenn er erwischt wurde – bei Tieren und Autos sieht man's sowieso.
+    ...((mischief.blocked || bb.visitor) && mischief.senderName && { senderName: mischief.senderName }),
   };
   return { street: { ...result, incidents: [incident, ...(result.incidents ?? [])].slice(0, MISCHIEF.incidentLimit) }, incident };
 }
@@ -115,6 +157,20 @@ export function repairBuilding(player: Player, street: Street, plotId: string): 
   const cost = MISCHIEF.repairCost[plot.size];
   if (player.coins < cost) return { ok: false, reason: "too-expensive" };
   const { damaged: _removed, ...building } = plot.building;
+  return {
+    ok: true,
+    cost,
+    player: { ...player, coins: player.coins - cost },
+    street: { ...street, plots: street.plots.map((p) => (p.id === plotId ? { ...p, building } : p)) },
+  };
+}
+
+export function washFacade(player: Player, street: Street, plotId: string): FixResult {
+  const plot = street.plots.find((p) => p.id === plotId);
+  if (!plot?.building?.soot) return { ok: false, reason: "not-needed" };
+  const cost = CAR_OUTINGS.washCost;
+  if (player.coins < cost) return { ok: false, reason: "too-expensive" };
+  const { soot: _removed, ...building } = plot.building;
   return {
     ok: true,
     cost,
@@ -152,12 +208,16 @@ export function botMischief(neighborhood: Neighborhood, playerStreet: Street, no
       const id = `bot-${bot.id}-${next}`;
       const random = seededRandom(hashString(id));
       const favorites = BOT_MISCHIEF.favorites[bot.character] ?? [BAD_BOYS[0].id];
+      const badBoyId = favorites[Math.floor(random() * favorites.length)];
+      const visitor = isVisitorId(badBoyId);
+      const actor = actorOf({ badBoyId });
       mischief.push({
         id,
-        badBoyId: favorites[Math.floor(random() * favorites.length)],
+        badBoyId,
         at: next,
-        blocked: rollBlocked(playerStreet, id),
+        blocked: visitor ? false : rollBlocked(playerStreet, id),
         senderName: bot.name,
+        ...(visitor && { label: `${possessive(bot.name)} ${actor.name.replace(/^Ein /, "")}` }),
       });
       next += every * HOUR * (0.75 + random() * 0.5);
       count++;
@@ -175,7 +235,9 @@ export function provokeBot(neighborhood: Neighborhood, streetId: string, now: nu
   return {
     ...neighborhood,
     bots: neighborhood.bots.map((b) =>
-      b.streetId === streetId && BOT_MISCHIEF.everyHours[b.character] && (b.nextMischiefAt ?? Infinity) > revenge ? { ...b, nextMischiefAt: revenge } : b,
+      b.streetId === streetId && BOT_MISCHIEF.revengeful.includes(b.character) && (b.nextMischiefAt ?? Infinity) > revenge
+        ? { ...b, nextMischiefAt: revenge }
+        : b,
     ),
   };
 }

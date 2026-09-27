@@ -1,6 +1,6 @@
 /** Bad Boys: Man schickt sie gegen Geld in Nachbarstraßen, wo sie Ärger machen. Alle Werte hier anpassbar. */
 
-export type MischiefKind = "trash" | "poop" | "graffiti" | "smash";
+export type MischiefKind = "trash" | "poop" | "graffiti" | "smash" | "soot";
 
 export interface BadBoy {
   id: string;
@@ -60,15 +60,19 @@ export const securityOf = (level: number | undefined) => SECURITY.find((s) => s.
 
 /** Bots schicken auch mal jemanden vorbei: alle so viele Stunden (je Charakter), `null` = nie. */
 export const BOT_MISCHIEF = {
-  everyHours: { chaos: 20, party: 36, concrete: 60, sweet: null, nature: null } as Record<string, number | null>,
+  everyHours: { chaos: 20, party: 36, concrete: 60, sweet: 48, nature: 40 } as Record<string, number | null>,
   /** Wen welcher Bot bevorzugt schickt. */
   favorites: {
     chaos: ["spruehdosen-kevin", "muelltonnen-marvin", "knallfrosch-zwillinge"],
     party: ["kaugummi-klaus", "knallfrosch-zwillinge"],
-    concrete: ["gassi-gabi"],
+    concrete: ["gassi-gabi", "auto-mottenwerke-xprotz"],
+    // Zoe und Paula schicken keine Bad Boys – aber ihre Tiere gehen bei dir spazieren.
+    sweet: ["tier-katze", "tier-dackel"],
+    nature: ["tier-pony", "tier-schwein"],
   } as Record<string, string[]>,
-  /** Wer einen Bot ärgert, bekommt schneller Besuch zurück (in Stunden). */
+  /** Wer einen Bot ärgert, bekommt schneller Besuch zurück (in Stunden) – aber nur von den Rachsüchtigen. */
   revengeAfterHours: 6,
+  revengeful: ["chaos", "party", "concrete"] as string[],
   /** Höchstens so viele Bot-Streiche werden nach langer Abwesenheit nachgeholt. */
   maxCatchUp: 3,
 } as const;

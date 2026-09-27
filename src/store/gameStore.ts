@@ -23,6 +23,7 @@ import { inStreet, intoStreet } from "../game/names";
 import { makeIssue, paperDay, paperStats, type PaperStreet } from "../game/newspaper";
 import { badBoy } from "../config/badboys";
 import {
+  actorOf,
   applyMischief,
   botMischief,
   buySecurity,
@@ -30,8 +31,10 @@ import {
   repairBuilding,
   rollBlocked,
   scrubGraffiti,
+  washFacade,
   type FixResult,
 } from "../game/mischief";
+import { buyPet, dueOutings, type BuyPetResult } from "../game/pets";
 import { createId } from "../game/ids";
 import type {
   Building,
@@ -126,6 +129,10 @@ interface GameState {
   repair(plotId: string): Promise<FixResult>;
   /** Wachschutz für die eigene Straße kaufen bzw. verstärken. */
   buySecurity(): Promise<FixResult>;
+  /** Ruß von der Fassade eines eigenen Hauses waschen. */
+  washFacade(plotId: string): Promise<FixResult>;
+  /** Tier in der Tierhandlung kaufen. */
+  buyPet(speciesId: string, name: string): Promise<BuyPetResult>;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
 }
@@ -272,7 +279,54 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
 
     /** Was Bad Boys angestellt haben, als Neuigkeiten. */
     function incidentNews(incidents: Incident[], streetId: string): NeighborEvent[] {
-      return incidents.map((i) => ({ streetId, at: i.at, text: i.text, emoji: i.blocked ? "🛡️" : (badBoy(i.badBoyId)?.emoji ?? "😈") }));
+      return incidents.map((i) => ({ streetId, at: i.at, text: i.text, emoji: i.blocked ? "🛡️" : actorOf({ badBoyId: i.badBoyId }).emoji }));
+    }
+
+    /** Nachbarstraßen, in die Tiere und Autos auf Ausflug gehen: Bots und echte Mitspieler in der Nähe. */
+    function outingTargets(): Street[] {
+      const { street, neighborStreets, playerStreets, ownerNames } = get();
+      if (!street) return [];
+      const players = nearbyStreets(street, Object.values(playerStreets)).filter((s) => ownerNames[s.id]);
+      return [...Object.values(neighborStreets), ...players];
+    }
+
+    /** Tiere und Autos, deren Ausflug fällig ist, losschicken – nach festem Takt. */
+    let outingBusy = false;
+    async function goOnOutings() {
+      const { player, neighborhood } = get();
+      if (!player || !neighborhood || outingBusy) return;
+      const due = dueOutings(player, outingTargets(), clock());
+      if (due.outings.length === 0) {
+        if (due.player !== player) set({ player: due.player });
+        return;
+      }
+      outingBusy = true;
+      try {
+        set({ player: due.player });
+        const news: NeighborEvent[] = [];
+        for (const { targetStreetId, mischief } of due.outings) {
+          const target = streetById(targetStreetId);
+          if (!target) continue;
+          const actor = actorOf(mischief);
+          if (get().neighborStreets[targetStreetId]) {
+            const applied = applyMischief(target, mischief);
+            set(streetPatch(applied.street));
+            await repo.saveStreet(applied.street);
+            if (applied.incident) news.push({ streetId: targetStreetId, at: mischief.at, text: applied.incident.text, emoji: actor.emoji });
+          } else {
+            const sent = await repo.online?.sendMischief(targetStreetId, mischief.badBoyId, mischief.label);
+            if (sent?.ok) news.push({ streetId: targetStreetId, at: mischief.at, text: `${actor.name} ist ${intoStreet(target.name)} unterwegs.`, emoji: actor.emoji });
+          }
+        }
+        const hood = get().neighborhood;
+        if (hood && news.length > 0) {
+          const updated = withNews(hood, news);
+          set({ neighborhood: updated });
+          await repo.saveNeighborhood(updated);
+        }
+      } finally {
+        outingBusy = false;
+      }
     }
 
     /** Bad Boys jetzt in der eigenen Straße ankommen lassen (live, während man spielt). */
@@ -429,7 +483,8 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       async tick() {
         const result = accrued();
         if (!result) return;
-        await repo.savePlayer(result.player);
+        await goOnOutings();
+        await repo.savePlayer(get().player!);
         // Straßen nur speichern, wenn man etwas sieht (Bewohner, Müll) – nicht jede Sekunde.
         await saveIfVisiblyChanged(allStreets());
         // Neuer Tag, während man spielt → neue Zeitung.
@@ -748,6 +803,28 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(done.player, done.street);
         }
         return done;
+      },
+
+      async washFacade(plotId) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-needed" };
+        const done = washFacade(result.player, result.street, plotId);
+        if (done.ok) {
+          set({ player: done.player, street: done.street });
+          await save(done.player, done.street);
+        }
+        return done;
+      },
+
+      async buyPet(speciesId, name) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "unknown" };
+        const bought = buyPet(result.player, speciesId, name, clock());
+        if (bought.ok) {
+          set({ player: bought.player });
+          await repo.savePlayer(bought.player);
+        }
+        return bought;
       },
 
       async buySecurity() {

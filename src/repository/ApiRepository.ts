@@ -100,7 +100,7 @@ export class ApiRepository implements Repository {
       incomingMischief: () => this.read<Mischief[]>(INBOX_KEY) ?? [],
       fetchMischief: () => this.fetchMischief(),
       ackMischief: (ids) => this.ackMischief(ids),
-      sendMischief: (streetId, badBoyId) => this.sendMischief(streetId, badBoyId),
+      sendMischief: (streetId, badBoyId, label) => this.sendMischief(streetId, badBoyId, label),
     };
   }
 
@@ -262,9 +262,10 @@ export class ApiRepository implements Repository {
     this.scheduleFlush();
   }
 
-  private async sendMischief(streetId: string, badBoyId: string) {
+  private async sendMischief(streetId: string, badBoyId: string, label?: string) {
     try {
-      const { mischief } = await this.request<{ mischief: Mischief }>("POST", `/streets/${encodeURIComponent(streetId)}/mischief`, { badBoy: badBoyId });
+      const body = label ? { badBoy: badBoyId, label } : { badBoy: badBoyId };
+      const { mischief } = await this.request<{ mischief: Mischief }>("POST", `/streets/${encodeURIComponent(streetId)}/mischief`, body);
       return { ok: true as const, mischief };
     } catch (error) {
       if (error instanceof ApiError && error.status < 500) return { ok: false as const, message: error.message };

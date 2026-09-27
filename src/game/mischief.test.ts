@@ -5,7 +5,7 @@ import type { Mischief, Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
 import { createNeighborhood } from "./bots";
 import { homeComfort, targetOccupancy } from "./life";
-import { applyMischief, botMischief, buySecurity, provokeBot, repairBuilding, rollBlocked, scrubGraffiti } from "./mischief";
+import { applyMischief, botMischief, buySecurity, isVisitorId, provokeBot, repairBuilding, rollBlocked, scrubGraffiti } from "./mischief";
 import { buyPlot, placeBuilding } from "./plots";
 import { playerUpkeepPerHour, simulate } from "./rent";
 import { buildingFromTemplate, TEMPLATES } from "./templates";
@@ -120,12 +120,16 @@ describe("in der Simulation", () => {
     expect(first.mischief).toEqual([]); // neue Nachbarschaft: erst mal Ruhe
     const later = botMischief(first.neighborhood, s, 3 * 24 * HOUR);
     expect(later.mischief.length).toBeGreaterThan(0);
-    expect(later.mischief.every((m) => BAD_BOYS.some((b) => b.id === m.badBoyId))).toBe(true);
+    expect(later.mischief.every((m) => BAD_BOYS.some((b) => b.id === m.badBoyId) || isVisitorId(m.badBoyId))).toBe(true);
+    // Zoe und Paula schicken ihre Tiere – die hält kein Wachschutz auf und man sieht, wem sie gehören.
+    const pet = later.mischief.find((m) => m.badBoyId.startsWith("tier-"));
+    if (pet) expect(pet).toMatchObject({ blocked: false, label: expect.stringMatching(/^(Zucker-Zoes|Palmen-Paulas) /) });
     expect(botMischief(first.neighborhood, s, 3 * 24 * HOUR)).toEqual(later);
     const chaos = first.neighborhood.bots.find((b) => b.character === "chaos")!;
     const provoked = provokeBot(first.neighborhood, chaos.streetId, 0);
     expect(provoked.bots.find((b) => b.id === chaos.id)!.nextMischiefAt).toBe(6 * HOUR);
     const sweet = first.neighborhood.bots.find((b) => b.character === "sweet")!;
-    expect(provokeBot(first.neighborhood, sweet.streetId, 0).bots.find((b) => b.id === sweet.id)!.nextMischiefAt).toBeUndefined();
+    // Zoe ist nicht rachsüchtig: ihr Takt bleibt.
+    expect(provokeBot(first.neighborhood, sweet.streetId, 0).bots.find((b) => b.id === sweet.id)!.nextMischiefAt).toBe(sweet.nextMischiefAt);
   });
 });

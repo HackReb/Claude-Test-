@@ -3,6 +3,7 @@ import type { Building, Incident, Mischief, Player, Plot, PlotSize, Street } fro
 import { moveTowards, occupancyOf, spawnLitter, targetOccupancy, useOf } from "./life";
 import { securityOf } from "../config/badboys";
 import { applyMischief } from "./mischief";
+import { petUpkeepPerHour } from "./pets";
 import { belongsTo } from "./plots";
 import { getPart } from "../parts/catalog";
 
@@ -125,6 +126,8 @@ export function simulate(player: Player, streets: Street[], now: number, incomin
       if (street.ownerId === player.id) result.upkeep += securityUpkeepPerHour(street) * hours;
       return changed ? { ...withLitter, plots } : street;
     });
+    // Futter & Tierarzt für die eigenen Tiere.
+    result.upkeep += petUpkeepPerHour(player) * hours;
     t = next;
   }
   // Müll bis genau jetzt nachwürfeln (volle Stunden), übrige Bad Boys kommen jetzt an.

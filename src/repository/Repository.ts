@@ -70,8 +70,8 @@ export interface OnlineFeatures {
   fetchMischief(): Promise<Mischief[]>;
   /** Verarbeitete Bad Boys bestätigen. */
   ackMischief(ids: string[]): Promise<void>;
-  /** Einen Bad Boy in die Straße eines anderen Spielers schicken. */
-  sendMischief(streetId: string, badBoyId: string): Promise<{ ok: true; mischief: Mischief } | { ok: false; message: string }>;
+  /** Einen Bad Boy (oder ein Tier/Auto auf Ausflug, mit Namen) in die Straße eines anderen Spielers schicken. */
+  sendMischief(streetId: string, badBoyId: string, label?: string): Promise<{ ok: true; mischief: Mischief } | { ok: false; message: string }>;
 }
 
 export class StreetTakenError extends Error {

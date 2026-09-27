@@ -11,6 +11,7 @@ import { NewspaperScreen } from "./screens/NewspaperScreen";
 import { PlotScreen } from "./screens/PlotScreen";
 import { ShareScreen } from "./screens/ShareScreen";
 import { GarageScreen } from "./screens/GarageScreen";
+import { PetShopScreen } from "./screens/PetShopScreen";
 import { StreetScreen } from "./screens/StreetScreen";
 import { useGameStore } from "./store/gameStore";
 
@@ -46,6 +47,7 @@ export function App() {
             <Route path={routes.share} element={<ShareScreen />} />
             <Route path={routes.paper} element={<NewspaperScreen />} />
             <Route path={routes.garage} element={<GarageScreen />} />
+            <Route path={routes.pets} element={<PetShopScreen />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to={hasPlayer ? routes.street : routes.start} replace />} />

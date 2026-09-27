@@ -221,3 +221,28 @@ describe("gameStore – Bad Boys", () => {
     expect(store.getState().player!.coins).toBe(1000 - 25 - 60 - 400);
   });
 });
+
+describe("gameStore – Tiere & Autos", () => {
+  it("der Elefant geht nach seinem Takt beim Bot-Nachbarn spazieren – mit Neuigkeit und Futterkosten", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    let now = 0;
+    const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await vi.waitFor(() => expect(store.getState().neighborhood).not.toBeNull());
+    store.setState({ player: { ...store.getState().player!, coins: 5000 } });
+
+    const bought = await store.getState().buyPet("elefant", "Benjamin");
+    expect(bought.ok).toBe(true);
+    expect(store.getState().player!.coins).toBe(2000);
+
+    const litterBefore = Object.values(store.getState().neighborStreets).reduce((sum, s) => sum + (s.litter?.length ?? 0), 0);
+    now = 16 * 60 * MIN;
+    await store.getState().tick();
+    const litterAfter = Object.values(store.getState().neighborStreets).reduce((sum, s) => sum + (s.litter?.length ?? 0), 0);
+    expect(litterAfter - litterBefore).toBe(8);
+    expect(store.getState().neighborhood!.news[0].text).toMatch(/^Kalles Elefant Benjamin war .* spazieren: 8 Haufen\. Igitt!$/);
+    // Futter: 4 pro Stunde (plus Kiosk 1,5)
+    expect(store.getState().player!.coins).toBeCloseTo(2000 - 16 * (4 + 1.5));
+    expect((await repo.loadPlayer())!.pets![0].nextOutingAt).toBe(32 * 60 * MIN);
+  });
+});
