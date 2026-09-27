@@ -20,12 +20,12 @@ export interface Species {
 }
 
 export const SPECIES: Species[] = [
-  { id: "katze", name: "Katze", emoji: "🐈", price: 150, upkeepPerHour: 0.3, poopPerOuting: 1, outingEveryHours: 10, names: ["Mieze", "Garfield", "Schnurri"], blurb: "Geht ihre eigenen Wege. Meistens in fremde Vorgärten." },
-  { id: "dackel", name: "Dackel", emoji: "🐕", price: 250, upkeepPerHour: 0.5, poopPerOuting: 2, outingEveryHours: 8, names: ["Waldi", "Bello", "Herr Wurst"], blurb: "Kurze Beine, großes Geschäft." },
-  { id: "schwein", name: "Hausschwein", emoji: "🐖", price: 500, upkeepPerHour: 1, poopPerOuting: 3, outingEveryHours: 10, names: ["Rosi", "Babe", "Schnitzel"], blurb: "Sehr schlau. Sehr verdauungsfreudig." },
-  { id: "pony", name: "Pony", emoji: "🐴", price: 900, upkeepPerHour: 1.5, poopPerOuting: 4, outingEveryHours: 12, names: ["Fury", "Blitz", "Ponyhof"], blurb: "Lässt sich gern ausreiten – und fallen." },
-  { id: "kamel", name: "Kamel", emoji: "🐪", price: 1400, upkeepPerHour: 2, poopPerOuting: 5, outingEveryHours: 14, names: ["Achmed", "Höcker", "Sandy"], blurb: "Spuckt nicht. Macht aber sonst alles." },
-  { id: "elefant", name: "Elefant", emoji: "🐘", price: 3000, upkeepPerHour: 4, poopPerOuting: 8, outingEveryHours: 16, names: ["Benjamin", "Dumbo", "Törööö"], blurb: "Der Endgegner jeder Nachbarschaft. Törööö!" },
+  { id: "katze", name: "Katze", emoji: "🐈", price: 600, upkeepPerHour: 2.4, poopPerOuting: 1, outingEveryHours: 10, names: ["Mieze", "Garfield", "Schnurri"], blurb: "Geht ihre eigenen Wege. Meistens in fremde Vorgärten." },
+  { id: "dackel", name: "Dackel", emoji: "🐕", price: 1000, upkeepPerHour: 4, poopPerOuting: 2, outingEveryHours: 8, names: ["Waldi", "Bello", "Herr Wurst"], blurb: "Kurze Beine, großes Geschäft." },
+  { id: "schwein", name: "Hausschwein", emoji: "🐖", price: 2000, upkeepPerHour: 8, poopPerOuting: 3, outingEveryHours: 10, names: ["Rosi", "Babe", "Schnitzel"], blurb: "Sehr schlau. Sehr verdauungsfreudig." },
+  { id: "pony", name: "Pony", emoji: "🐴", price: 3600, upkeepPerHour: 12, poopPerOuting: 4, outingEveryHours: 12, names: ["Fury", "Blitz", "Ponyhof"], blurb: "Lässt sich gern ausreiten – und fallen." },
+  { id: "kamel", name: "Kamel", emoji: "🐪", price: 5600, upkeepPerHour: 16, poopPerOuting: 5, outingEveryHours: 14, names: ["Achmed", "Höcker", "Sandy"], blurb: "Spuckt nicht. Macht aber sonst alles." },
+  { id: "elefant", name: "Elefant", emoji: "🐘", price: 12000, upkeepPerHour: 32, poopPerOuting: 8, outingEveryHours: 16, names: ["Benjamin", "Dumbo", "Törööö"], blurb: "Der Endgegner jeder Nachbarschaft. Törööö!" },
 ];
 
 export const species = (id: string) => SPECIES.find((s) => s.id === id);
@@ -46,5 +46,5 @@ export const CAR_OUTINGS = {
   /** Mehr Ruß als so viele Stufen setzt sich an einem Haus nicht fest. */
   maxSoot: 4,
   /** Fassade waschen. */
-  washCost: 15,
+  washCost: 60,
 } as const;

@@ -8,7 +8,8 @@ import { Voices } from "../components/Voices";
 import { residentVoices, type Voice } from "../game/life";
 import type { LitterItem } from "../model/types";
 import { Link, useNavigate } from "react-router-dom";
-import { RentBar } from "../components/RentBar";
+import { IncidentList } from "../components/IncidentList";
+import { StatusBar, type StreetTab } from "../components/StatusBar";
 import { StreetSearch } from "../components/StreetSearch";
 import { StreetView } from "../components/street/StreetView";
 import { formatCoins } from "../format";
@@ -16,6 +17,13 @@ import { currentPrice } from "../game/plots";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 import { useAllStreets } from "../store/useStreetContext";
+
+const TABS: { id: StreetTab; emoji: string; label: string }[] = [
+  { id: "residents", emoji: "🏠", label: "Bewohner" },
+  { id: "security", emoji: "🛡️", label: "Sicherheit" },
+  { id: "shop", emoji: "🛍️", label: "Einkaufen" },
+  { id: "more", emoji: "⚙️", label: "Mehr" },
+];
 
 export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
@@ -34,6 +42,8 @@ export function StreetScreen() {
   const [verifying, setVerifying] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [honk, setHonk] = useState<string | null>(null);
+  const [tab, setTab] = useState<StreetTab>("residents");
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const voices = useMemo(() => residentVoices(street), [street]);
 
@@ -73,8 +83,15 @@ export function StreetScreen() {
   function onVoice(voice: Voice) {
     sound.bubble();
     setHighlight(voice.id);
-    document.getElementById("voices")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTab("residents");
+    // Nach dem Umschalten des Reiters zur Stimme scrollen.
+    setTimeout(() => document.getElementById("voices")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
     setTimeout(() => setHighlight(null), 1800);
+  }
+
+  function openTab(next: StreetTab) {
+    setTab(next);
+    setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   return (
@@ -140,95 +157,139 @@ export function StreetScreen() {
         </div>
       )}
 
-      <StreetView
-        street={street}
-        ownerName={player.name}
-        coins={player.coins}
-        priceOf={(plot) => currentPrice(allStreets, street, plot, player.id)}
-        onSelect={(plot) => {
-          sound.tap();
-          navigate(routes.plot(plot.id));
-        }}
-        life
-        onLitterTap={onLitterTap}
-        onDrop={(kind, spot) => void dropLitter(kind, spot)}
-        voices={voices}
-        onVoice={onVoice}
-        onViewport={onViewport}
-        cars={player.cars}
-        pets={player.pets}
-        onCarTap={({ model, car }) => {
-          sound.horn(model.horn);
-          setHonk(car ? `📯 ${car.name} (${car.plate}) hupt!` : `📯 ${model.brand} ${model.model} hupt zurück!`);
-          setTimeout(() => setHonk(null), 2200);
-        }}
-      />
-      {honk && (
-        <p className="honk" role="status">
-          {honk}
-        </p>
-      )}
-      <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an · Müll und 💩 wegtippen!</p>
+      <div className="street-layout">
+        <div className="street-status">
+          <StatusBar onOpen={openTab} />
+        </div>
 
-      {paper && !paper.read && paper.issue.stories[0] && (
-        <Link className="card paper-teaser" to={routes.paper}>
-          <span aria-hidden>📰</span>
-          <span>
-            <small>Neu im Babo-Anzeiger</small>
-            <strong>{paper.issue.stories[0].headline}</strong>
-          </span>
-        </Link>
-      )}
-      <RentBar />
-      <WellbeingCard street={street} playerId={player.id} />
-      <SecurityCard street={street} />
+        <div className="street-main">
+          <StreetView
+            street={street}
+            ownerName={player.name}
+            coins={player.coins}
+            priceOf={(plot) => currentPrice(allStreets, street, plot, player.id)}
+            onSelect={(plot) => {
+              sound.tap();
+              navigate(routes.plot(plot.id));
+            }}
+            life
+            onLitterTap={onLitterTap}
+            onDrop={(kind, spot) => void dropLitter(kind, spot)}
+            voices={voices}
+            onVoice={onVoice}
+            onViewport={onViewport}
+            cars={player.cars}
+            pets={player.pets}
+            onCarTap={({ model, car }) => {
+              sound.horn(model.horn);
+              setHonk(car ? `📯 ${car.name} (${car.plate}) hupt!` : `📯 ${model.brand} ${model.model} hupt zurück!`);
+              setTimeout(() => setHonk(null), 2200);
+            }}
+          />
+          {honk && (
+            <p className="honk" role="status">
+              {honk}
+            </p>
+          )}
+          <p className="hint street-hint">Wisch zur Seite · Grundstück antippen · Müll und 💩 wegtippen!</p>
+        </div>
 
-      <Link className="card garage-link" to={routes.garage}>
-        <span aria-hidden>🚗</span>
-        <span>
-          <strong>Autohaus Babo</strong>
-          <small>
-            {player.cars?.length
-              ? `${player.cars.length} Auto${player.cars.length > 1 ? "s" : ""} in deiner Garage`
-              : "Kauf dir dein erstes Auto – mit eigenem Nummernschild"}
-          </small>
-        </span>
-      </Link>
+        <div className="street-panel">
+          {paper && !paper.read && paper.issue.stories[0] && (
+            <Link className="card paper-teaser" to={routes.paper}>
+              <span aria-hidden>📰</span>
+              <span>
+                <small>Neu im Babo-Anzeiger</small>
+                <strong>{paper.issue.stories[0].headline}</strong>
+              </span>
+            </Link>
+          )}
 
-      <Link className="card garage-link" to={routes.pets}>
-        <span aria-hidden>🐾</span>
-        <span>
-          <strong>Tierhandlung</strong>
-          <small>
-            {player.pets?.length
-              ? `${player.pets.map((p) => p.name).join(", ")} ${player.pets.length > 1 ? "gehen" : "geht"} bei den Nachbarn spazieren`
-              : "Vom Dackel bis zum Elefanten – sie lassen bei den Nachbarn was liegen"}
-          </small>
-        </span>
-      </Link>
+          <div className="tabs" role="tablist" aria-label="Deine Straße" ref={tabsRef}>
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? "selected" : ""}
+                onClick={() => setTab(t.id)}
+              >
+                <span aria-hidden>{t.emoji}</span>
+                {t.label}
+                {t.id === "residents" && voices.some((v) => v.tone === "complaint") && <b className="tab-dot" aria-label="Beschwerden" />}
+              </button>
+            ))}
+          </div>
 
-      <Voices voices={voices} highlight={highlight} />
-
-      <AccountCard />
-
-      {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
-      {confirmReset ? (
-        <div className="confirm">
-          <p>Spielstand wirklich löschen und neu anfangen?</p>
-          <div className="actions">
-            <button type="button" className="btn btn-danger" onClick={() => void reset()}>
-              Ja, löschen
-            </button>
-            <button type="button" className="btn" onClick={() => setConfirmReset(false)}>
-              Abbrechen
-            </button>
+          <div className="tab-panel" role="tabpanel">
+            {tab === "residents" && (
+              <>
+                <WellbeingCard street={street} playerId={player.id} />
+                <Voices voices={voices} highlight={highlight} />
+              </>
+            )}
+            {tab === "security" && (
+              <>
+                <SecurityCard street={street} />
+                <IncidentList street={street} />
+              </>
+            )}
+            {tab === "shop" && (
+              <div className="shop-tiles">
+                <Link className="card shop-tile" to={routes.garage}>
+                  <span aria-hidden>🚗</span>
+                  <strong>Autohaus</strong>
+                  <small>
+                    {player.cars?.length ? `${player.cars.length} Auto${player.cars.length > 1 ? "s" : ""} in der Garage` : "Erstes Auto mit eigenem Schild"}
+                  </small>
+                </Link>
+                <Link className="card shop-tile" to={routes.pets}>
+                  <span aria-hidden>🐾</span>
+                  <strong>Tierhandlung</strong>
+                  <small>{player.pets?.length ? player.pets.map((p) => p.name).join(", ") : "Vom Dackel bis zum Elefanten"}</small>
+                </Link>
+                <Link className="card shop-tile" to={routes.neighborhood}>
+                  <span aria-hidden>😈</span>
+                  <strong>Bad Boys</strong>
+                  <small>In der Nachbarschaft eine Straße antippen</small>
+                </Link>
+                <div className="card shop-tile">
+                  <span aria-hidden>🪧</span>
+                  <strong>Grundstücke</strong>
+                  <small>Tipp oben ein Schild „Zu verkaufen“ an</small>
+                </div>
+              </div>
+            )}
+            {tab === "more" && (
+              <>
+                <AccountCard />
+                <Link className="btn" to={routes.share}>
+                  📸 Straße teilen
+                </Link>
+                {/* Bestätigung im Screen statt confirm(): der blockiert auf Mobile und in eingebetteten Ansichten. */}
+                {confirmReset ? (
+                  <div className="confirm">
+                    <p>Spielstand wirklich löschen und neu anfangen?</p>
+                    <div className="actions">
+                      <button type="button" className="btn btn-danger" onClick={() => void reset()}>
+                        Ja, löschen
+                      </button>
+                      <button type="button" className="btn" onClick={() => setConfirmReset(false)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="btn btn-link" onClick={() => setConfirmReset(true)}>
+                    Spielstand zurücksetzen
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
-      ) : (
-        <button type="button" className="btn btn-link" onClick={() => setConfirmReset(true)}>
-          Spielstand zurücksetzen
-        </button>
-      )}
+      </div>
     </div>
   );
 }

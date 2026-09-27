@@ -17,8 +17,8 @@ describe("economy", () => {
     expect([capacityOf("S", 1), capacityOf("M", 1), capacityOf("L", 1)]).toEqual([4, 10, 24]);
     expect(capacityOf("M", 2)).toBe(15);
     expect(capacityOf("L", 3)).toBe(53);
-    expect(upkeepOf("S", 1)).toBe(1.5);
-    expect(upkeepOf("L", 3)).toBeCloseTo(12 * 2.2);
+    expect(upkeepOf("S", 1)).toBe(12);
+    expect(upkeepOf("L", 3)).toBeCloseTo(96 * 2.2);
   });
 
   it("Mietniveau: 1 + Deko + Stockwerke", () => {

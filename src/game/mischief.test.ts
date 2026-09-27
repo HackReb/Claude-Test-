@@ -80,9 +80,9 @@ describe("Bad Boys", () => {
 describe("Wachschutz", () => {
   it("kostet, hat laufende Kosten und fängt einen Teil ab – dann kommt raus, wer geschickt hat", () => {
     const { player, street: s } = street();
-    const guard = buySecurity({ ...player, coins: 1000 }, s);
+    const guard = buySecurity({ ...player, coins: 5000 }, s);
     if (!guard.ok) throw new Error();
-    expect(guard.player.coins).toBe(1000 - SECURITY[0].price);
+    expect(guard.player.coins).toBe(5000 - SECURITY[0].price);
     expect(playerUpkeepPerHour([guard.street], player.id) - playerUpkeepPerHour([s], player.id)).toBe(SECURITY[0].upkeepPerHour);
 
     const outcomes = Array.from({ length: 200 }, (_, i) => rollBlocked(guard.street, `versuch-${i}`));
@@ -102,9 +102,10 @@ describe("Wachschutz", () => {
 describe("in der Simulation", () => {
   it("Bad Boys kommen zu ihrer Zeit an und drücken ab dann die Belegung", () => {
     const { player, street: s } = street();
-    const full: Street = { ...s, plots: s.plots.map((p) => (p.building ? { ...p, building: { ...p.building, occupancy: 0.7 } } : p)) };
-    const quiet = simulate(player, [full], 10 * HOUR);
-    const attacked = simulate(player, [full], 10 * HOUR, [send("knallfrosch-zwillinge", "boom", { at: 2 * HOUR }), send("muelltonnen-marvin", "tonne", { at: 3 * HOUR })]);
+    // Frisch gebaut, die Leute ziehen gerade ein – dann kommen die Knallfrösche und Marvin.
+    const moving: Street = { ...s, plots: s.plots.map((p) => (p.building ? { ...p, building: { ...p.building, occupancy: 0.1 } } : p)) };
+    const quiet = simulate(player, [moving], HOUR);
+    const attacked = simulate(player, [moving], HOUR, [send("knallfrosch-zwillinge", "boom", { at: 0 }), send("muelltonnen-marvin", "tonne", { at: HOUR / 4 })]);
     // Welches Haus es trifft, entscheidet der Zufall des Streichs – belegt ist danach insgesamt weniger.
     const occ = (r: typeof quiet) => r.streets[0].plots.reduce((sum, p) => sum + (p.building?.occupancy ?? 0), 0);
     expect(attacked.incidents.map((i) => i.id)).toEqual(["boom", "tonne"]);

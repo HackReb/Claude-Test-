@@ -102,7 +102,8 @@ describe("Wohlfühl-Liste und Bewohner", () => {
   });
 
   it("Einziehen geht schneller als Ausziehen", () => {
-    expect(moveTowards(0.2, 1, 1)).toBeCloseTo(0.2 + LIFE.moveInPerHour);
+    expect(moveTowards(0.2, 1, 0.1)).toBeCloseTo(0.2 + 0.1 * LIFE.moveInPerHour);
+    expect(moveTowards(0.2, 1, 5)).toBe(1);
     expect(moveTowards(1, 0.2, 1)).toBeCloseTo(1 - LIFE.moveOutPerHour);
     expect(moveTowards(0.5, 0.52, 10)).toBe(0.52);
     expect(moveTowards(0.5, 0.48, 10)).toBe(0.48);

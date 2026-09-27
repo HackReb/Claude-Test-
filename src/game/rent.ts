@@ -113,7 +113,8 @@ export function simulate(player: Player, streets: Street[], now: number, incomin
         if (!isBuilt(plot)) return plot;
         const before = occupancyOf(withLitter, plot);
         const after = moveTowards(before, targetOccupancy(withLitter, plot), hours);
-        result.income += buildingIncomePerHour(plot.size, plot.building, before) * hours;
+        // Mittel aus vorher und nachher: Einziehen geht schnell, innerhalb einer Stunde ändert sich viel.
+        result.income += buildingIncomePerHour(plot.size, plot.building, (before + after) / 2) * hours;
         if (useOf(plot.building) === "residential") {
           const people = (after - before) * capacityOf(plot.size, plot.building.level);
           if (people > 0) result.movedIn += people;

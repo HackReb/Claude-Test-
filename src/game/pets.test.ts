@@ -17,11 +17,12 @@ const neighbor = (name: string) => ({ ...claimStreet({ playerName: name, street:
 describe("Tierhandlung", () => {
   it("Tier kaufen: kostet, braucht einen Namen, höchstens 5 Tiere, Futter kostet laufend", () => {
     const { player } = kalle();
-    const bought = buyPet({ ...player, coins: 5000 }, "elefant", "  Benjamin  ", 0);
+    const elefant = SPECIES.find((s) => s.id === "elefant")!;
+    const bought = buyPet({ ...player, coins: 20_000 }, "elefant", "  Benjamin  ", 0);
     if (!bought.ok) throw new Error(bought.reason);
     expect(bought.pet).toMatchObject({ speciesId: "elefant", name: "Benjamin", nextOutingAt: 16 * HOUR });
-    expect(bought.player.coins).toBe(2000);
-    expect(petUpkeepPerHour(bought.player)).toBe(4);
+    expect(bought.player.coins).toBe(20_000 - elefant.price);
+    expect(petUpkeepPerHour(bought.player)).toBe(elefant.upkeepPerHour);
     expect(buyPet(player, "elefant", "Dumbo", 0)).toEqual({ ok: false, reason: "too-expensive" });
     expect(buyPet(player, "katze", "   ", 0)).toEqual({ ok: false, reason: "no-name" });
     const full = { ...bought.player, coins: 1e6, pets: Array.from({ length: PETS.maxPets }, () => bought.pet) };
