@@ -1,34 +1,80 @@
+import { bearing, largestGapMiddle, spreadBearings } from "../game/bots";
+import { residentsOf } from "../game/life";
 import { possessive } from "../game/names";
-import type { Neighborhood, Street } from "../model/types";
+import type { Bot, Neighborhood, Street } from "../model/types";
 
 const SIZE = 360;
 const C = SIZE / 2;
 const RADIUS = 124;
 const INK = "#2b2118";
 
+/** Straße eines echten Mitspielers. */
+export interface PlayerNeighbor {
+  street: Street;
+  ownerName: string;
+}
+
+/** Mehr passen nicht beschriftet auf die Karte. */
+export const MAP_SLOTS = 5;
+
+/**
+ * Wer auf die Karte kommt: echte Mitspieler in der Nähe zuerst, freie Plätze füllen Bots
+ * (die, bei denen man Grundstücke hat, zuerst). Der Rest steht unter der Karte.
+ */
+export function mapNeighbors(neighborhood: Neighborhood, streets: Record<string, Street>, players: PlayerNeighbor[], playerId: string) {
+  const shownPlayers = players.slice(0, MAP_SLOTS);
+  const ownsThere = (bot: Bot) => streets[bot.streetId]?.plots.some((p) => p.ownerId === playerId) ?? false;
+  const bots = [...neighborhood.bots].sort((a, b) => Number(ownsThere(b)) - Number(ownsThere(a)));
+  const free = MAP_SLOTS - shownPlayers.length;
+  return { shownPlayers, shownBots: bots.slice(0, free), hiddenBots: bots.slice(free) };
+}
+
 interface Props {
   neighborhood: Neighborhood;
+  players: PlayerNeighbor[];
   playerStreet: Street;
   playerName: string;
   playerId: string;
   streets: Record<string, Street>;
-  unreadByBot: Record<string, number>;
+  unreadByStreet: Record<string, number>;
   onSelect: (streetId: string) => void;
 }
 
 const shorten = (name: string, max = 17) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 
-/** Karte: eigene Straße in der Mitte, Bot-Straßen in ihrer Himmelsrichtung drumherum. */
-export function NeighborhoodMap({ neighborhood, playerStreet, playerName, playerId, streets, unreadByBot, onSelect }: Props) {
-  const nodes = neighborhood.bots.flatMap((bot) => {
-    const street = streets[bot.streetId];
-    if (!street) return [];
-    const angle = ((neighborhood.bearings[street.id] ?? 90) * Math.PI) / 180;
+/** Karte: eigene Straße in der Mitte, Nachbarstraßen (Mitspieler und Bots) in ihrer Himmelsrichtung drumherum. */
+export function NeighborhoodMap({ neighborhood, players, playerStreet, playerName, playerId, streets, unreadByStreet, onSelect }: Props) {
+  const { shownPlayers, shownBots } = mapNeighbors(neighborhood, streets, players, playerId);
+  const entries = [
+    ...shownPlayers.map((p) => ({
+      street: p.street,
+      avatar: "🧑",
+      owner: p.ownerName,
+      real: true,
+      angle: playerStreet.osm && p.street.osm ? bearing(playerStreet.osm, p.street.osm) : null,
+    })),
+    ...shownBots.flatMap((bot) => {
+      const street = streets[bot.streetId];
+      return street ? [{ street, avatar: bot.avatar, owner: bot.name, real: false, angle: neighborhood.bearings[street.id] ?? null }] : [];
+    }),
+  ];
+  // Richtungen ohne Koordinaten in die größten Lücken setzen, dann so verteilen, dass sich nichts überlappt.
+  const known: number[] = entries.flatMap((e) => (e.angle === null ? [] : [e.angle]));
+  const raw = entries.map((e) => {
+    if (e.angle !== null) return e.angle;
+    const angle = largestGapMiddle(known);
+    known.push(angle);
+    return angle;
+  });
+  const angles = spreadBearings(raw);
+  const nodes = entries.map((entry, i) => {
+    const angle = (angles[i] * Math.PI) / 180;
     const x = Math.min(SIZE - 62, Math.max(62, C + RADIUS * Math.cos(angle)));
     const y = Math.min(SIZE - 44, Math.max(40, C - RADIUS * Math.sin(angle)));
-    const built = street.plots.filter((p) => p.building).length;
-    const mine = street.plots.filter((p) => p.ownerId === playerId).length;
-    return [{ bot, street, x, y, built, mine }];
+    const built = entry.street.plots.filter((p) => p.building).length;
+    const mine = entry.street.plots.filter((p) => p.ownerId === playerId).length;
+    const people = Math.round(residentsOf(entry.street));
+    return { ...entry, x, y, built, mine, people };
   });
 
   return (
@@ -46,8 +92,8 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, player
         <rect key={i} x={x} y={y} width={w} height={h} rx={8} fill="#b8d9ad" />
       ))}
 
-      {nodes.map(({ bot, x, y }) => (
-        <g key={`road-${bot.id}`}>
+      {nodes.map(({ street, x, y }) => (
+        <g key={`road-${street.id}`}>
           <line x1={C} y1={C} x2={x} y2={y} stroke="#4a4a5a" strokeWidth={16} strokeLinecap="round" />
           <line x1={C} y1={C} x2={x} y2={y} stroke="#fff" strokeWidth={2} strokeDasharray="8 8" />
         </g>
@@ -69,15 +115,15 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, player
         </text>
       </g>
 
-      {nodes.map(({ bot, street, x, y, built, mine }) => {
-        const unread = unreadByBot[bot.id] ?? 0;
+      {nodes.map(({ street, avatar, owner, real, x, y, built, mine, people }) => {
+        const unread = unreadByStreet[street.id] ?? 0;
         return (
           <g
-            key={bot.id}
-            className="map-node"
+            key={street.id}
+            className={`map-node${real ? " real" : ""}`}
             role="button"
             tabIndex={0}
-            aria-label={`${street.name} von ${bot.name}, ${built} Gebäude${mine ? `, ${mine} davon deine Grundstücke` : ""}${unread ? `, ${unread} Neuigkeiten` : ""}`}
+            aria-label={`${street.name} von ${owner}${real ? " (Mitspieler)" : ""}, ${built} Gebäude, ${people} Bewohner${mine ? `, ${mine} davon deine Grundstücke` : ""}${unread ? `, ${unread} Neuigkeiten` : ""}`}
             onClick={() => onSelect(street.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -86,16 +132,25 @@ export function NeighborhoodMap({ neighborhood, playerStreet, playerName, player
               }
             }}
           >
-            <rect x={x - 60} y={y + 8} width={120} height={34} rx={10} fill="#fff" stroke={mine ? "#ff7a45" : INK} strokeWidth={mine ? 4 : 2.5} />
+            <rect
+              x={x - 60}
+              y={y + 8}
+              width={120}
+              height={34}
+              rx={10}
+              fill={real ? "#e3f6ff" : "#fff"}
+              stroke={mine ? "#ff7a45" : real ? "#1a73e8" : INK}
+              strokeWidth={mine || real ? 4 : 2.5}
+            />
             <text x={x} y={y + 23} textAnchor="middle" fontSize={11} fontWeight={900} fill={INK}>
               {shorten(street.name)}
             </text>
             <text x={x} y={y + 36} textAnchor="middle" fontSize={9} fontWeight={700} fill="#7a6a5a">
-              {mine ? `${mine}× deins · ${built} 🏠` : `${bot.name} · ${built} 🏠`}
+              {mine ? `${mine}× deins · 👥 ${people}` : `${shorten(owner, 11)} · 👥 ${people}`}
             </text>
-            <circle className="map-avatar" cx={x} cy={y - 8} r={20} fill="#fff7e8" stroke={INK} strokeWidth={2.5} />
+            <circle className="map-avatar" cx={x} cy={y - 8} r={20} fill={real ? "#e3f6ff" : "#fff7e8"} stroke={real ? "#1a73e8" : INK} strokeWidth={real ? 3.5 : 2.5} />
             <text x={x} y={y - 1} textAnchor="middle" fontSize={20}>
-              {bot.avatar}
+              {avatar}
             </text>
             {unread > 0 && (
               <g>

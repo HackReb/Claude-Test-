@@ -100,7 +100,7 @@ describe("ApiRepository", () => {
 
   it("gibt die vom Server zusammengeführte Straße zurück", async () => {
     let serverStreet: Street | null = null;
-    const { repo } = setup((c) => (c.method === "PUT" && c.path.startsWith("/streets/") ? { status: 200, body: { street: serverStreet, ownerName: "Zoe" } } : undefined));
+    const { repo } = setup((c) => (c.method === "PUT" && c.path.startsWith("/streets/") ? { status: 200, body: { street: serverStreet, ownerName: "Zoe", names: { zoe: "Zoe", max: "Max" } } } : undefined));
     const { player, street } = start();
     await repo.online.register(player, street);
     serverStreet = { ...street, plots: street.plots.map((p, i) => (i === 1 ? { ...p, purchasedAt: 1, ownerId: "zoe" } : p)) };
@@ -108,6 +108,8 @@ describe("ApiRepository", () => {
     const merged = await repo.saveStreet(street);
     expect(merged).toEqual(serverStreet);
     expect(await repo.loadStreet(street.id)).toEqual(serverStreet);
+    // Namen für Neuigkeiten („Max hat in deiner Straße gekauft“)
+    expect(repo.online.playerNames()).toMatchObject({ zoe: "Zoe", max: "Max", [street.ownerId]: "Zoe" });
   });
 
   it("alter lokaler Spielstand wird beim ersten Start mit Server angemeldet", async () => {
@@ -180,6 +182,32 @@ describe("ApiRepository", () => {
     expect(await repo.online.foreignStreets()).toEqual([{ street: zoeStreet, ownerName: "Zoe" }]);
     expect(repo.online.account()).toEqual({ status: "online", recoveryCode: "BABO-AAAA-BBBB-CCCC" });
     expect(server.calls.at(-1)?.token).toBe("tok-2");
+  });
+
+  it("Bad Boys: schicken, Posteingang und Bestätigung (auch offline nachgereicht)", async () => {
+    const kevin = { id: "m1", badBoyId: "spruehdosen-kevin", at: 5, blocked: false, senderName: "Maxim" };
+    const { repo, server } = setup((c) => {
+      if (c.path === "/streets/street-x/mischief") return { status: 201, body: { mischief: { ...kevin, id: "m9" } } };
+      if (c.path === "/streets/street-y/mischief") return { status: 429, body: { error: "Deine Bad Boys brauchen eine Pause." } };
+      if (c.path === "/me/mischief") return { status: 200, body: { mischief: [kevin] } };
+      return undefined;
+    });
+    const { player, street } = start();
+    await repo.online.register(player, street);
+
+    expect(await repo.online.sendMischief("street-x", "spruehdosen-kevin")).toMatchObject({ ok: true, mischief: { id: "m9" } });
+    expect(await repo.online.sendMischief("street-y", "gassi-gabi")).toEqual({ ok: false, message: "Deine Bad Boys brauchen eine Pause." });
+
+    expect(await repo.online.fetchMischief()).toEqual([kevin]);
+    server.setOffline(true);
+    await repo.online.ackMischief(["m1"]);
+    await repo.flush();
+    expect(repo.online.incomingMischief()).toEqual([]);
+    // Noch nicht bestätigt beim Server → kommt beim Abholen nicht wieder rein
+    server.setOffline(false);
+    expect(await repo.online.fetchMischief()).toEqual([]);
+    await repo.flush();
+    expect(server.calls.find((c) => c.path === "/me/mischief/ack")?.body).toEqual({ ids: ["m1"] });
   });
 
   it("normalisiert Codes wie der Server", () => {

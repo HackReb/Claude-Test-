@@ -7,16 +7,15 @@ namespace App\Service;
  * Regeln (damit mehrere Spieler fair in derselben Straße arbeiten können):
  *
  * - Der Besitzer (oder bei Bot-Straßen: der steuernde Spieler) darf alles an der Straße ändern –
- *   außer Grundstücken, die anderen Spielern gehören.
- * - Andere Spieler dürfen nur (a) ein freies Grundstück für sich kaufen und
- *   (b) ihre eigenen Grundstücke bebauen, ausbauen, umbenennen.
+ *   außer Grundstücken, die (aus früheren Regeln) anderen Spielern gehören.
+ * - Gekauft wird nur in der eigenen Straße. Andere Spieler dürfen nur ihre alten Grundstücke von
+ *   früher wieder freigeben (Regeln v3: sie bekommen den Kaufpreis erstattet).
  * - Unveränderlich für alle: ID, Größe, Straßenseite, Platz und Grundpreis eines Grundstücks.
- * - Wer zuerst kauft, gewinnt: Ist ein Grundstück inzwischen vergeben, bleibt es beim ersten Käufer.
  */
 final class StreetMerger
 {
     private const IMMUTABLE_PLOT_FIELDS = ['id', 'size', 'side', 'index', 'price'];
-    private const OWNER_STREET_FIELDS = ['name', 'city', 'osm', 'litter', 'litterCheckedAt'];
+    private const OWNER_STREET_FIELDS = ['name', 'city', 'osm', 'litter', 'litterCheckedAt', 'security', 'incidents'];
 
     public function merge(array $current, array $incoming, string $writerId, bool $writerManagesStreet): array
     {
@@ -77,19 +76,9 @@ final class StreetMerger
             return $this->withImmutable($incoming, $current);
         }
 
-        // Besucher: eigenes Grundstück bearbeiten …
-        if ($currentOwner === $writerId) {
-            if (!isset($incoming['purchasedAt'])) {
-                return $current; // eigenes Grundstück „wegwerfen“ ist nicht vorgesehen
-            }
-            $incoming['ownerId'] = $writerId;
-
-            return $this->withImmutable($incoming, $current);
-        }
-
-        // … oder ein freies Grundstück kaufen (wer zuerst kommt).
-        if (null === $currentOwner && isset($incoming['purchasedAt']) && ($incoming['ownerId'] ?? null) === $writerId) {
-            return $this->withImmutable($incoming, $current);
+        // Besucher: nur ein altes eigenes Grundstück wieder freigeben.
+        if ($currentOwner === $writerId && !isset($incoming['purchasedAt'])) {
+            return $this->withImmutable([], $current);
         }
 
         return $current;

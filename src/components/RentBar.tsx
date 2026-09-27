@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { formatCoins, formatRate } from "../format";
 import { sound } from "../audio/sound";
-import { rentModifiers, streetStats } from "../game/life";
-import { playerRentPerMinute, streetRentPerMinute } from "../game/rent";
+import { playerIncomePerHour, playerUpkeepPerHour, streetIncomePerHour } from "../game/rent";
 import { useAllStreets } from "../store/useStreetContext";
 import { useGameStore } from "../store/gameStore";
 
-/** Angesammelte Miete + Einsammeln-Button. */
+/** Kasse (angesammelte Miete) + Einsammeln, darunter Einnahmen und laufende Kosten pro Stunde. */
 export function RentBar() {
   const player = useGameStore((s) => s.player)!;
   const street = useGameStore((s) => s.street)!;
@@ -15,11 +14,10 @@ export function RentBar() {
 
   const pending = Math.floor(player.pendingRent);
   const streets = useAllStreets();
-  const rate = playerRentPerMinute(streets, player.id);
-  const fromNeighbors = rate - streetRentPerMinute(street, player.id);
-
-  const stats = streetStats(street);
-  const penalty = Math.round((1 - rentModifiers(street).cleanliness) * 100);
+  const income = playerIncomePerHour(streets, player.id);
+  const upkeep = playerUpkeepPerHour(streets, player.id);
+  const fromNeighbors = income - streetIncomePerHour(street, player.id);
+  const net = income - upkeep;
 
   async function onCollect() {
     const amount = await collect();
@@ -30,14 +28,14 @@ export function RentBar() {
   return (
     <section className="rentbar card" aria-live="polite">
       <div className="rentbar-info">
-        <span className="rentbar-label">Miete bereit</span>
+        <span className="rentbar-label">Miete in der Kasse</span>
         <strong className="rentbar-amount">🪙 {formatCoins(pending)}</strong>
         <span className="rentbar-rate">
-          +{formatRate(rate)} pro Minute
-          {fromNeighbors > 0.05 && ` (davon ${formatRate(fromNeighbors)} aus Nachbarstraßen)`}
+          +{formatRate(income)}/Std. Miete{fromNeighbors > 0.05 && ` (${formatRate(fromNeighbors)} aus Nachbarstraßen)`} · −{formatRate(upkeep)}
+          /Std. Kosten
         </span>
-        <span className={`rentbar-clean${penalty > 0 ? " dirty" : ""}`}>
-          {penalty === 0 ? "😊 Straße sauber" : `${stats.litter >= 8 ? "🤢" : "😒"} ${stats.litter}× Dreck: −${penalty} % Miete`}
+        <span className={`rentbar-net${net < 0 ? " negative" : ""}`}>
+          {net >= 0 ? `Gewinn 🪙 ${formatRate(net)} pro Stunde` : `⚠️ Verlust 🪙 ${formatRate(-net)} pro Stunde – deine Häuser leeren sich!`}
         </span>
       </div>
       <button type="button" className="btn btn-primary" disabled={pending < 1} onClick={onCollect}>

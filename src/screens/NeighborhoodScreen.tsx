@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { NeighborhoodMap } from "../components/NeighborhoodMap";
+import { mapNeighbors, NeighborhoodMap, type PlayerNeighbor } from "../components/NeighborhoodMap";
+import { nearbyStreets } from "../game/world";
 import { formatAgo } from "../format";
 import { ownedStreetName } from "../game/names";
 import { routes } from "../routes";
@@ -14,6 +15,8 @@ export function NeighborhoodScreen() {
   const playerId = useGameStore((s) => s.player!.id);
   const markNewsSeen = useGameStore((s) => s.markNewsSeen);
   const online = useGameStore((s) => s.account?.status === "online");
+  const playerStreets = useGameStore((s) => s.playerStreets);
+  const ownerNames = useGameStore((s) => s.ownerNames);
   const loadCity = useGameStore((s) => s.loadCity);
   const navigate = useNavigate();
 
@@ -34,10 +37,15 @@ export function NeighborhoodScreen() {
 
   const now = Date.now();
   const unread = neighborhood.news.filter((n) => n.at > neighborhood.newsSeenAt);
-  const unreadByBot: Record<string, number> = {};
-  for (const n of unread) unreadByBot[n.botId] = (unreadByBot[n.botId] ?? 0) + 1;
-  const botOf = (id: string) => neighborhood.bots.find((b) => b.id === id);
+  const unreadByStreet: Record<string, number> = {};
+  for (const n of unread) unreadByStreet[n.streetId] = (unreadByStreet[n.streetId] ?? 0) + 1;
+  const botOf = (id?: string) => neighborhood.bots.find((b) => b.id === id);
   const realNeighbors = Object.values(streets).some((s) => s.osm);
+  // Echte Mitspieler in der Nähe: kommen vor den Bots auf die Karte.
+  const players: PlayerNeighbor[] = nearbyStreets(street, Object.values(playerStreets))
+    .filter((s) => ownerNames[s.id])
+    .map((s) => ({ street: s, ownerName: ownerNames[s.id] }));
+  const { hiddenBots } = mapNeighbors(neighborhood, streets, players, playerId);
 
   return (
     <div className="neighborhood">
@@ -45,18 +53,30 @@ export function NeighborhoodScreen() {
       <div className="card map-card">
         <NeighborhoodMap
           neighborhood={neighborhood}
+          players={players}
           playerStreet={street}
           playerName={playerName}
           playerId={playerId}
           streets={streets}
-          unreadByBot={unreadByBot}
+          unreadByStreet={unreadByStreet}
           onSelect={(id) => navigate(routes.neighborStreet(id))}
         />
       </div>
       <p className="hint left">
+        {players.length > 0 && "🧑 Blau umrandet: echte Mitspieler in deiner Nähe – was sie bauen, siehst du hier und in den Neuigkeiten. "}
         {realNeighbors ? "Echte Nachbarstraßen, grob in ihrer echten Richtung. " : ""}Tipp eine Straße an – dort kannst du freie Grundstücke
         kaufen und bauen.
       </p>
+      {hiddenBots.length > 0 && (
+        <p className="more-neighbors">
+          Weitere Nachbarn:{" "}
+          {hiddenBots.map((bot) => (
+            <Link key={bot.id} className="chip" to={routes.neighborStreet(bot.streetId)}>
+              {bot.avatar} {streets[bot.streetId]?.name ?? bot.name}
+            </Link>
+          ))}
+        </p>
+      )}
 
       {online && <CityPlayers />}
 
@@ -70,10 +90,10 @@ export function NeighborhoodScreen() {
             return (
               <li key={`${n.at}-${i}`} className={n.at > neighborhood.newsSeenAt ? "unread" : ""}>
                 <span className="news-avatar" aria-hidden>
-                  {bot?.avatar}
+                  {n.emoji ?? bot?.avatar ?? (n.playerName ? "🧑" : "📰")}
                 </span>
                 <div>
-                  <Link to={routes.neighborStreet(n.streetId)}>{n.text}</Link>
+                  <Link to={n.streetId === street.id ? routes.street : routes.neighborStreet(n.streetId)}>{n.text}</Link>
                   <small>{formatAgo(n.at, now)}</small>
                 </div>
               </li>

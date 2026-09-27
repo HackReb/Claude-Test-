@@ -1,3 +1,5 @@
+import { capacityOf, ECONOMY } from "../config/economy";
+import { MISCHIEF } from "../config/badboys";
 import { LIFE } from "../config/life";
 import type { Building, BuildingUse, LitterItem, LitterKind, Player, Plot, Street } from "../model/types";
 import { getPart } from "../parts/catalog";
@@ -21,6 +23,8 @@ export interface StreetStats {
   shops: number;
   playgrounds: number;
   litter: number;
+  graffiti: number;
+  damaged: number;
 }
 
 export function streetStats(street: Street): StreetStats {
@@ -30,31 +34,88 @@ export function streetStats(street: Street): StreetStats {
     shops: buildings.filter((p) => useOf(p.building) === "commercial").length,
     playgrounds: street.plots.filter((p) => p.purchasedAt !== undefined && p.amenity === "playground").length,
     litter: street.litter?.length ?? 0,
+    graffiti: buildings.filter((p) => p.building.graffiti).length,
+    damaged: buildings.filter((p) => p.building.damaged).length,
   };
 }
 
-export interface RentModifiers {
-  /** Faktor durch Dreck (1 = sauber). */
-  cleanliness: number;
-  /** Bonus für Wohnhäuser durch einen Spielplatz. */
-  playgroundBonus: number;
-  /** Bonus für Gewerbe durch Kundschaft aus Wohnhäusern. */
-  customerBonus: number;
+// ---------- Bewohner & Wohlfühl-Liste ----------
+
+export type NeedId = "clean" | "playground" | "shop";
+
+/** Ein Punkt der Wohlfühl-Liste: erfüllt → Häuser können voll werden, sonst ziehen Leute aus. */
+export interface Need {
+  id: NeedId;
+  label: string;
+  met: boolean;
+  /** Höchste Belegung, die dieser Punkt erlaubt (1 = keine Einschränkung). */
+  factor: number;
 }
 
-export function rentModifiers(street: Street): RentModifiers {
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+/** Wohlfühl-Liste für Wohnhäuser in dieser Straße. */
+export function streetNeeds(street: Street): Need[] {
   const stats = streetStats(street);
-  return {
-    cleanliness: 1 - Math.min(LIFE.maxLitterPenalty, stats.litter * LIFE.litterRentPenalty),
-    playgroundBonus: stats.playgrounds > 0 ? LIFE.playgroundBonus : 0,
-    customerBonus: Math.min(LIFE.maxCustomerBonus, stats.homes * LIFE.customerBonusPerHome),
-  };
+  // Graffiti stört wie mehrere Dreck-Teile.
+  const dirt = stats.litter + stats.graffiti * MISCHIEF.graffitiAsLitter;
+  const cleanliness = Math.max(LIFE.minCleanliness, 1 - dirt * LIFE.litterComfortLoss);
+  const what = [stats.litter > 0 && `${stats.litter}× Dreck`, stats.graffiti > 0 && `${stats.graffiti}× Graffiti`].filter(Boolean).join(", ");
+  return [
+    {
+      id: "clean",
+      label: dirt === 0 ? "Straße sauber" : dirt < LIFE.dirtyThreshold ? `Fast sauber (${what})` : `${what} in der Straße`,
+      met: dirt < LIFE.dirtyThreshold,
+      factor: cleanliness,
+    },
+    { id: "playground", label: "Spielplatz für die Kinder", met: stats.playgrounds > 0, factor: stats.playgrounds > 0 ? 1 : LIFE.noPlaygroundFactor },
+    { id: "shop", label: "Laden zum Einkaufen", met: stats.shops > 0, factor: stats.shops > 0 ? 1 : LIFE.noShopFactor },
+  ];
 }
 
-/** Wirkt die Straßen-Lage auf die Grundmiete eines Gebäudes. */
-export function applyModifiers(baseRent: number, building: Building, modifiers: RentModifiers): number {
-  const bonus = useOf(building) === "residential" ? modifiers.playgroundBonus : modifiers.customerBonus;
-  return baseRent * (1 + bonus) * modifiers.cleanliness;
+/** Wie voll Wohnhäuser hier höchstens werden (0–1). */
+export function homeComfort(street: Street): number {
+  return streetNeeds(street).reduce((product, need) => product * need.factor, 1);
+}
+
+/** Plätze eines Gebäudes (Bewohner bzw. Kunden). */
+export const placesOf = (plot: Plot & { building: Building }) => capacityOf(plot.size, plot.building.level);
+
+/** Aktuelle Belegung; ohne gespeicherten Wert (alte Stände, Bots) das, was die Straße hergibt. */
+export function occupancyOf(street: Street, plot: Plot & { building: Building }): number {
+  return plot.building.occupancy ?? targetOccupancy(street, plot);
+}
+
+/** Bewohner der Straße insgesamt (Kundschaft für die Läden). */
+export function residentsOf(street: Street): number {
+  return ownedBuildings(street)
+    .filter((p) => useOf(p.building) === "residential")
+    .reduce((sum, p) => sum + placesOf(p) * (p.building.occupancy ?? homeComfort(street)), 0);
+}
+
+/** Wie viele Plätze die Läden der Straße zusammen haben. */
+function shopPlacesOf(street: Street): number {
+  return ownedBuildings(street)
+    .filter((p) => useOf(p.building) === "commercial")
+    .reduce((sum, p) => sum + placesOf(p), 0);
+}
+
+/** Wohin sich die Belegung eines Gebäudes gerade bewegt (0–1). */
+export function targetOccupancy(street: Street, plot: Plot & { building: Building }): number {
+  // Kaputte Fenster: da will keiner wohnen oder einkaufen, bis repariert ist.
+  const damage = plot.building.damaged ? MISCHIEF.damagedFactor : 1;
+  if (useOf(plot.building) === "residential") return homeComfort(street) * damage;
+  const litter = street.litter?.length ?? 0;
+  const cleanliness = Math.max(LIFE.shopMinCleanliness, 1 - litter * LIFE.shopLitterLoss);
+  const demand = shopPlacesOf(street);
+  const customers = demand > 0 ? Math.min(1, residentsOf(street) / demand) : 0;
+  return clamp01(cleanliness * damage * (LIFE.walkInCustomers + (1 - LIFE.walkInCustomers) * customers));
+}
+
+/** Belegung nach `hours` Stunden: Einziehen geht schneller als Ausziehen. */
+export function moveTowards(current: number, target: number, hours: number): number {
+  if (current < target) return Math.min(target, current + LIFE.moveInPerHour * hours);
+  return Math.max(target, current - LIFE.moveOutPerHour * hours);
 }
 
 // ---------- Müll ----------
@@ -77,7 +138,7 @@ export function addLitter(street: Street, kind: LitterKind, spot: Pick<LitterIte
 export function spawnLitter(street: Street, now: number): Street {
   const since = street.litterCheckedAt ?? now;
   const stats = streetStats(street);
-  const firstHour = Math.max(Math.floor(since / HOUR), Math.floor(now / HOUR) - LIFE.maxOfflineHours);
+  const firstHour = Math.max(Math.floor(since / HOUR), Math.floor(now / HOUR) - ECONOMY.maxOfflineHours);
   const lastHour = Math.floor(now / HOUR);
   let result: Street = { ...street, litterCheckedAt: now };
   for (let hour = firstHour + 1; hour <= lastHour; hour++) {
@@ -147,28 +208,46 @@ export function residentVoices(street: Street): Voice[] {
   const buildings = ownedBuildings(street);
   const homes = buildings.filter((p) => useOf(p.building) === "residential");
   const shops = buildings.filter((p) => useOf(p.building) === "commercial");
+  const needs = Object.fromEntries(streetNeeds(street).map((n) => [n.id, n])) as Record<NeedId, Need>;
   const voices: Voice[] = [];
 
-  if (stats.litter >= LIFE.dirtyThreshold && buildings.length > 0) {
+  if (!needs.clean.met && buildings.length > 0) {
     const speaker = homes[0] ?? shops[0];
     voices.push({
       id: "dirty",
       emoji: "😠",
       speaker: `Bewohner von ${speaker.building.name}`,
-      quote: stats.litter >= 8 ? "Das ist ja eine Müllhalde hier! Wir zahlen weniger!" : "Hier liegt überall Müll und Hundekacke …",
-      effect: `−${pct(1 - rentModifiers(street).cleanliness)} Miete, bis es sauber ist. Tipp den Dreck auf dem Gehweg an!`,
+      quote:
+        stats.graffiti > 0 && stats.litter < LIFE.dirtyThreshold
+          ? "Wer hat denn unsere Hauswand vollgeschmiert?!"
+          : stats.litter >= 8
+            ? "Das ist ja eine Müllhalde hier! Wir ziehen weg!"
+            : "Hier liegt überall Müll und Hundekacke …",
+      effect: `Häuser werden höchstens zu ${pct(needs.clean.factor)} voll, bis es sauber ist – die Leute ziehen aus. Tipp den Dreck auf dem Gehweg an!`,
       tone: "complaint",
       plotId: speaker.id,
     });
   }
 
-  if (homes.length > 0 && stats.playgrounds === 0) {
+  if (homes.length > 0 && !needs.playground.met) {
     voices.push({
       id: "playground",
       emoji: "🧒",
       speaker: `Die Kinder aus ${homes[0].building.name}`,
-      quote: "Wir wollen einen Spielplatz! Bitte, bitte!",
-      effect: `Leg auf einem freien Grundstück einen Spielplatz an: +${pct(LIFE.playgroundBonus)} Miete für alle Wohnhäuser.`,
+      quote: "Wir wollen einen Spielplatz! Sonst ziehen wir weg!",
+      effect: `Ohne Spielplatz werden Wohnhäuser höchstens zu ${pct(LIFE.noPlaygroundFactor)} voll. Leg auf einem freien Grundstück einen an.`,
+      tone: "wish",
+      plotId: homes[0].id,
+    });
+  }
+
+  if (homes.length > 0 && !needs.shop.met) {
+    voices.push({
+      id: "shop",
+      emoji: "🛒",
+      speaker: `Bewohner von ${homes[0].building.name}`,
+      quote: "Wo sollen wir denn hier einkaufen?",
+      effect: `Ohne Laden werden Wohnhäuser höchstens zu ${pct(LIFE.noShopFactor)} voll. Bau einen Laden, Kiosk oder Supermarkt.`,
       tone: "wish",
       plotId: homes[0].id,
     });
@@ -180,19 +259,32 @@ export function residentVoices(street: Street): Voice[] {
       emoji: "🏪",
       speaker: shops[0].building.name,
       quote: "Uns fehlen Kunden – hier wohnt ja keiner!",
-      effect: `Jedes Wohnhaus bringt Gewerbe +${pct(LIFE.customerBonusPerHome)} Miete (bis +${pct(LIFE.maxCustomerBonus)}).`,
+      effect: `Ohne Bewohner kommt nur Laufkundschaft (${pct(LIFE.walkInCustomers)}). Bau Wohnhäuser – Bewohner kaufen in deinen Läden ein.`,
       tone: "wish",
       plotId: shops[0].id,
     });
   }
 
-  if (homes.length > 0 && stats.playgrounds > 0 && stats.litter < LIFE.dirtyThreshold) {
+  const broken = buildings.find((p) => p.building.damaged);
+  if (broken) {
+    voices.push({
+      id: "damaged",
+      emoji: "🪟",
+      speaker: `Bewohner von ${broken.building.name}`,
+      quote: "Uns hat jemand das Fenster eingeworfen! Es zieht!",
+      effect: `Kaputte Häuser füllen sich höchstens zu ${pct(MISCHIEF.damagedFactor)} – lass es reparieren (tipp das Haus an).`,
+      tone: "complaint",
+      plotId: broken.id,
+    });
+  }
+
+  if (homes.length > 0 && needs.playground.met && needs.shop.met && needs.clean.met) {
     voices.push({
       id: "happy",
       emoji: "😊",
       speaker: `Bewohner von ${homes[0].building.name}`,
-      quote: "Sauber und mit Spielplatz – so wohnt man gern!",
-      effect: `Wohnhäuser zahlen +${pct(LIFE.playgroundBonus)} Miete.`,
+      quote: "Sauber, Spielplatz, Laden um die Ecke – hier bleiben wir!",
+      effect: "Alles erfüllt: Deine Häuser füllen sich bis unters Dach.",
       tone: "praise",
       plotId: homes[0].id,
     });

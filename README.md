@@ -37,14 +37,26 @@ teilen alle Spieler eine Welt:
 - **Anmelden ohne Passwort:** Beim Claimen bekommt das Gerät einen geheimen Schlüssel, dazu einen
   Wiederherstellungs-Code (`BABO-XXXX-XXXX-XXXX`, unter *Straße → Auf anderem Gerät weiterspielen*).
 - **Wer zuerst kommt:** Jede echte Straße (OSM-Kennung) gehört nur einem Spieler.
-- **Einkaufen bei Mitspielern:** Unter *Nachbarn → Mitspieler in <Ort>* kauft man freie Grundstücke
-  in Straßen anderer Spieler. Der Server lässt niemanden fremdes Eigentum überschreiben; wer zu spät
-  kauft, bekommt sein Geld zurück.
+- **Mitspieler in der Nähe** erscheinen auf der Nachbarschaftskarte; was sie bauen, steht in den
+  Neuigkeiten und in der Tageszeitung. Gekauft wird nur in der eigenen Straße.
+- **Bad Boys:** Gegen Münzen schickt man Kaugummi-Klaus, Sprühdosen-Kevin & Co. in Nachbarstraßen
+  (Müll, Hundehaufen, Graffiti, kaputte Fenster). Der Server bremst Dauerbeschuss und würfelt aus, ob der
+  Wachschutz des Opfers sie abfängt; das Spiel des Opfers wendet den Streich an.
 - **Offline:** Alles landet zuerst lokal und wird nachgeschickt. Alte lokale Spielstände werden beim
   ersten Start mit Server automatisch angemeldet.
 
 Die PWA nutzt den Server, wenn sie mit `VITE_API_URL` gebaut wird (GitHub Pages: Repository-Variable
 `API_URL`). Einrichten des Servers: [server/README.md](./server/README.md).
+
+## Spielregeln (Kurzfassung)
+
+- **Bewohner:** Wohnhäuser haben Plätze (S 4, M 10, L 24, mit Ausbaustufe mehr). Jeder Bewohner zahlt
+  Miete, Läden leben von den Bewohnern der Straße. Wie voll die Häuser werden, bestimmt die Wohlfühl-Liste
+  (sauber, Spielplatz, Laden) – Graffiti und kaputte Fenster drücken sie zusätzlich.
+- **Laufende Kosten** je Gebäude, Spielplatz und Wachschutz. Wer sich 2–3 Tage nicht kümmert, verliert
+  Bewohner und Geld; das Konto darf ins Minus (dann wird nichts gekauft).
+- **Babo-Anzeiger:** Jeden Tag eine Titelseite mit dem Besten und Schlimmsten aus Straße und Nachbarschaft.
+- Alle Zahlen: `src/config/economy.ts`, `src/config/life.ts`, `src/config/badboys.ts`.
 
 ## Stack
 

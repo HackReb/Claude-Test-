@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { formatRate } from "../format";
 import { randomBuilding } from "../game/randomBuilding";
-import { buildingRentPerMinute } from "../game/rent";
+import { buildingIncomePerHour } from "../game/rent";
+import { BuildingEconomy } from "./BuildingEconomy";
 import { cleanBuildingName, personalName } from "../game/names";
 import { buildingFromTemplate, templatesFor, type Template } from "../game/templates";
 import type { Building, BuildingUse, Plot } from "../model/types";
@@ -62,7 +63,7 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
         </div>
         <BuildingNameField value={name} onChange={setName} />
         <UsePicker value={use} onChange={setUse} />
-        <p className="subtle">Grundmiete 🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute</p>
+        <BuildingEconomy size={plot.size} building={{ ...building, use }} />
         <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name, use)}>
           Bauen
         </button>
@@ -94,7 +95,9 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
             >
               <FacadePreview facade={template.facade} size={plot.size} label={template.name} maxHeight={120} />
               <strong>{template.name}</strong>
-              <span className="subtle">🪙 {formatRate(buildingRentPerMinute(plot.size, building))}/min</span>
+              <span className="subtle">
+                {template.use === "residential" ? "🏠" : "🏪"} bis 🪙 {formatRate(buildingIncomePerHour(plot.size, building))}/Std.
+              </span>
             </button>
           );
         })}
@@ -135,10 +138,7 @@ function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDon
         }}
       />
       <UsePicker value={use} onChange={setUse} />
-      <p className="subtle">
-        Bringt 🪙 {formatRate(buildingRentPerMinute(plot.size, building))} pro Minute · {building.facade.floors} Stockwerk
-        {building.facade.floors > 1 ? "e" : ""}
-      </p>
+      <BuildingEconomy size={plot.size} building={{ ...building, use }} />
       <div className="actions">
         <button
           type="button"

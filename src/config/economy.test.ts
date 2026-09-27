@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ECONOMY, creditedMinutes, plotPrice, rentPerMinute, upgradeCost } from "./economy";
+import { capacityOf, plotPrice, rentLevel, upgradeCost, upkeepOf } from "./economy";
 
 describe("economy", () => {
   it("Startpreise laut Konzept", () => {
@@ -13,20 +13,21 @@ describe("economy", () => {
     expect(plotPrice("S", 2)).toBe(661);
   });
 
-  it("Miete: Basis × (1 + Deko + Stockwerke) × Upgrade", () => {
-    expect(rentPerMinute({ size: "S", floors: 1, partsBonus: 0, level: 1 })).toBe(10);
-    expect(rentPerMinute({ size: "M", floors: 2, partsBonus: 0.1, level: 1 })).toBeCloseTo(30 * 1.3);
-    expect(rentPerMinute({ size: "L", floors: 3, partsBonus: 0, level: 3 })).toBeCloseTo(90 * 1.4 * 2.2);
+  it("Plätze und Kosten wachsen mit Größe und Stufe", () => {
+    expect([capacityOf("S", 1), capacityOf("M", 1), capacityOf("L", 1)]).toEqual([4, 10, 24]);
+    expect(capacityOf("M", 2)).toBe(15);
+    expect(capacityOf("L", 3)).toBe(53);
+    expect(upkeepOf("S", 1)).toBe(1.5);
+    expect(upkeepOf("L", 3)).toBeCloseTo(12 * 2.2);
+  });
+
+  it("Mietniveau: 1 + Deko + Stockwerke", () => {
+    expect(rentLevel(1, 0)).toBe(1);
+    expect(rentLevel(2, 0.1)).toBeCloseTo(1.3);
   });
 
   it("Upgrade-Kosten 50 % / 100 % des Grundstückpreises", () => {
     expect(upgradeCost(1500, 2)).toBe(750);
     expect(upgradeCost(1500, 3)).toBe(1500);
-  });
-
-  it("Offline-Zeit wird auf 8 h gedeckelt", () => {
-    expect(creditedMinutes(0, 30 * 60_000)).toBe(30);
-    expect(creditedMinutes(0, 24 * 60 * 60_000)).toBe(ECONOMY.maxOfflineMinutes);
-    expect(creditedMinutes(1000, 0)).toBe(0);
   });
 });

@@ -41,7 +41,7 @@ export function spreadBearings(angles: number[], gap = MIN_BEARING_GAP): number[
 }
 
 /** Setzt eine neue Richtung mitten in die größte freie Lücke. */
-function largestGapMiddle(angles: number[]): number {
+export function largestGapMiddle(angles: number[]): number {
   if (angles.length === 0) return 90;
   const sorted = [...angles].sort((a, b) => a - b);
   let best = { gap: -1, mid: 0 };

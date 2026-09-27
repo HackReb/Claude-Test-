@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\Entity\Mischief;
 use App\Entity\Neighborhood;
 use App\Entity\Player;
 use App\Entity\Street;
 use App\Entity\StreetShare;
 use App\Service\Auth;
+use App\Service\BadBoys;
 use App\Service\Credentials;
 use App\Service\Documents;
 use App\Service\StreetMerger;
@@ -19,6 +21,7 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -150,6 +153,10 @@ final class ApiController
             }
             $this->em->remove($share);
         }
+        $this->em->createQueryBuilder()->delete(Mischief::class, 'm')
+            ->where('m.senderId = :me')->orWhere('m.streetId = :street')
+            ->setParameter('me', $playerId)->setParameter('street', $player->getStreetId())
+            ->getQuery()->execute();
         $hood = $this->em->find(Neighborhood::class, $playerId);
         if (null !== $hood) {
             $this->em->remove($hood);
@@ -233,7 +240,82 @@ final class ApiController
         return new JsonResponse($this->streetEntry($street));
     }
 
-    /** Straßen anderer Spieler im selben Ort – dort kann man Grundstücke kaufen. */
+    /**
+     * Einen Bad Boy in die Straße eines anderen Spielers schicken. Bezahlt wird im Spiel; hier wird
+     * gebremst (nicht dauernd dieselbe Straße) und ausgewürfelt, ob der Wachschutz ihn abfängt.
+     */
+    #[Route('/streets/{id}/mischief', methods: ['POST'])]
+    public function sendMischief(string $id, Request $request): JsonResponse
+    {
+        $player = $this->auth->player($request);
+        $street = $this->em->find(Street::class, Documents::id($id, 'street'));
+        if (!$street instanceof Street || $street->isBotStreet()) {
+            throw new NotFoundHttpException('Straße nicht gefunden.');
+        }
+        if ($street->getOwnerId() === $player->getId()) {
+            throw new BadRequestHttpException('Nicht in die eigene Straße!');
+        }
+        $badBoy = (string) (Documents::json($request->getContent())['badBoy'] ?? '');
+        if (!in_array($badBoy, BadBoys::IDS, true)) {
+            throw new BadRequestHttpException('Diesen Bad Boy gibt es nicht.');
+        }
+
+        $recent = $this->em->createQueryBuilder()
+            ->select('COUNT(m.id)')->from(Mischief::class, 'm')
+            ->where('m.streetId = :street')->andWhere('m.senderId = :me')->andWhere('m.createdAt > :since')
+            ->setParameter('street', $street->getId())->setParameter('me', $player->getId())
+            ->setParameter('since', new \DateTimeImmutable(sprintf('-%d minutes', BadBoys::COOLDOWN_MINUTES)))
+            ->getQuery()->getSingleScalarResult();
+        if ($recent > 0) {
+            throw new TooManyRequestsHttpException(null, sprintf('Deine Bad Boys brauchen eine Pause – in diese Straße erst wieder in %d Minuten.', BadBoys::COOLDOWN_MINUTES));
+        }
+        $today = $this->em->createQueryBuilder()
+            ->select('COUNT(m.id)')->from(Mischief::class, 'm')
+            ->where('m.streetId = :street')->andWhere('m.createdAt > :since')
+            ->setParameter('street', $street->getId())->setParameter('since', new \DateTimeImmutable('-1 day'))
+            ->getQuery()->getSingleScalarResult();
+        if ($today >= BadBoys::MAX_PER_STREET_PER_DAY) {
+            throw new TooManyRequestsHttpException(null, 'In dieser Straße war heute schon genug los.');
+        }
+
+        $mischief = new Mischief(
+            Credentials::newToken(),
+            $street->getId(),
+            $player->getId(),
+            $player->getName(),
+            $badBoy,
+            BadBoys::blocked($street->getData()),
+        );
+        $this->em->persist($mischief);
+        $this->em->flush();
+
+        return new JsonResponse(['mischief' => $mischief->toArray()], 201);
+    }
+
+    /** Bad Boys, die in meiner Straße angekommen sind und die mein Spiel noch nicht verarbeitet hat. */
+    #[Route('/me/mischief', methods: ['GET'])]
+    public function myMischief(Request $request): JsonResponse
+    {
+        return new JsonResponse(['mischief' => $this->pendingMischief($this->auth->player($request))]);
+    }
+
+    #[Route('/me/mischief/ack', methods: ['POST'])]
+    public function ackMischief(Request $request): JsonResponse
+    {
+        $player = $this->auth->player($request);
+        $ids = array_filter((array) (Documents::json($request->getContent())['ids'] ?? []), 'is_string');
+        foreach ($ids as $id) {
+            $mischief = $this->em->find(Mischief::class, $id);
+            if ($mischief instanceof Mischief && $mischief->getStreetId() === $player->getStreetId()) {
+                $mischief->markDelivered();
+            }
+        }
+        $this->em->flush();
+
+        return new JsonResponse(['ok' => true]);
+    }
+
+    /** Straßen anderer Spieler im selben Ort – zum Ansehen und um Bad Boys hinzuschicken. */
     #[Route('/city', methods: ['GET'])]
     public function city(Request $request): JsonResponse
     {
@@ -254,6 +336,17 @@ final class ApiController
 
     // ---------- Hilfen ----------
 
+    private function pendingMischief(Player $player): array
+    {
+        $list = $this->em->getRepository(Mischief::class)->findBy(
+            ['streetId' => $player->getStreetId(), 'delivered' => false],
+            ['createdAt' => 'ASC'],
+            50,
+        );
+
+        return array_map(fn (Mischief $m) => $m->toArray(), $list);
+    }
+
     /** Spieler, eigene Straße, Nachbarschaft, Bot-Straßen und fremde Straßen mit eigenen Grundstücken. */
     private function snapshot(Player $player): array
     {
@@ -270,15 +363,26 @@ final class ApiController
             'street' => $own?->getData(),
             'neighborhood' => $this->em->find(Neighborhood::class, $playerId)?->getData(),
             'streets' => array_map($this->streetEntry(...), [...$repo->findBy(['controllerId' => $playerId]), ...array_values($shared)]),
+            'mischief' => $this->pendingMischief($player),
         ];
     }
 
-    /** Straße plus Name des Besitzers (bei Spieler-Straßen). */
+    /** Straße plus Name des Besitzers (bei Spieler-Straßen) und Namen der Spieler, die dort Grundstücke haben. */
     private function streetEntry(Street $street): array
     {
         $owner = $street->isBotStreet() ? null : $this->em->find(Player::class, $street->getOwnerId());
+        $names = [];
+        foreach ((array) ($street->getData()['plots'] ?? []) as $plot) {
+            $id = $plot['ownerId'] ?? null;
+            if (is_string($id) && !isset($names[$id])) {
+                $buyer = $this->em->find(Player::class, $id);
+                if ($buyer instanceof Player) {
+                    $names[$id] = $buyer->getName();
+                }
+            }
+        }
 
-        return ['street' => $street->getData(), 'ownerName' => $owner?->getName()];
+        return ['street' => $street->getData(), 'ownerName' => $owner?->getName(), 'names' => (object) $names];
     }
 
     private function newStreet(array $doc, ?string $controllerId): Street
