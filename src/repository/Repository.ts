@@ -62,6 +62,8 @@ export interface OnlineFeatures {
   fetchStreet(id: string): Promise<{ street: Street; ownerName: string | null } | null>;
   /** Mit Wiederherstellungs-Code auf diesem Gerät weiterspielen. `false` = Code unbekannt. */
   recover(code: string): Promise<boolean>;
+  /** Bekannte Namen echter Spieler (Spieler-ID → Name). */
+  playerNames(): Record<string, string>;
 }
 
 export class StreetTakenError extends Error {

@@ -136,6 +136,7 @@ final class ApiTest extends WebTestCase
         $street['plots'][1] += ['purchasedAt' => 10, 'ownerId' => 'player-zoe'];
         $saved = $this->call('PUT', '/api/streets/street-kalle', ['street' => $street], $zoe['token']);
         self::assertSame('player-zoe', $saved['street']['plots'][1]['ownerId']);
+        self::assertSame(['player-zoe' => 'Zoe'], $saved['names']);
 
         // Max war zu langsam.
         $max = $this->register('player-max', 'Max', 'street-max');

@@ -84,6 +84,11 @@ export interface Building {
   createdBy: "template" | "random" | "player";
   /** Fehlt bei älteren Spielständen – dann entscheidet `useOf()` anhand der Fassade. */
   use?: BuildingUse;
+  /**
+   * Belegung 0–1: Anteil der Plätze mit Bewohnern (Wohnhaus) bzw. Kunden (Laden).
+   * Fehlt bei älteren Ständen und Bot-Häusern – dann gilt, was die Straße gerade hergibt.
+   */
+  occupancy?: number;
 }
 
 export interface Facade {
@@ -134,6 +139,8 @@ export interface Player {
   lastSeen: number;
   /** Eigene Autos, die auf der Straße fahren. */
   cars?: Car[];
+  /** Version der Spielregeln, nach denen der Stand gerechnet wird (2 = Bewohner & laufende Kosten). */
+  economy?: number;
 }
 
 export interface Car {
@@ -165,10 +172,19 @@ export interface Bot {
 }
 
 export interface NeighborEvent {
-  botId: string;
+  /** Bot, der etwas getan hat – fehlt bei echten Mitspielern. */
+  botId?: string;
+  /** Echter Mitspieler, der etwas getan hat. */
+  playerName?: string;
   streetId: string;
   at: number;
   text: string;
+}
+
+/** Was man zuletzt von einer Straße eines Mitspielers gesehen hat – daraus entstehen Neuigkeiten. */
+export interface StreetDigest {
+  /** Grundstück → Besitzer, Gebäudename, Stufe, Spielplatz. */
+  plots: Record<string, { owner?: string; name?: string; level?: number; amenity?: string }>;
 }
 
 export interface Neighborhood {
@@ -179,4 +195,6 @@ export interface Neighborhood {
   news: NeighborEvent[];
   /** Bis wann der Spieler die Neuigkeiten gesehen hat. */
   newsSeenAt: number;
+  /** Zuletzt gesehener Stand der Straßen echter Mitspieler (und der eigenen), um Änderungen zu melden. */
+  known?: Record<string, StreetDigest>;
 }

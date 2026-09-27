@@ -273,12 +273,22 @@ final class ApiController
         ];
     }
 
-    /** Straße plus Name des Besitzers (bei Spieler-Straßen). */
+    /** Straße plus Name des Besitzers (bei Spieler-Straßen) und Namen der Spieler, die dort Grundstücke haben. */
     private function streetEntry(Street $street): array
     {
         $owner = $street->isBotStreet() ? null : $this->em->find(Player::class, $street->getOwnerId());
+        $names = [];
+        foreach ((array) ($street->getData()['plots'] ?? []) as $plot) {
+            $id = $plot['ownerId'] ?? null;
+            if (is_string($id) && !isset($names[$id])) {
+                $buyer = $this->em->find(Player::class, $id);
+                if ($buyer instanceof Player) {
+                    $names[$id] = $buyer->getName();
+                }
+            }
+        }
 
-        return ['street' => $street->getData(), 'ownerName' => $owner?->getName()];
+        return ['street' => $street->getData(), 'ownerName' => $owner?->getName(), 'names' => (object) $names];
     }
 
     private function newStreet(array $doc, ?string $controllerId): Street

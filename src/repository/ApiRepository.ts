@@ -5,6 +5,7 @@ import { StreetTakenError, type Account, type ForeignStreet, type OnlineFeatures
 const AUTH_KEY = `${PREFIX}auth`;
 const OUTBOX_KEY = `${PREFIX}outbox`;
 const FOREIGN_KEY = `${PREFIX}foreign`;
+const NAMES_KEY = `${PREFIX}names`;
 
 const TIMEOUT_MS = 8000;
 /** Spieler und Nachbarschaft ändern sich sekündlich (Miete) – gesammelt schicken. */
@@ -27,6 +28,8 @@ interface Outbox {
 interface StreetEntry {
   street: Street;
   ownerName: string | null;
+  /** Spieler-ID → Name der Käufer von Grundstücken in dieser Straße. */
+  names?: Record<string, string>;
 }
 
 interface Snapshot {
@@ -88,6 +91,7 @@ export class ApiRepository implements Repository {
       cityStreets: (city) => this.cityStreets(city),
       fetchStreet: (id) => this.fetchStreet(id),
       recover: (code) => this.recover(code),
+      playerNames: () => this.read<Record<string, string>>(NAMES_KEY) ?? {},
     };
   }
 
@@ -150,6 +154,7 @@ export class ApiRepository implements Repository {
     this.storage.removeItem(AUTH_KEY);
     this.storage.removeItem(OUTBOX_KEY);
     this.storage.removeItem(FOREIGN_KEY);
+    this.storage.removeItem(NAMES_KEY);
     await this.cache.reset();
   }
 
@@ -195,6 +200,7 @@ export class ApiRepository implements Repository {
   private async cityStreets(city: string): Promise<ForeignStreet[]> {
     if (!this.auth.token) return [];
     const { streets } = await this.request<{ streets: StreetEntry[] }>("GET", `/city?name=${encodeURIComponent(city)}`);
+    this.learnNames(streets);
     return streets.filter((e): e is ForeignStreet => e.ownerName !== null);
   }
 
@@ -203,6 +209,7 @@ export class ApiRepository implements Repository {
     await this.flush();
     try {
       const entry = await this.request<StreetEntry>("GET", `/streets/${encodeURIComponent(id)}`);
+      this.learnNames([entry]);
       // Nur übernehmen, wenn lokal nichts Neueres wartet.
       if (this.outbox.streets[id] === undefined && (await this.cache.loadStreet(id))) await this.cache.saveStreet(entry.street);
       return entry;
@@ -272,6 +279,7 @@ export class ApiRepository implements Repository {
     await this.cache.savePlayer(snapshot.player);
     if (snapshot.street) await this.cache.saveStreet(snapshot.street);
     if (snapshot.neighborhood) await this.cache.saveNeighborhood(snapshot.neighborhood);
+    this.learnNames(snapshot.streets);
     const owners: Record<string, string> = {};
     for (const entry of snapshot.streets) {
       await this.cache.saveStreet(entry.street);
@@ -287,6 +295,7 @@ export class ApiRepository implements Repository {
       try {
         if (street) {
           const entry = await this.request<StreetEntry>("PUT", `/streets/${encodeURIComponent(id)}`, { street });
+          this.learnNames([entry]);
           this.merged.set(id, { version, street: entry.street });
           if (this.outbox.streets[id] === version) await this.cache.saveStreet(entry.street);
           const me = (await this.cache.loadPlayer())?.id;
@@ -337,6 +346,17 @@ export class ApiRepository implements Repository {
     if (!(error instanceof ApiError) || error.status !== 401) return false;
     this.setAuth({ recoveryCode: this.auth.recoveryCode, status: "signed-out" });
     return true;
+  }
+
+  /** Namen von Straßenbesitzern und Käufern merken – für Neuigkeiten wie „Maxim hat bei dir gekauft“. */
+  private learnNames(entries: StreetEntry[]) {
+    const known = this.read<Record<string, string>>(NAMES_KEY) ?? {};
+    const next = { ...known };
+    for (const entry of entries) {
+      if (entry.ownerName !== null) next[entry.street.ownerId] = entry.ownerName;
+      Object.assign(next, entry.names ?? {});
+    }
+    if (Object.keys(next).some((id) => next[id] !== known[id])) this.write(NAMES_KEY, next);
   }
 
   private rememberForeign(id: string, ownerName: string) {

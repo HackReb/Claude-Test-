@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { StreetView } from "../components/street/StreetView";
 import { formatRate } from "../format";
 import { ownedStreetName } from "../game/names";
-import { streetRentPerMinute } from "../game/rent";
+import { streetIncomePerHour } from "../game/rent";
 import { formatPlace } from "../geo/streetSearch";
 import { renderStreetImage } from "../share/streetImage";
 import { useGameStore } from "../store/gameStore";
@@ -18,7 +18,7 @@ export function ShareScreen() {
 
   const built = street.plots.filter((p) => p.building).length;
   const title = ownedStreetName(player.name, street.name);
-  const subtitle = `${formatPlace(street)} · ${built} Gebäude · 🪙 ${formatRate(streetRentPerMinute(street))}/min`;
+  const subtitle = `${formatPlace(street)} · ${built} Gebäude · 🪙 ${formatRate(streetIncomePerHour(street))}/Std.`;
   const text = `Das ist ${title} in ${street.city}! ${built} Gebäude und ich kassier Miete. 🏠`;
 
   // Bild einmal beim Öffnen erzeugen – aus der aktuellen Straße.

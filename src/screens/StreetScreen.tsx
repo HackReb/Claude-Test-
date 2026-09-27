@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountCard } from "../components/AccountCard";
+import { WellbeingCard } from "../components/WellbeingCard";
 import { ambienceFor } from "../audio/ambience";
 import { sound } from "../audio/sound";
 import { Voices } from "../components/Voices";
@@ -18,8 +19,8 @@ import { useAllStreets } from "../store/useStreetContext";
 export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
   const player = useGameStore((s) => s.player)!;
-  const offlineEarnings = useGameStore((s) => s.offlineEarnings);
-  const dismissOfflineEarnings = useGameStore((s) => s.dismissOfflineEarnings);
+  const offlineReport = useGameStore((s) => s.offlineReport);
+  const dismissOfflineReport = useGameStore((s) => s.dismissOfflineReport);
   const collect = useGameStore((s) => s.collect);
   const reset = useGameStore((s) => s.reset);
   const navigate = useNavigate();
@@ -76,11 +77,13 @@ export function StreetScreen() {
 
   return (
     <div className="street-screen">
-      {offlineEarnings !== null && (
+      {offlineReport !== null && (
         <div className="notice card" role="status">
           <p>
-            Willkommen zurück, {player.name}! Während du weg warst, hat deine Straße{" "}
-            <strong>🪙 {formatCoins(offlineEarnings)}</strong> Miete verdient.
+            Willkommen zurück, {player.name}! Während du weg warst: <strong>+🪙 {formatCoins(offlineReport.income)}</strong> Miete,{" "}
+            <strong>−🪙 {formatCoins(offlineReport.upkeep)}</strong> laufende Kosten.
+            {Math.round(offlineReport.movedIn) > 0 && ` ${Math.round(offlineReport.movedIn)} Bewohner eingezogen.`}
+            {Math.round(offlineReport.movedOut) > 0 && ` 😢 ${Math.round(offlineReport.movedOut)} Bewohner ausgezogen – kümmer dich um deine Straße!`}
           </p>
           <div className="actions">
             <button
@@ -93,7 +96,7 @@ export function StreetScreen() {
             >
               Einsammeln
             </button>
-            <button type="button" className="btn btn-link" onClick={dismissOfflineEarnings}>
+            <button type="button" className="btn btn-link" onClick={dismissOfflineReport}>
               Später
             </button>
           </div>
@@ -159,6 +162,7 @@ export function StreetScreen() {
       <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an · Müll und 💩 wegtippen!</p>
 
       <RentBar />
+      <WellbeingCard street={street} playerId={player.id} />
 
       <Link className="card garage-link" to={routes.garage}>
         <span aria-hidden>🚗</span>

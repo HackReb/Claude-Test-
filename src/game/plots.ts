@@ -1,5 +1,7 @@
 import { ECONOMY, plotPrice, upgradeCost } from "../config/economy";
 import type { Building, Player, Plot, Street } from "../model/types";
+import { LIFE } from "../config/life";
+import { useOf } from "./life";
 import { cleanBuildingName } from "./names";
 
 /** Ist das Grundstück verkauft (egal an wen)? */
@@ -51,7 +53,14 @@ export function buyPlot(player: Player, street: Street, plotId: string, now: num
 export function placeBuilding(street: Street, plotId: string, building: Building): Street | null {
   const plot = street.plots.find((p) => p.id === plotId);
   if (!plot || !isOwned(plot)) return null;
-  const placed = plot.building ? { ...building, level: plot.building.level } : building;
+  // Umbau behält Stufe und – bei gleicher Nutzung – die Bewohner; ein neues Haus startet mit den ersten Mietern.
+  const previous = plot.building;
+  const keepsTenants = previous && useOf(previous) === useOf(building) && previous.occupancy !== undefined;
+  const placed: Building = {
+    ...building,
+    level: previous?.level ?? building.level,
+    occupancy: keepsTenants ? previous.occupancy : LIFE.firstResidents,
+  };
   // Ein Gebäude ersetzt eine Anlage (z. B. Spielplatz) auf demselben Grundstück.
   const replace = ({ amenity: _removed, ...p }: Plot): Plot => ({ ...p, building: placed });
   return { ...street, plots: street.plots.map((p) => (p.id === plotId ? replace(p) : p)) };

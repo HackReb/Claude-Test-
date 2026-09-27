@@ -1,4 +1,4 @@
-import { ECONOMY } from "../config/economy";
+import { CURRENT_ECONOMY, ECONOMY } from "../config/economy";
 import type { Player, Plot, PlotSize, Street, StreetLocation } from "../model/types";
 import { createId } from "./ids";
 import { hashString, seededRandom, shuffle } from "./random";
@@ -83,6 +83,7 @@ export function claimStreet(input: ClaimInput, now: number): { player: Player; s
     unlockedParts: [],
     streetId,
     lastSeen: now,
+    economy: CURRENT_ECONOMY,
   };
   return { player, street };
 }

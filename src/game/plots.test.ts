@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
 import { belongsTo, buyPlot, currentPrice, nextUpgrade, placeBuilding, plotsBought, renameBuilding, upgradePlot } from "./plots";
-import { playerRentPerMinute, streetRentPerMinute } from "./rent";
-import { LIFE } from "../config/life";
+import { playerIncomePerHour, streetIncomePerHour } from "./rent";
 import { buildingFromTemplate, TEMPLATES } from "./templates";
 
 const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
@@ -111,10 +110,10 @@ describe("Grundstücke bei Nachbarn", () => {
     const bought = buyPlot({ ...player, coins: 99_999 }, zoe, target.id, 5)!;
     if (!bought.ok) throw new Error();
     const built = placeBuilding(bought.street, target.id, buildingFromTemplate(TEMPLATES.find((t) => t.id === "wohnhaus")!))!;
-    const mine = streetRentPerMinute(built, player.id);
+    const mine = streetIncomePerHour(built, player.id);
     expect(mine).toBeGreaterThan(0);
-    // Zoe kassiert nicht meine Miete – aber mein Wohnhaus bringt ihrem Kiosk Kundschaft (+5 %).
-    expect(streetRentPerMinute(built)).toBeCloseTo(streetRentPerMinute(zoe) * (1 + LIFE.customerBonusPerHome));
-    expect(playerRentPerMinute([street, built], player.id)).toBeCloseTo(streetRentPerMinute(street) + mine);
+    // Zoe kassiert nicht meine Miete – aber mein Wohnhaus bringt ihrem Kiosk Kundschaft.
+    expect(streetIncomePerHour(built)).toBeGreaterThan(streetIncomePerHour(zoe));
+    expect(playerIncomePerHour([street, built], player.id)).toBeCloseTo(streetIncomePerHour(street) + mine);
   });
 });

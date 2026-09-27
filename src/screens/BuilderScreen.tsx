@@ -10,7 +10,7 @@ import { formatCoins, formatRate } from "../format";
 import { createId } from "../game/ids";
 import { BUILDING_NAME_MAX_LENGTH, cleanBuildingName, personalName } from "../game/names";
 import { belongsTo } from "../game/plots";
-import { buildingRentPerMinute } from "../game/rent";
+import { buildingIncomePerHour } from "../game/rent";
 import type { Building, BuildingUse, Facade, Part, PartCategory, Plot } from "../model/types";
 import { getPart, isUnlocked, partsOf } from "../parts/catalog";
 import { partAt, placePart, removeAt, setFloors, setText, starterFacade, TEXT_MAX_LENGTH } from "../parts/editor";
@@ -62,7 +62,7 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   const errors = validateFacade(facade, plot.size);
   const cleanName = cleanBuildingName(name);
   const draft: Building = { id: createId(), name: cleanName ?? "", level: 1, createdBy: "player", use, facade };
-  const rent = buildingRentPerMinute(plot.size, draft);
+  const rent = buildingIncomePerHour(plot.size, draft);
   const count = (category: PartCategory) => facade.parts.filter((p) => getPart(p.partId)?.category === category).length;
   const activePart = active ? partAt(facade, active.x, active.y) : undefined;
   const editingText = activePart && getPart(activePart.partId)?.textFill ? activePart : undefined;
@@ -157,7 +157,7 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
       </div>
 
       <div className="builder-stats">
-        <strong className="builder-rent">🪙 {formatRate(rent)}/min</strong>
+        <strong className="builder-rent" title="Einnahmen, wenn das Haus voll ist">bis 🪙 {formatRate(rent)}/Std.</strong>
         <span className="subtle">
           Türen {count("door")} · Fenster {count("window")}/{FACADE_RULES.maxWindows} · Deko {count("deco")}/{FACADE_RULES.maxDeco}
         </span>

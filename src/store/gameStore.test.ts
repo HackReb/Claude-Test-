@@ -13,22 +13,25 @@ function setup() {
 }
 
 describe("gameStore", () => {
-  it("Offline-Miete wird beim Start verbucht und gemeldet", async () => {
+  it("Offline: Miete in die Kasse, Kosten vom Konto – beim Start gemeldet", async () => {
     const { repo, store, advance } = setup();
     await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
 
-    advance(60 * MIN);
+    advance(10 * 60 * MIN);
     // App neu starten: neuer Store auf demselben Speicher
-    const restarted = createGameStore(repo, () => 60 * MIN);
+    const restarted = createGameStore(repo, () => 10 * 60 * MIN);
     await restarted.getState().init();
-    const { player, offlineEarnings } = restarted.getState();
-    expect(offlineEarnings).toBeCloseTo(630);
-    expect(player?.pendingRent).toBeCloseTo(630);
+    const { player, offlineReport } = restarted.getState();
+    expect(offlineReport!.income).toBeGreaterThan(10);
+    expect(offlineReport!.upkeep).toBeCloseTo(10 * 1.5); // Kiosk: 1,5 pro Stunde
+    expect(player!.pendingRent).toBeCloseTo(offlineReport!.income);
+    expect(player!.coins).toBeCloseTo(1000 - offlineReport!.upkeep);
 
-    expect(await restarted.getState().collect()).toBe(630);
-    expect(restarted.getState().player?.coins).toBe(1630);
-    expect(restarted.getState().offlineEarnings).toBeNull();
-    expect((await repo.loadPlayer())?.coins).toBe(1630);
+    const collected = await restarted.getState().collect();
+    expect(collected).toBe(Math.floor(offlineReport!.income));
+    expect(restarted.getState().player!.coins).toBeCloseTo(1000 - offlineReport!.upkeep + collected);
+    expect(restarted.getState().offlineReport).toBeNull();
+    expect((await repo.loadPlayer())?.coins).toBeCloseTo(restarted.getState().player!.coins);
   });
 
   it("Kauf wird gespeichert", async () => {
@@ -51,7 +54,7 @@ describe("gameStore", () => {
 
     const imbiss = buildingFromTemplate(templatesFor("S").find((t) => t.id === "imbiss")!);
     expect(await store.getState().build(gift.id, imbiss)).toBe(true);
-    expect(store.getState().player?.pendingRent).toBeCloseTo(105); // 10 min Kiosk
+    expect(store.getState().player?.pendingRent).toBeGreaterThan(0); // 10 min Kiosk vorher verbucht
     const saved = await repo.loadStreet(store.getState().street!.id);
     expect(saved?.plots.find((p) => p.id === gift.id)?.building?.name).toBe("Imbiss");
 
@@ -84,12 +87,31 @@ describe("gameStore", () => {
     expect(saved?.plots.find((p) => p.id === gift.id)?.building?.level).toBe(2);
   });
 
-  it("tick lässt Miete während des Spielens hochlaufen", async () => {
+  it("tick lässt Miete während des Spielens hochlaufen und bucht Kosten ab", async () => {
     const { store, advance } = setup();
     await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
-    advance(2 * MIN);
+    advance(60 * MIN);
     await store.getState().tick();
-    expect(store.getState().player?.pendingRent).toBeCloseTo(21);
+    expect(store.getState().player!.pendingRent).toBeGreaterThan(1);
+    expect(store.getState().player!.coins).toBeCloseTo(1000 - 1.5);
+  });
+
+  it("neue Wohnhäuser füllen sich nach und nach – gespeichert wird nur, was man sieht", async () => {
+    const { repo, store, advance } = setup();
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    const free = store.getState().street!.plots.find((p) => p.size === "S" && p.purchasedAt === undefined)!;
+    await store.getState().buyPlot(free.id);
+    const home = buildingFromTemplate(templatesFor("S").find((t) => t.id === "haeuschen")!);
+    expect(await store.getState().build(free.id, home)).toBe(true);
+    const occupancy = () => store.getState().street!.plots.find((p) => p.id === free.id)!.building!.occupancy!;
+    expect(occupancy()).toBe(0.25);
+
+    advance(5 * 60 * MIN);
+    await store.getState().tick();
+    // Wie viel Müll in 5 Std. entsteht, hängt an der (zufälligen) Straßen-ID – eingezogen wird aber immer.
+    expect(occupancy()).toBeGreaterThan(0.3);
+    const saved = (await repo.loadStreet(store.getState().street!.id))!.plots.find((p) => p.id === free.id)!;
+    expect(saved.building!.occupancy).toBeCloseTo(occupancy());
   });
 });
 
@@ -146,7 +168,8 @@ describe("gameStore – bei Nachbarn bauen", () => {
     const saved = later.getState().neighborStreets[zoeStreetId].plots.find((p) => p.id === plot.id)!;
     expect(saved.ownerId).toBe(later.getState().player!.id);
     expect(saved.building).toBeDefined();
-    const ownOnly = 60 * 10.5; // Kalles Kiosk zu Hause
-    expect(later.getState().offlineEarnings!).toBeGreaterThan(ownOnly + 60 * 10);
+    // Kosten für beide Kioske (je 1,5/Std), Miete auch aus Zoes Straße
+    expect(later.getState().offlineReport!.upkeep).toBeCloseTo(3);
+    expect(saved.building!.occupancy).toBeGreaterThan(0.25);
   });
 });

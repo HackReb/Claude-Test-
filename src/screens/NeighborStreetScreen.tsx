@@ -5,13 +5,16 @@ import { sound } from "../audio/sound";
 import { StreetView } from "../components/street/StreetView";
 import { personaOf } from "../config/bots";
 import { formatRate } from "../format";
-import { streetRentPerMinute } from "../game/rent";
+import { streetIncomePerHour } from "../game/rent";
 import { currentPrice } from "../game/plots";
 import { ECONOMY } from "../config/economy";
 import { useAllStreets } from "../store/useStreetContext";
 import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
+
+/** Wie oft die angesehene Straße eines Mitspielers neu geladen wird. */
+const LIVE_REFRESH_MS = 20_000;
 
 /** Straße eines Nachbarn – Bot oder echter Mitspieler. Freie Grundstücke kann man kaufen. */
 export function NeighborStreetScreen() {
@@ -31,6 +34,14 @@ export function NeighborStreetScreen() {
     [street],
   );
   useEffect(() => () => sound.stopAmbience(), []);
+  // Straße eines Mitspielers: fast live mitverfolgen, was dort passiert.
+  const refreshStreet = useGameStore((s) => s.refreshStreet);
+  const live = !bot && !!realOwner;
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => void refreshStreet(streetId), LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [live, refreshStreet, streetId]);
   // Straße eines Mitspielers (z. B. per Link) erst vom Server holen.
   useEffect(() => {
     if (lookup === "loading") void loadPlayerStreet(streetId).finally(() => setLookup("done"));
@@ -81,7 +92,7 @@ export function NeighborStreetScreen() {
       {mine.length > 0 ? (
         <div className="card neighbor-mine">
           <strong>
-            Du hast hier {mine.length} Grundstück{mine.length > 1 ? "e" : ""} · bringt dir 🪙 {formatRate(streetRentPerMinute(street, player.id))} pro Minute
+            Du hast hier {mine.length} Grundstück{mine.length > 1 ? "e" : ""} · bringt dir 🪙 {formatRate(streetIncomePerHour(street, player.id))} pro Stunde
           </strong>
         </div>
       ) : (
@@ -93,8 +104,8 @@ export function NeighborStreetScreen() {
         )
       )}
       <p className="subtle">
-        {built} von {street.plots.length} Grundstücken bebaut, {free} frei · {owner.name} verdient ca. 🪙 {formatRate(streetRentPerMinute(street))} pro
-        Minute
+        {built} von {street.plots.length} Grundstücken bebaut, {free} frei · {owner.name} verdient ca. 🪙 {formatRate(streetIncomePerHour(street))} pro
+        Stunde
       </p>
     </div>
   );

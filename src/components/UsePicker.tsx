@@ -5,12 +5,12 @@ const OPTIONS: { use: BuildingUse; label: string; hint: string }[] = [
   {
     use: "residential",
     label: "🏠 Wohnen",
-    hint: `Bewohner, Kinder und Hunde. Mögen es sauber und wünschen sich einen Spielplatz (+${Math.round(LIFE.playgroundBonus * 100)} % Miete).`,
+    hint: `Bewohner zahlen Miete. Sie ziehen nur ein, wenn es sauber ist, einen Spielplatz und einen Laden gibt – sonst ziehen sie wieder aus.`,
   },
   {
     use: "commercial",
     label: "🏪 Gewerbe",
-    hint: `Kundschaft bringt Umsatz: +${Math.round(LIFE.customerBonusPerHome * 100)} % Miete je Wohnhaus in der Straße – aber Kunden werfen Müll weg.`,
+    hint: `Umsatz durch Kundschaft: Bewohner der Straße kaufen hier ein (ohne Bewohner nur ${Math.round(LIFE.walkInCustomers * 100)} % Laufkundschaft). Kunden werfen Müll weg.`,
   },
 ];
 

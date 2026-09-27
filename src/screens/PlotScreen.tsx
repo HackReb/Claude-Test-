@@ -6,14 +6,14 @@ import { useLabel } from "../components/UsePicker";
 import { Playground } from "../components/street/Playground";
 import { sound } from "../audio/sound";
 import { LIFE } from "../config/life";
-import { rentModifiers, useOf } from "../game/life";
+import { occupancyOf, streetNeeds, targetOccupancy, useOf } from "../game/life";
 import { possessive } from "../game/names";
 import { FacadePreview } from "../components/FacadePreview";
-import { ECONOMY } from "../config/economy";
-import { formatCoins, formatRate } from "../format";
+import { capacityOf, ECONOMY, upkeepOf } from "../config/economy";
+import { formatCoins, formatDuration, formatRate } from "../format";
 import { belongsTo, currentPrice, isOwned, nextUpgrade } from "../game/plots";
-import { buildingRentPerMinute, playerRentPerMinute, plotRentPerMinute } from "../game/rent";
-import type { BuildingUse, Plot, Street } from "../model/types";
+import { playerIncomePerHour, plotIncomePerHour, plotUpkeepPerHour } from "../game/rent";
+import type { Building, Plot, Street } from "../model/types";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 import { useAllStreets, useStreetContext, type StreetContext } from "../store/useStreetContext";
@@ -69,9 +69,14 @@ function ForeignPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
           <FacadePreview facade={plot.building.facade} size={plot.size} label={plot.building.name} maxHeight={220} />
         </div>
       )}
+      {plot.building && (
+        <ul className="facts">
+          <OccupancyFacts street={ctx.street} plot={plot as Plot & { building: Building }} />
+        </ul>
+      )}
       <p>
-        Gehört <strong>{ctx.bot ? `${ctx.bot.avatar} ${ctx.bot.name}` : "deinem Nachbarn"}</strong> und ist nicht zu verkaufen. Freie
-        Grundstücke in dieser Straße kannst du kaufen und selbst bebauen.
+        Gehört <strong>{ctx.bot ? `${ctx.bot.avatar} ${ctx.bot.name}` : plot.ownerId && plot.ownerId !== ctx.street.ownerId ? "einem anderen Mitspieler" : ctx.own ? "einem Mitspieler" : ctx.ownerName || "deinem Nachbarn"}</strong> und ist nicht zu verkaufen. Freie Grundstücke in dieser Straße kannst du kaufen und selbst
+        bebauen.
       </p>
     </>
   );
@@ -142,15 +147,13 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
         </div>
         <ul className="facts">
           <li>
-            <strong>{useLabel(useOf(building))}</strong>
+            <strong>{useLabel(useOf(building))}</strong> · Stufe {building.level} von 3
           </li>
+          <OccupancyFacts street={street} plot={plot as Plot & { building: Building }} />
           <li>
-            Bringt <strong>🪙 {formatRate(plotRentPerMinute(street, plot))} pro Minute</strong>
-            {Math.abs(plotRentPerMinute(street, plot) - buildingRentPerMinute(plot.size, building)) > 0.05 && (
-              <span className="subtle"> (Grundmiete {formatRate(buildingRentPerMinute(plot.size, building))}, {rentNote(street, useOf(building))})</span>
-            )}
+            Bringt jetzt <strong>🪙 {formatRate(plotIncomePerHour(street, plot))} pro Stunde</strong>
+            <span className="subtle"> · Kosten 🪙 {formatRate(plotUpkeepPerHour(plot))}/Std.</span>
           </li>
-          <li>Stufe {building.level} von 3</li>
         </ul>
         <UpgradeSection plot={plot} streetId={ctx.streetId} />
         <h2>Umbauen</h2>
@@ -169,7 +172,8 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
           </svg>
         </div>
         <p>
-          Die Kinder lieben ihn! Alle Wohnhäuser deiner Straße zahlen <strong>+{Math.round(LIFE.playgroundBonus * 100)} % Miete</strong>.
+          Die Kinder lieben ihn! Ohne Spielplatz würden sich die Wohnhäuser deiner Straße nur zu{" "}
+          {Math.round(LIFE.noPlaygroundFactor * 100)} % füllen. Kosten: 🪙 {formatRate(ECONOMY.playgroundUpkeepPerHour)}/Std. für die Pflege.
         </p>
         <h2>Umbauen</h2>
         <p className="subtle">Ein Gebäude ersetzt den Spielplatz.</p>
@@ -181,9 +185,9 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   return (
     <>
       <p>
-        {ctx.own ? "Dein Bauplatz ist bereit." : `Dein Bauplatz in ${possessive(ctx.ownerName)} ${street.name} ist bereit.`} Ein Gebäude hier
-        bringt ab{" "}
-        <strong>🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</strong>.
+        {ctx.own ? "Dein Bauplatz ist bereit." : `Dein Bauplatz in ${possessive(ctx.ownerName)} ${street.name} ist bereit.`} Ein Wohnhaus hier
+        hat Platz für <strong>{capacityOf(plot.size, 1)} Bewohner</strong>, ein Laden für {capacityOf(plot.size, 1)} Kunden gleichzeitig.
+        Laufende Kosten: 🪙 {formatRate(upkeepOf(plot.size, 1))}/Std.
       </p>
       {buildActions}
       {ctx.own && <PlaygroundOffer plot={plot} />}
@@ -191,14 +195,33 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   );
 }
 
-/** Kurz erklären, warum die Miete von der Grundmiete abweicht. */
-function rentNote(street: Street, use: BuildingUse): string {
-  const m = rentModifiers(street);
-  const parts = [];
-  const bonus = use === "residential" ? m.playgroundBonus : m.customerBonus;
-  if (bonus > 0) parts.push(`+${Math.round(bonus * 100)} % ${use === "residential" ? "Spielplatz" : "Kundschaft"}`);
-  if (m.cleanliness < 1) parts.push(`−${Math.round((1 - m.cleanliness) * 100)} % Dreck`);
-  return parts.join(", ");
+/** Bewohner bzw. Kundschaft eines Gebäudes, und ob gerade Leute ein- oder ausziehen – und warum. */
+function OccupancyFacts({ street, plot }: { street: Street; plot: Plot & { building: Building } }) {
+  const places = capacityOf(plot.size, plot.building.level);
+  const now = occupancyOf(street, plot);
+  const target = targetOccupancy(street, plot);
+  const home = useOf(plot.building) === "residential";
+  const missing = home ? streetNeeds(street).filter((n) => !n.met).map((n) => n.label) : [];
+  const trend =
+    target > now + 0.01 ? "↗ Es ziehen gerade Leute ein." : target < now - 0.01 ? "↘ Es ziehen gerade Leute aus!" : "Stabil.";
+  return (
+    <li>
+      {home ? (
+        <>
+          👥 <strong>{Math.round(now * places)} von {places} Bewohnern</strong>
+        </>
+      ) : (
+        <>
+          🛒 <strong>{Math.round(now * 100)} % ausgelastet</strong> ({places} Kundenplätze)
+        </>
+      )}{" "}
+      <span className="subtle">
+        {trend}
+        {missing.length > 0 && ` Es fehlt: ${missing.join(", ")}.`}
+        {!home && target < 0.99 && " Mehr Bewohner in der Straße bringen mehr Kundschaft."}
+      </span>
+    </li>
+  );
 }
 
 function PlaygroundOffer({ plot }: { plot: Plot }) {
@@ -208,7 +231,8 @@ function PlaygroundOffer({ plot }: { plot: Plot }) {
     <div className="card upgrade-card">
       <h2>🛝 Spielplatz anlegen</h2>
       <p className="subtle">
-        Statt eines Hauses: Die Kinder freuen sich, alle Wohnhäuser zahlen +{Math.round(LIFE.playgroundBonus * 100)} % Miete.
+        Statt eines Hauses: Ohne Spielplatz füllen sich Wohnhäuser nur zu {Math.round(LIFE.noPlaygroundFactor * 100)} %. Pflege kostet 🪙{" "}
+        {formatRate(ECONOMY.playgroundUpkeepPerHour)}/Std.
       </p>
       <button
         type="button"
@@ -233,14 +257,15 @@ function UpgradeSection({ plot, streetId }: { plot: Plot; streetId?: string }) {
   if (!plot.building) return null;
   if (!next) return <p className="badge">⭐ Höchste Stufe erreicht</p>;
 
-  const rentNow = buildingRentPerMinute(plot.size, plot.building);
-  const rentNext = buildingRentPerMinute(plot.size, { ...plot.building, level: next.level });
+  const home = useOf(plot.building) === "residential";
+  const placesNow = capacityOf(plot.size, plot.building.level);
+  const placesNext = capacityOf(plot.size, next.level);
   return (
     <div className="card upgrade-card">
       <h2>Ausbauen auf Stufe {next.level}</h2>
       <p className="subtle">
-        Miete ×{formatRate(ECONOMY.upgradeLevels[next.level].multiplier)}: 🪙 {formatRate(rentNow)} → <strong>{formatRate(rentNext)}</strong> pro
-        Minute
+        Platz für {placesNow} → <strong>{placesNext}</strong> {home ? "Bewohner" : "Kunden"} · Kosten 🪙{" "}
+        {formatRate(upkeepOf(plot.size, plot.building.level))} → {formatRate(upkeepOf(plot.size, next.level))}/Std.
       </p>
       <button type="button" className="btn btn-primary" disabled={coins < next.cost} onClick={async () => {
           if ((await upgrade(plot.id, streetId)).ok) sound.upgrade();
@@ -263,7 +288,7 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
   const price = currentPrice(streets, ctx.street, plot, player.id);
   const missing = price - player.coins;
   const pending = Math.floor(player.pendingRent);
-  const rate = playerRentPerMinute(streets, player.id);
+  const rate = playerIncomePerHour(streets, player.id);
   const basePrice = ECONOMY.plotSizes[plot.size].price;
 
   async function onBuy() {
@@ -301,7 +326,9 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
             Gehört dann dir – mitten in {possessive(ctx.ownerName)} {ctx.street.name}. Die Miete geht an dich.
           </span>
         )}
-        <span className="subtle">Miete mit Gebäude: ab 🪙 {ECONOMY.plotSizes[plot.size].baseRentPerMinute} pro Minute</span>
+        <span className="subtle">
+          Mit Gebäude: Platz für {capacityOf(plot.size, 1)} Bewohner oder Kunden · Kosten ab 🪙 {formatRate(upkeepOf(plot.size, 1))}/Std.
+        </span>
       </div>
 
       <button type="button" className="btn btn-primary btn-wide" disabled={missing > 0 || busy} onClick={onBuy}>
@@ -319,7 +346,7 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
             Dir fehlen noch <strong>🪙 {formatCoins(missing)}</strong>.{" "}
             {pending >= missing
               ? "Deine gesammelte Miete reicht schon!"
-              : rate > 0 && `Bei deiner Miete dauert das ca. ${Math.ceil((missing - pending) / rate)} Min.`}
+              : rate > 0 && `Bei deinen Einnahmen dauert das ca. ${formatDuration((missing - pending) / rate)}.`}
           </p>
           {pending >= 1 && (
             <button type="button" className="btn" onClick={() => void collect()}>

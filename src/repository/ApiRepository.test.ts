@@ -100,7 +100,7 @@ describe("ApiRepository", () => {
 
   it("gibt die vom Server zusammengeführte Straße zurück", async () => {
     let serverStreet: Street | null = null;
-    const { repo } = setup((c) => (c.method === "PUT" && c.path.startsWith("/streets/") ? { status: 200, body: { street: serverStreet, ownerName: "Zoe" } } : undefined));
+    const { repo } = setup((c) => (c.method === "PUT" && c.path.startsWith("/streets/") ? { status: 200, body: { street: serverStreet, ownerName: "Zoe", names: { zoe: "Zoe", max: "Max" } } } : undefined));
     const { player, street } = start();
     await repo.online.register(player, street);
     serverStreet = { ...street, plots: street.plots.map((p, i) => (i === 1 ? { ...p, purchasedAt: 1, ownerId: "zoe" } : p)) };
@@ -108,6 +108,8 @@ describe("ApiRepository", () => {
     const merged = await repo.saveStreet(street);
     expect(merged).toEqual(serverStreet);
     expect(await repo.loadStreet(street.id)).toEqual(serverStreet);
+    // Namen für Neuigkeiten („Max hat in deiner Straße gekauft“)
+    expect(repo.online.playerNames()).toMatchObject({ zoe: "Zoe", max: "Max", [street.ownerId]: "Zoe" });
   });
 
   it("alter lokaler Spielstand wird beim ersten Start mit Server angemeldet", async () => {

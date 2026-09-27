@@ -53,7 +53,7 @@ export function AppLayout() {
           <span className="topbar-city">{formatPlace(street)}</span>
         </div>
         <SoundToggle />
-        <div className="coins" aria-label={`${player.coins} Münzen`}>
+        <div className={`coins${player.coins < 0 ? " negative" : ""}`} aria-label={`${Math.floor(player.coins)} Münzen${player.coins < 0 ? " – im Minus" : ""}`}>
           <span aria-hidden>🪙</span> {formatCoins(player.coins)}
         </div>
       </header>

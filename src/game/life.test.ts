@@ -2,9 +2,21 @@ import { describe, expect, it } from "vitest";
 import { LIFE } from "../config/life";
 import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
-import { addLitter, buildPlayground, residentVoices, rentModifiers, spawnLitter, streetStats, tapLitter, useOf } from "./life";
+import {
+  addLitter,
+  buildPlayground,
+  homeComfort,
+  moveTowards,
+  residentsOf,
+  residentVoices,
+  spawnLitter,
+  streetNeeds,
+  streetStats,
+  tapLitter,
+  targetOccupancy,
+  useOf,
+} from "./life";
 import { buyPlot, placeBuilding } from "./plots";
-import { streetRentPerMinute } from "./rent";
 import { buildingFromTemplate, TEMPLATES } from "./templates";
 
 const HOUR = 3_600_000;
@@ -31,42 +43,69 @@ describe("Nutzung", () => {
   });
 });
 
-describe("Miete je nach Straße", () => {
-  it("Gewerbe verdient mehr mit Wohnhäusern (Kundschaft)", () => {
-    const s = start();
-    const kioskOnly = streetRentPerMinute(s.street);
-    const withHome = withPlot(s, "M", "wohnhaus");
-    expect(rentModifiers(withHome.street).customerBonus).toBeCloseTo(LIFE.customerBonusPerHome);
-    const kioskRent = kioskOnly * (1 + LIFE.customerBonusPerHome);
-    expect(streetRentPerMinute(withHome.street)).toBeGreaterThan(kioskRent);
+describe("Wohlfühl-Liste und Bewohner", () => {
+  it("Wohnhäuser werden nur voll mit sauberer Straße, Spielplatz und Laden", () => {
+    const s = start(); // Kiosk = Laden
+    const home = withPlot(s, "M", "wohnhaus");
+    const needs = streetNeeds(home.street);
+    expect(needs.map((n) => [n.id, n.met])).toEqual([
+      ["clean", true],
+      ["playground", false],
+      ["shop", true],
+    ]);
+    expect(homeComfort(home.street)).toBeCloseTo(LIFE.noPlaygroundFactor);
+
+    const empty = withPlot({ player: home.player, street: home.street }, "S");
+    const built = buildPlayground({ ...empty.player, coins: 1000 }, empty.street, empty.plotId);
+    if (!built.ok) throw new Error(built.reason);
+    expect(homeComfort(built.street)).toBe(1);
+
+    let dirty: Street = built.street;
+    for (let i = 0; i < 20; i++) dirty = addLitter(dirty, "poop", { pos: 0.2, side: "bottom" });
+    expect(dirty.litter).toHaveLength(LIFE.maxLitter);
+    expect(homeComfort(dirty)).toBeCloseTo(Math.max(LIFE.minCleanliness, 1 - LIFE.maxLitter * LIFE.litterComfortLoss));
   });
 
-  it("Spielplatz: kostet Münzen, nur auf leerem eigenen Grundstück, Wohnhäuser zahlen mehr", () => {
+  it("Läden brauchen Bewohner als Kundschaft, sonst nur Laufkundschaft", () => {
     const s = start();
-    const home = withPlot(s, "M", "wohnhaus");
-    const rentBefore = streetRentPerMinute(home.street);
+    const kiosk = s.street.plots.find((p) => p.building)! as Parameters<typeof targetOccupancy>[1];
+    expect(targetOccupancy(s.street, kiosk)).toBeCloseTo(LIFE.walkInCustomers);
+    const home = withPlot(s, "M", "wohnhaus"); // 10 Plätze, ziehen erst ein
+    const kioskThere = home.street.plots.find((p) => p.id === kiosk.id)! as typeof kiosk;
+    expect(residentsOf(home.street)).toBeCloseTo(10 * LIFE.firstResidents);
+    // 2,5 Bewohner für 4 Kiosk-Plätze: Laufkundschaft + 62,5 % vom Rest
+    expect(targetOccupancy(home.street, kioskThere)).toBeCloseTo(LIFE.walkInCustomers + (1 - LIFE.walkInCustomers) * (2.5 / 4));
+  });
+
+  it("Spielplatz: kostet Münzen, nur auf leerem eigenen Grundstück, ein Gebäude ersetzt ihn", () => {
+    const home = withPlot(start(), "M", "wohnhaus");
     const empty = withPlot({ player: home.player, street: home.street }, "S");
     const built = buildPlayground({ ...empty.player, coins: 1000 }, empty.street, empty.plotId);
     if (!built.ok) throw new Error(built.reason);
     expect(built.player.coins).toBe(1000 - LIFE.playgroundCost);
     expect(streetStats(built.street).playgrounds).toBe(1);
-    expect(streetRentPerMinute(built.street)).toBeGreaterThan(rentBefore);
     expect(buildPlayground({ ...empty.player, coins: 10 }, empty.street, empty.plotId)).toEqual({ ok: false, reason: "too-expensive" });
     expect(buildPlayground(built.player, built.street, empty.plotId)).toEqual({ ok: false, reason: "not-allowed" });
-    // Ein Gebäude ersetzt den Spielplatz
     const replaced = placeBuilding(built.street, empty.plotId, tpl("kiosk"))!;
     expect(replaced.plots.find((p) => p.id === empty.plotId)?.amenity).toBeUndefined();
   });
 
-  it("Dreck senkt die Miete, höchstens um 40 %", () => {
-    const { street } = start();
-    const clean = streetRentPerMinute(street);
-    let dirty: Street = street;
-    for (let i = 0; i < 3; i++) dirty = addLitter(dirty, "trash", { pos: 0.5, side: "top" });
-    expect(streetRentPerMinute(dirty)).toBeCloseTo(clean * (1 - 3 * LIFE.litterRentPenalty));
-    for (let i = 0; i < 20; i++) dirty = addLitter(dirty, "poop", { pos: 0.2, side: "bottom" });
-    expect(dirty.litter).toHaveLength(LIFE.maxLitter);
-    expect(streetRentPerMinute(dirty)).toBeCloseTo(clean * (1 - LIFE.maxLitterPenalty));
+  it("neue Häuser starten mit den ersten Mietern, Umbau behält die Bewohner", () => {
+    const home = withPlot(start(), "M", "wohnhaus");
+    const plot = home.street.plots.find((p) => p.id === home.plotId)!;
+    expect(plot.building?.occupancy).toBe(LIFE.firstResidents);
+    const full = { ...home.street, plots: home.street.plots.map((p) => (p.id === home.plotId ? { ...p, building: { ...p.building!, occupancy: 0.9 } } : p)) };
+    const rebuilt = placeBuilding(full, home.plotId, tpl("wohnhaus"))!;
+    expect(rebuilt.plots.find((p) => p.id === home.plotId)?.building?.occupancy).toBe(0.9);
+    const shop = placeBuilding(full, home.plotId, tpl("kiosk"))!;
+    expect(shop.plots.find((p) => p.id === home.plotId)?.building?.occupancy).toBe(LIFE.firstResidents);
+  });
+
+  it("Einziehen geht schneller als Ausziehen", () => {
+    expect(moveTowards(0.2, 1, 1)).toBeCloseTo(0.2 + LIFE.moveInPerHour);
+    expect(moveTowards(1, 0.2, 1)).toBeCloseTo(1 - LIFE.moveOutPerHour);
+    expect(moveTowards(0.5, 0.52, 10)).toBe(0.52);
+    expect(moveTowards(0.5, 0.48, 10)).toBe(0.48);
   });
 });
 
@@ -118,10 +157,11 @@ describe("Stimmen der Bewohner", () => {
     const ids = residentVoices(home.street).map((v) => v.id);
     expect(ids).toContain("playground");
     expect(ids).not.toContain("customers");
+    expect(ids).not.toContain("shop"); // der Kiosk ist ein Laden
     let dirty = home.street;
     for (let i = 0; i < LIFE.dirtyThreshold; i++) dirty = addLitter(dirty, "trash", { pos: 0.4, side: "top" });
     const complaint = residentVoices(dirty).find((v) => v.id === "dirty")!;
-    expect(complaint.effect).toContain("−12 %");
+    expect(complaint.effect).toContain("79 %");
   });
 
   it("zufriedene Bewohner mit Spielplatz und sauberer Straße", () => {
