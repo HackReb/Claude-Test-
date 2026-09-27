@@ -23,7 +23,7 @@ describe("gameStore", () => {
     await restarted.getState().init();
     const { player, offlineReport } = restarted.getState();
     expect(offlineReport!.income).toBeGreaterThan(10);
-    expect(offlineReport!.upkeep).toBeCloseTo(10 * 1.5); // Kiosk: 1,5 pro Stunde
+    expect(offlineReport!.upkeep).toBeCloseTo(10 * 12); // Kiosk: 12 pro Stunde
     expect(player!.pendingRent).toBeCloseTo(offlineReport!.income);
     expect(player!.coins).toBeCloseTo(1000 - offlineReport!.upkeep);
 
@@ -93,7 +93,7 @@ describe("gameStore", () => {
     advance(60 * MIN);
     await store.getState().tick();
     expect(store.getState().player!.pendingRent).toBeGreaterThan(1);
-    expect(store.getState().player!.coins).toBeCloseTo(1000 - 1.5);
+    expect(store.getState().player!.coins).toBeCloseTo(1000 - 12);
   });
 
   it("neue Wohnhäuser füllen sich nach und nach – gespeichert wird nur, was man sieht", async () => {
@@ -183,7 +183,7 @@ describe("gameStore – Bad Boys", () => {
 
     const sent = await store.getState().sendBadBoy(chaos.streetId, "muelltonnen-marvin");
     expect(sent).toMatchObject({ ok: true, blocked: false });
-    expect(store.getState().player!.coins).toBe(1000 - 160);
+    expect(store.getState().player!.coins).toBe(1000 - 640);
     expect(store.getState().neighborStreets[chaos.streetId].litter).toHaveLength(6);
     expect(store.getState().neighborhood!.news[0].text).toContain("Mülltonnen-Marvin");
     expect((await repo.loadStreet(chaos.streetId))!.litter).toHaveLength(6);
@@ -206,6 +206,7 @@ describe("gameStore – Bad Boys", () => {
     const store = createGameStore(repo, () => 0, { findNeighbors: async () => [] });
     await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
     const kiosk = store.getState().street!.plots.find((p) => p.building)!;
+    store.setState({ player: { ...store.getState().player!, coins: 10_000 } });
     store.setState({
       street: {
         ...store.getState().street!,
@@ -218,6 +219,31 @@ describe("gameStore – Bad Boys", () => {
     const saved = (await repo.loadStreet(store.getState().street!.id))!;
     expect(saved.plots.find((p) => p.id === kiosk.id)!.building).not.toHaveProperty("graffiti");
     expect(saved.security).toBe(1);
-    expect(store.getState().player!.coins).toBe(1000 - 25 - 60 - 400);
+    expect(store.getState().player!.coins).toBe(10_000 - 100 - 240 - 1600);
+  });
+});
+
+describe("gameStore – Tiere & Autos", () => {
+  it("der Elefant geht nach seinem Takt beim Bot-Nachbarn spazieren – mit Neuigkeit und Futterkosten", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    let now = 0;
+    const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await vi.waitFor(() => expect(store.getState().neighborhood).not.toBeNull());
+    store.setState({ player: { ...store.getState().player!, coins: 20_000 } });
+
+    const bought = await store.getState().buyPet("elefant", "Benjamin");
+    expect(bought.ok).toBe(true);
+    expect(store.getState().player!.coins).toBe(20_000 - 12_000);
+
+    const litterBefore = Object.values(store.getState().neighborStreets).reduce((sum, s) => sum + (s.litter?.length ?? 0), 0);
+    now = 16 * 60 * MIN;
+    await store.getState().tick();
+    const litterAfter = Object.values(store.getState().neighborStreets).reduce((sum, s) => sum + (s.litter?.length ?? 0), 0);
+    expect(litterAfter - litterBefore).toBe(8);
+    expect(store.getState().neighborhood!.news[0].text).toMatch(/^Kalles Elefant Benjamin war .* spazieren: 8 Haufen\. Igitt!$/);
+    // Futter: 32 pro Stunde (plus Kiosk 12)
+    expect(store.getState().player!.coins).toBeCloseTo(8000 - 16 * (32 + 12));
+    expect((await repo.loadPlayer())!.pets![0].nextOutingAt).toBe(32 * 60 * MIN);
   });
 });

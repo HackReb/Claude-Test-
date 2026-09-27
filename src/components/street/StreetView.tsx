@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { residentsOf, useOf, type Voice } from "../../game/life";
-import type { LitterItem, LitterKind, Plot, Street } from "../../model/types";
+import type { Pet, LitterItem, LitterKind, Plot, Street } from "../../model/types";
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
 import { possessive } from "../../game/names";
@@ -9,6 +9,7 @@ import { layoutStreet, STREET, type LotBox } from "./layout";
 import { Litter } from "./Litter";
 import { Playground } from "./Playground";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
+import { PetWalkers } from "./PetWalkers";
 import { Traffic } from "./Traffic";
 import { CARS, type CarModel } from "../../config/cars";
 import type { Car } from "../../model/types";
@@ -38,6 +39,8 @@ interface Props {
   mineId?: string;
   /** Eigene Autos, die hier fahren. */
   cars?: Car[];
+  /** Eigene Tiere, die auf den Gehwegen herumlaufen. */
+  pets?: Pet[];
   /** Auto antippen (hupen). */
   onCarTap?: (vehicle: { model: CarModel; car?: Car }) => void;
 }
@@ -64,6 +67,7 @@ export function StreetView({
   onViewport,
   mineId,
   cars = [],
+  pets = [],
   onCarTap,
 }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
@@ -181,6 +185,7 @@ export function StreetView({
         )}
 
         {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} />}
+        {pets.length > 0 && <PetWalkers pets={pets} width={width} walkY={walkY} />}
 
         {popups.map((p) => (
           <text key={p.id} x={p.x} y={p.y} textAnchor="middle" fontSize={16} fontWeight={900} fill="#2b2118" className="reward-popup">
@@ -217,7 +222,7 @@ function Lot({
 
   const label = (mine ? "Dein Grundstück: " : "") + (owned
     ? plot.building
-      ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}${plot.building.graffiti ? `, besprüht: „${plot.building.graffiti}“` : ""}${plot.building.damaged ? ", kaputt" : ""}`
+      ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}${plot.building.graffiti ? `, besprüht: „${plot.building.graffiti}“` : ""}${plot.building.damaged ? ", kaputt" : ""}${plot.building.soot ? ", verrußt" : ""}`
       : plot.amenity === "playground"
         ? `Spielplatz, Grundstück ${plot.size}`
         : `Dein Bauplatz ${plot.size}`
@@ -343,9 +348,26 @@ function Building({ lot, groundY }: { lot: LotBox; groundY: number }) {
       <ellipse cx={lot.width / 2} cy={groundY} rx={width / 2 + 10} ry={8} fill="#000" opacity={0.15} />
       <g transform={`translate(${left} ${groundY - height})`}>
         <FacadeSvg facade={building.facade} size={lot.plot.size} />
+        {!!building.soot && <Soot level={building.soot} width={width} height={height} />}
         {building.damaged && <Cracks width={width} height={height} />}
         {building.graffiti && <Graffiti text={building.graffiti} width={width} height={height} />}
       </g>
+    </g>
+  );
+}
+
+/** Ruß von Abgasen: grauer Schleier, unten dunkler (da, wo der Auspuff hinbläst). */
+function Soot({ level, width, height }: { level: number; width: number; height: number }) {
+  const id = `soot-${level}`;
+  return (
+    <g aria-hidden className="soot">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3a3a3a" stopOpacity={0.09 * level} />
+          <stop offset="1" stopColor="#1f1f1f" stopOpacity={0.2 * level} />
+        </linearGradient>
+      </defs>
+      <rect width={width} height={height} fill={`url(#${id})`} />
     </g>
   );
 }

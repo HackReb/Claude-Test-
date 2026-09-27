@@ -28,6 +28,8 @@ export interface Mischief {
   /** Vom Wachschutz abgefangen (dann steht fest, wer ihn geschickt hat). */
   blocked: boolean;
   senderName?: string;
+  /** Anzeigename bei Tieren und Autos, z. B. „Maxims Elefant Benjamin“. */
+  label?: string;
 }
 
 /** Was in einer Straße passiert ist. */
@@ -117,6 +119,8 @@ export interface Building {
   graffiti?: string;
   /** Kaputt gemacht (Fenster eingeworfen) – muss repariert werden. */
   damaged?: boolean;
+  /** Ruß von Abgasen fremder Autos (Stufen). */
+  soot?: number;
 }
 
 export interface Facade {
@@ -167,6 +171,8 @@ export interface Player {
   lastSeen: number;
   /** Eigene Autos, die auf der Straße fahren. */
   cars?: Car[];
+  /** Eigene Tiere – sie gehen in der Nachbarschaft spazieren. */
+  pets?: Pet[];
   /** Version der Spielregeln, nach denen der Stand gerechnet wird (2 = Bewohner & laufende Kosten). */
   economy?: number;
 }
@@ -180,6 +186,18 @@ export interface Car {
   /** Nummernschild, z. B. „TUT-KA 911“ */
   plate: string;
   boughtAt: number;
+  /** Wann das Auto das nächste Mal durch eine Nachbarstraße fährt. */
+  nextOutingAt?: number;
+}
+
+export interface Pet {
+  id: string;
+  speciesId: string;
+  /** z. B. „Benjamin“ */
+  name: string;
+  boughtAt: number;
+  /** Wann das Tier das nächste Mal in der Nachbarschaft spazieren geht. */
+  nextOutingAt?: number;
 }
 
 // ---------- Nachbarschaft (Bots) ----------

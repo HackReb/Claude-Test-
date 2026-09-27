@@ -28,17 +28,18 @@ export const LIFE = {
 
   /**
    * Anteil der Plätze, der pro Stunde einzieht bzw. auszieht, bis das Ziel erreicht ist.
-   * Ausziehen ist langsam: eine volle Straße leert sich bei Vernachlässigung über zwei bis drei Tage.
+   * Einziehen geht schnell (ein neues Haus ist in gut einer halben Stunde voll, während man spielt),
+   * Ausziehen langsam: eine volle Straße leert sich bei Vernachlässigung über zwei bis drei Tage.
    */
-  moveInPerHour: 0.06,
+  moveInPerHour: 1.2,
   moveOutPerHour: 0.012,
   /** Neue Gebäude starten nicht leer: so viel zieht sofort ein (Anteil der Plätze). */
   firstResidents: 0.25,
 
-  playgroundCost: 300,
+  playgroundCost: 600,
 
   tapsToClean: { trash: 1, poop: 3 },
-  cleanReward: { trash: 2, poop: 5 },
+  cleanReward: { trash: 8, poop: 20 },
   /** Live auf dem Bildschirm: frühestens alle so viele Sekunden neuer Dreck. */
   liveLitterEverySeconds: 25,
 } as const;

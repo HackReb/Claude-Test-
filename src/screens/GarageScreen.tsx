@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { sound } from "../audio/sound";
 import { CarSvg, carLength } from "../components/cars/CarSvg";
 import { CAR_COLORS, CAR_MODELS, CARS, carModel, type CarModel } from "../config/cars";
+import { CAR_OUTINGS } from "../config/pets";
 import { formatCoins } from "../format";
 import { defaultCarName, defaultPlate } from "../game/cars";
 import type { Car } from "../model/types";
@@ -187,6 +188,11 @@ function ShopCar({ model, garageFull }: { model: CarModel; garageFull: boolean }
             {model.brand} {model.model}
           </strong>
           <span className="subtle">„{model.slogan}“</span>
+          <span className="pet-stats">
+            {model.soot === 0
+              ? "⚡ Elektro: keine Abgase"
+              : `${"💨".repeat(model.soot)} Abgase – hinterlässt bei Nachbarn Ruß (${model.soot}× an einer Fassade, alle ${CAR_OUTINGS.everyHours} Std.)`}
+          </span>
         </div>
         <strong className="shop-price">🪙 {formatCoins(model.price)}</strong>
       </div>

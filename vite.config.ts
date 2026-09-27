@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => ({
         start_url: ".",
         scope: ".",
         display: "standalone",
-        orientation: "portrait",
+        orientation: "any",
         background_color: "#fff7e8",
         theme_color: "#ff7a45",
         categories: ["games", "entertainment"],

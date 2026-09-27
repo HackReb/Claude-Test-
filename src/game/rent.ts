@@ -3,6 +3,7 @@ import type { Building, Incident, Mischief, Player, Plot, PlotSize, Street } fro
 import { moveTowards, occupancyOf, spawnLitter, targetOccupancy, useOf } from "./life";
 import { securityOf } from "../config/badboys";
 import { applyMischief } from "./mischief";
+import { petUpkeepPerHour } from "./pets";
 import { belongsTo } from "./plots";
 import { getPart } from "../parts/catalog";
 
@@ -112,7 +113,8 @@ export function simulate(player: Player, streets: Street[], now: number, incomin
         if (!isBuilt(plot)) return plot;
         const before = occupancyOf(withLitter, plot);
         const after = moveTowards(before, targetOccupancy(withLitter, plot), hours);
-        result.income += buildingIncomePerHour(plot.size, plot.building, before) * hours;
+        // Mittel aus vorher und nachher: Einziehen geht schnell, innerhalb einer Stunde ändert sich viel.
+        result.income += buildingIncomePerHour(plot.size, plot.building, (before + after) / 2) * hours;
         if (useOf(plot.building) === "residential") {
           const people = (after - before) * capacityOf(plot.size, plot.building.level);
           if (people > 0) result.movedIn += people;
@@ -125,6 +127,8 @@ export function simulate(player: Player, streets: Street[], now: number, incomin
       if (street.ownerId === player.id) result.upkeep += securityUpkeepPerHour(street) * hours;
       return changed ? { ...withLitter, plots } : street;
     });
+    // Futter & Tierarzt für die eigenen Tiere.
+    result.upkeep += petUpkeepPerHour(player) * hours;
     t = next;
   }
   // Müll bis genau jetzt nachwürfeln (volle Stunden), übrige Bad Boys kommen jetzt an.

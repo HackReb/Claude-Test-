@@ -255,9 +255,30 @@ final class ApiController
         if ($street->getOwnerId() === $player->getId()) {
             throw new BadRequestHttpException('Nicht in die eigene Straße!');
         }
-        $badBoy = (string) (Documents::json($request->getContent())['badBoy'] ?? '');
-        if (!in_array($badBoy, BadBoys::IDS, true)) {
+        $body = Documents::json($request->getContent());
+        $badBoy = (string) ($body['badBoy'] ?? '');
+        $visitor = BadBoys::isVisitor($badBoy);
+        if (!$visitor && !in_array($badBoy, BadBoys::IDS, true)) {
             throw new BadRequestHttpException('Diesen Bad Boy gibt es nicht.');
+        }
+        $label = $visitor && is_string($body['label'] ?? null) ? mb_substr(trim($body['label']), 0, 60) : null;
+
+        if ($visitor) {
+            // Tiere und Autos: nach festem Takt unterwegs – nur eine Obergrenze pro Tag.
+            $visits = $this->em->createQueryBuilder()
+                ->select('COUNT(m.id)')->from(Mischief::class, 'm')
+                ->where('m.streetId = :street')->andWhere('m.senderId = :me')->andWhere('m.createdAt > :since')
+                ->setParameter('street', $street->getId())->setParameter('me', $player->getId())
+                ->setParameter('since', new \DateTimeImmutable('-1 day'))
+                ->getQuery()->getSingleScalarResult();
+            if ($visits >= BadBoys::MAX_VISITS_PER_SENDER_PER_DAY) {
+                throw new TooManyRequestsHttpException(null, 'Genug Ausflüge in diese Straße für heute.');
+            }
+            $mischief = new Mischief(Credentials::newToken(), $street->getId(), $player->getId(), $player->getName(), $badBoy, false, $label ?: null);
+            $this->em->persist($mischief);
+            $this->em->flush();
+
+            return new JsonResponse(['mischief' => $mischief->toArray()], 201);
         }
 
         $recent = $this->em->createQueryBuilder()

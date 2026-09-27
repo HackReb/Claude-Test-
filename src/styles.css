@@ -345,29 +345,9 @@ p {
   margin-top: -4px;
 }
 
-.rentbar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.rentbar-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.rentbar-label,
-.rentbar-rate,
 .subtle {
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.rentbar-amount {
-  font-size: 1.5rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .rentbar-toast {
@@ -1063,15 +1043,7 @@ h2 {
   }
 }
 
-.rentbar-net {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #2d7a3e;
-}
 
-.rentbar-net.negative {
-  color: var(--danger);
-}
 
 .voices {
   display: flex;
@@ -1698,4 +1670,290 @@ h2 {
   min-height: 0;
   white-space: nowrap;
   font-size: 0.95rem;
+}
+
+/* ---------- Tierhandlung ---------- */
+
+.pet-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pet-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.pet-emoji.big {
+  font-size: 2.8rem;
+}
+
+.pet-stats {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #7a4a2a;
+}
+
+/* ---------- Straße: Statusleiste, Reiter, Querformat ---------- */
+
+.street-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "status" "street" "panel";
+  gap: 12px;
+}
+
+.street-status {
+  grid-area: status;
+}
+
+.street-main {
+  grid-area: street;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.street-panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.statusbar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.status-cash {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.status-label {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.status-amount {
+  grid-column: 1;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-cash .btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.status-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.status-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.status-chip span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-chip strong {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.status-chip.good strong {
+  color: #2d7a3e;
+}
+
+.status-chip.bad {
+  border-color: var(--danger);
+  background: #ffe8ec;
+}
+
+.status-chip.bad strong {
+  color: var(--danger);
+}
+
+.status-detail {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  scroll-margin-top: 8px;
+}
+
+.tabs button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tabs button span {
+  font-size: 1.2rem;
+}
+
+.tabs button.selected {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.tab-dot {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 20px);
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shop-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shop-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.shop-tile > span:first-child {
+  font-size: 1.8rem;
+}
+
+.shop-tile small {
+  color: var(--muted);
+}
+
+.incidents h2 {
+  margin: 0 0 6px;
+}
+
+/* Querformat (Handy quer, Tablet, Desktop): Straße links groß, Überblick und Reiter rechts. */
+@media (orientation: landscape) and (min-width: 700px) {
+  .app {
+    max-width: 1280px;
+  }
+
+  .street-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+    grid-template-areas: "street status" "street panel";
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+
+  .street-main {
+    position: sticky;
+    top: 0;
+  }
+
+  .street-scroll {
+    margin: 0;
+    border: 3px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* Die Straße füllt die verfügbare Höhe. */
+  .street-svg {
+    height: clamp(220px, calc(100dvh - 190px), 620px);
+  }
+}
+
+/* Flache Bildschirme (Handy quer): Kopf- und Fußleiste schlanker. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .topbar {
+    padding-top: calc(4px + env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .topbar-street-name {
+    font-size: 0.95rem;
+  }
+
+  .bottomnav a {
+    min-height: 44px;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .bottomnav a span {
+    font-size: 1.1rem;
+  }
+
+  .content {
+    padding: 10px 12px;
+  }
+
+  .street-svg {
+    height: clamp(200px, calc(100dvh - 140px), 520px);
+  }
 }

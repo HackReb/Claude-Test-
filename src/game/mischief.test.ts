@@ -5,7 +5,7 @@ import type { Mischief, Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
 import { createNeighborhood } from "./bots";
 import { homeComfort, targetOccupancy } from "./life";
-import { applyMischief, botMischief, buySecurity, provokeBot, repairBuilding, rollBlocked, scrubGraffiti } from "./mischief";
+import { applyMischief, botMischief, buySecurity, isVisitorId, provokeBot, repairBuilding, rollBlocked, scrubGraffiti } from "./mischief";
 import { buyPlot, placeBuilding } from "./plots";
 import { playerUpkeepPerHour, simulate } from "./rent";
 import { buildingFromTemplate, TEMPLATES } from "./templates";
@@ -80,9 +80,9 @@ describe("Bad Boys", () => {
 describe("Wachschutz", () => {
   it("kostet, hat laufende Kosten und fängt einen Teil ab – dann kommt raus, wer geschickt hat", () => {
     const { player, street: s } = street();
-    const guard = buySecurity({ ...player, coins: 1000 }, s);
+    const guard = buySecurity({ ...player, coins: 5000 }, s);
     if (!guard.ok) throw new Error();
-    expect(guard.player.coins).toBe(1000 - SECURITY[0].price);
+    expect(guard.player.coins).toBe(5000 - SECURITY[0].price);
     expect(playerUpkeepPerHour([guard.street], player.id) - playerUpkeepPerHour([s], player.id)).toBe(SECURITY[0].upkeepPerHour);
 
     const outcomes = Array.from({ length: 200 }, (_, i) => rollBlocked(guard.street, `versuch-${i}`));
@@ -102,9 +102,10 @@ describe("Wachschutz", () => {
 describe("in der Simulation", () => {
   it("Bad Boys kommen zu ihrer Zeit an und drücken ab dann die Belegung", () => {
     const { player, street: s } = street();
-    const full: Street = { ...s, plots: s.plots.map((p) => (p.building ? { ...p, building: { ...p.building, occupancy: 0.7 } } : p)) };
-    const quiet = simulate(player, [full], 10 * HOUR);
-    const attacked = simulate(player, [full], 10 * HOUR, [send("knallfrosch-zwillinge", "boom", { at: 2 * HOUR }), send("muelltonnen-marvin", "tonne", { at: 3 * HOUR })]);
+    // Frisch gebaut, die Leute ziehen gerade ein – dann kommen die Knallfrösche und Marvin.
+    const moving: Street = { ...s, plots: s.plots.map((p) => (p.building ? { ...p, building: { ...p.building, occupancy: 0.1 } } : p)) };
+    const quiet = simulate(player, [moving], HOUR);
+    const attacked = simulate(player, [moving], HOUR, [send("knallfrosch-zwillinge", "boom", { at: 0 }), send("muelltonnen-marvin", "tonne", { at: HOUR / 4 })]);
     // Welches Haus es trifft, entscheidet der Zufall des Streichs – belegt ist danach insgesamt weniger.
     const occ = (r: typeof quiet) => r.streets[0].plots.reduce((sum, p) => sum + (p.building?.occupancy ?? 0), 0);
     expect(attacked.incidents.map((i) => i.id)).toEqual(["boom", "tonne"]);
@@ -120,12 +121,16 @@ describe("in der Simulation", () => {
     expect(first.mischief).toEqual([]); // neue Nachbarschaft: erst mal Ruhe
     const later = botMischief(first.neighborhood, s, 3 * 24 * HOUR);
     expect(later.mischief.length).toBeGreaterThan(0);
-    expect(later.mischief.every((m) => BAD_BOYS.some((b) => b.id === m.badBoyId))).toBe(true);
+    expect(later.mischief.every((m) => BAD_BOYS.some((b) => b.id === m.badBoyId) || isVisitorId(m.badBoyId))).toBe(true);
+    // Zoe und Paula schicken ihre Tiere – die hält kein Wachschutz auf und man sieht, wem sie gehören.
+    const pet = later.mischief.find((m) => m.badBoyId.startsWith("tier-"));
+    if (pet) expect(pet).toMatchObject({ blocked: false, label: expect.stringMatching(/^(Zucker-Zoes|Palmen-Paulas) /) });
     expect(botMischief(first.neighborhood, s, 3 * 24 * HOUR)).toEqual(later);
     const chaos = first.neighborhood.bots.find((b) => b.character === "chaos")!;
     const provoked = provokeBot(first.neighborhood, chaos.streetId, 0);
     expect(provoked.bots.find((b) => b.id === chaos.id)!.nextMischiefAt).toBe(6 * HOUR);
     const sweet = first.neighborhood.bots.find((b) => b.character === "sweet")!;
-    expect(provokeBot(first.neighborhood, sweet.streetId, 0).bots.find((b) => b.id === sweet.id)!.nextMischiefAt).toBeUndefined();
+    // Zoe ist nicht rachsüchtig: ihr Takt bleibt.
+    expect(provokeBot(first.neighborhood, sweet.streetId, 0).bots.find((b) => b.id === sweet.id)!.nextMischiefAt).toBe(sweet.nextMischiefAt);
   });
 });

@@ -56,7 +56,10 @@ Die PWA nutzt den Server, wenn sie mit `VITE_API_URL` gebaut wird (GitHub Pages:
 - **Laufende Kosten** je Gebäude, Spielplatz und Wachschutz. Wer sich 2–3 Tage nicht kümmert, verliert
   Bewohner und Geld; das Konto darf ins Minus (dann wird nichts gekauft).
 - **Babo-Anzeiger:** Jeden Tag eine Titelseite mit dem Besten und Schlimmsten aus Straße und Nachbarschaft.
-- Alle Zahlen: `src/config/economy.ts`, `src/config/life.ts`, `src/config/badboys.ts`.
+- **Tiere & Autos:** Aus der Tierhandlung (Katze bis Elefant) gehen die Tiere nach festem Takt in
+  Nachbarstraßen spazieren und hinterlassen Haufen – je größer, desto mehr. Autos fahren durch und
+  hinterlassen Ruß an einer Fassade (je nach Modell, Elektro bleibt sauber). Wachschutz hält sie nicht auf.
+- Alle Zahlen: `src/config/economy.ts`, `src/config/life.ts`, `src/config/badboys.ts`, `src/config/pets.ts`, `src/config/cars.ts`.
 
 ## Stack
 

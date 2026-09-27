@@ -272,6 +272,28 @@ final class ApiTest extends WebTestCase
         self::assertSame([], $this->call('GET', '/api/me/mischief', null, $kalle['token'])['mischief']);
     }
 
+    public function testPetsAndCarsVisitWithTheirNames(): void
+    {
+        $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
+        $maxim = $this->register('player-maxim', 'Maxim', 'street-maxim', 'osm|maxim');
+        // Kalle hat die beste Wache – Tiere und Autos lässt sie trotzdem durch.
+        $this->call('PUT', '/api/streets/street-kalle', ['street' => $this->street('street-kalle', 'player-kalle', 'osm|kalle') + ['security' => 2]], $kalle['token']);
+
+        $elefant = $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'tier-elefant', 'label' => 'Maxims Elefant Benjamin'], $maxim['token']);
+        self::assertSame(201, $this->httpStatus());
+        self::assertFalse($elefant['mischief']['blocked']);
+        self::assertSame('Maxims Elefant Benjamin', $elefant['mischief']['label']);
+        // Gleich danach das Auto: keine 20-Minuten-Sperre für Ausflüge
+        $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'auto-mottenwerke-xprotz', 'label' => 'Maxims X-Protz'], $maxim['token']);
+        self::assertSame(201, $this->httpStatus());
+
+        $inbox = $this->call('GET', '/api/me/mischief', null, $kalle['token'])['mischief'];
+        self::assertSame(['tier-elefant', 'auto-mottenwerke-xprotz'], array_column($inbox, 'badBoyId'));
+
+        $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'tier-'], $maxim['token']);
+        self::assertSame(400, $this->httpStatus());
+    }
+
     public function testSecurityIsStoredWithTheStreet(): void
     {
         $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');

@@ -45,11 +45,11 @@ describe("Einnahmen & Kosten", () => {
     expect(buildingIncomePerHour("S", { ...home, level: 3 }, 1)).toBeCloseTo(buildingIncomePerHour("S", home, 1) * (Math.round(4 * 2.2) / 4));
   });
 
-  it("Start: Kiosk plus Wohnhaus, voll und sauber – ein paar Hundert Münzen am Tag", () => {
+  it("Start: Kiosk plus Wohnhaus, voll und sauber – ein, zwei Tausend Münzen am Tag", () => {
     const { player, street } = tidyStreet();
     const net = playerIncomePerHour([street], player.id) - playerUpkeepPerHour([street], player.id);
-    expect(net).toBeGreaterThan(8);
-    expect(net * 24).toBeLessThan(600);
+    expect(net).toBeGreaterThan(40);
+    expect(net * 24).toBeLessThan(5000);
   });
 });
 
@@ -94,9 +94,10 @@ describe("simulate", () => {
   it("neue Mieter ziehen nach und nach ein", () => {
     const { player, street } = tidyStreet();
     const empty = { ...street, plots: street.plots.map((p) => (p.building?.use === "residential" ? { ...p, building: { ...p.building, occupancy: 0 } } : p)) };
-    const { streets, movedIn } = simulate(player, [empty], 5 * HOUR);
+    // Während man spielt, geht es schnell: nach 10 Minuten ist schon ein Fünftel eingezogen.
+    const { streets, movedIn } = simulate(player, [empty], HOUR / 6);
     const home = streets[0].plots.find((p) => p.building?.use === "residential")!.building!.occupancy!;
-    expect(home).toBeCloseTo(5 * LIFE.moveInPerHour, 1);
+    expect(home).toBeCloseTo(LIFE.moveInPerHour / 6, 2);
     expect(movedIn).toBeGreaterThan(0);
   });
 

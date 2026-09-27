@@ -33,17 +33,17 @@ export const ECONOMY = {
 
   plotsPerSide: 6,
   plotSizes: {
-    S: { tiles: 1, price: 500, capacity: 4, upkeepPerHour: 1.5, maxFloors: 1 },
-    M: { tiles: 2, price: 1500, capacity: 10, upkeepPerHour: 5, maxFloors: 2 },
-    L: { tiles: 3, price: 4000, capacity: 24, upkeepPerHour: 12, maxFloors: 3 },
+    S: { tiles: 1, price: 500, capacity: 4, upkeepPerHour: 12, maxFloors: 1 },
+    M: { tiles: 2, price: 1500, capacity: 10, upkeepPerHour: 40, maxFloors: 2 },
+    L: { tiles: 3, price: 4000, capacity: 24, upkeepPerHour: 96, maxFloors: 3 },
   } satisfies Record<PlotSize, PlotSizeConfig>,
 
-  /** Miete je Bewohner pro Stunde. Volles S-Wohnhaus ohne Deko: 4 × 1,5 = 6/Std. */
-  rentPerResidentPerHour: 1.5,
-  /** Umsatz eines Ladens je belegtem Kundenplatz pro Stunde. Voller S-Laden ohne Deko: 4 × 2 = 8/Std. */
-  revenuePerCustomerPerHour: 2,
+  /** Miete je Bewohner pro Stunde. Volles S-Wohnhaus ohne Deko: 4 × 12 = 48/Std. */
+  rentPerResidentPerHour: 12,
+  /** Umsatz eines Ladens je belegtem Kundenplatz pro Stunde. Voller S-Laden ohne Deko: 4 × 16 = 64/Std. */
+  revenuePerCustomerPerHour: 16,
   /** Laufende Kosten eines Spielplatzes pro Stunde. */
-  playgroundUpkeepPerHour: 1,
+  playgroundUpkeepPerHour: 8,
 
   /** Preisanstieg je gekauftem Grundstück (0.15 = +15 %) – zählt über alle Straßen. */
   plotPriceIncrease: 0.15,

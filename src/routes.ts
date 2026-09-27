@@ -11,4 +11,5 @@ export const routes = {
   share: "/share",
   paper: "/zeitung",
   garage: "/garage",
+  pets: "/tiere",
 } as const;

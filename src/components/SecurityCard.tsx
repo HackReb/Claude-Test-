@@ -11,7 +11,6 @@ export function SecurityCard({ street }: { street: Street }) {
   const buy = useGameStore((s) => s.buySecurity);
   const current = securityOf(street.security);
   const next = nextSecurity(street);
-  const lastAttack = street.incidents?.[0];
 
   return (
     <section className="card security" aria-label="Wachschutz">
@@ -19,11 +18,6 @@ export function SecurityCard({ street }: { street: Street }) {
         {current ? `${current.emoji} ${current.name}` : "🛡️ Kein Wachschutz"}
         {current && <small> · fängt {Math.round(current.blockChance * 100)} % der Bad Boys ab</small>}
       </h2>
-      {lastAttack && (
-        <p className="subtle">
-          Zuletzt: {lastAttack.blocked ? "🛡️" : "😈"} {lastAttack.text}
-        </p>
-      )}
       {next && (
         <>
           <p className="subtle">
