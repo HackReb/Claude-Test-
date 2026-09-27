@@ -14,6 +14,30 @@ export interface Street {
   litter?: LitterItem[];
   /** Bis wann Müll „nachgewürfelt“ wurde (für die Zeit, in der niemand zugeschaut hat). */
   litterCheckedAt?: number;
+  /** Wachschutz-Stufe (1 = Nachbarschaftswache, 2 = Wachdienst mit Kameras). */
+  security?: 1 | 2;
+  /** Was Bad Boys hier zuletzt angestellt haben (neueste zuerst). */
+  incidents?: Incident[];
+}
+
+/** Ein Bad Boy ist unterwegs in eine Straße (vom Server oder von einem Bot). */
+export interface Mischief {
+  id: string;
+  badBoyId: string;
+  at: number;
+  /** Vom Wachschutz abgefangen (dann steht fest, wer ihn geschickt hat). */
+  blocked: boolean;
+  senderName?: string;
+}
+
+/** Was in einer Straße passiert ist. */
+export interface Incident {
+  id: string;
+  at: number;
+  badBoyId: string;
+  blocked: boolean;
+  text: string;
+  senderName?: string;
 }
 
 export type LitterKind = "trash" | "poop";
@@ -89,6 +113,10 @@ export interface Building {
    * Fehlt bei älteren Ständen und Bot-Häusern – dann gilt, was die Straße gerade hergibt.
    */
   occupancy?: number;
+  /** Von einem Bad Boy besprüht (der Spruch). */
+  graffiti?: string;
+  /** Kaputt gemacht (Fenster eingeworfen) – muss repariert werden. */
+  damaged?: boolean;
 }
 
 export interface Facade {
@@ -169,6 +197,8 @@ export interface Bot {
   lastActionAt: number;
   /** Zähler aller Aktionen – macht das Verhalten reproduzierbar (Zufall aus Bot-ID + Zähler). */
   actions: number;
+  /** Wann der Bot das nächste Mal einen Bad Boy zum Spieler schickt. */
+  nextMischiefAt?: number;
 }
 
 export interface NeighborEvent {
@@ -176,6 +206,8 @@ export interface NeighborEvent {
   botId?: string;
   /** Echter Mitspieler, der etwas getan hat. */
   playerName?: string;
+  /** Bild zur Meldung (z. B. der Bad Boy). */
+  emoji?: string;
   streetId: string;
   at: number;
   text: string;
@@ -197,4 +229,44 @@ export interface Neighborhood {
   newsSeenAt: number;
   /** Zuletzt gesehener Stand der Straßen echter Mitspieler (und der eigenen), um Änderungen zu melden. */
   known?: Record<string, StreetDigest>;
+  /** Die Tageszeitung. */
+  paper?: Paper;
+}
+
+// ---------- Tageszeitung ----------
+
+export interface PaperStats {
+  residents: number;
+  places: number;
+  income: number;
+  litter: number;
+  poop: number;
+  graffiti: number;
+  damaged: number;
+  homes: number;
+  playgrounds: number;
+}
+
+export interface PaperStory {
+  id: string;
+  streetId: string;
+  headline: string;
+  text: string;
+  tone: "good" | "bad" | "funny";
+  score: number;
+}
+
+export interface PaperIssue {
+  /** Kalendertag (JJJJ-MM-TT). */
+  day: string;
+  at: number;
+  stories: PaperStory[];
+}
+
+export interface Paper {
+  issue: PaperIssue;
+  /** Kennzahlen der Straßen zum Zeitpunkt dieser Ausgabe – Vergleich für die nächste. */
+  stats: Record<string, PaperStats>;
+  /** Gelesen? */
+  read: boolean;
 }

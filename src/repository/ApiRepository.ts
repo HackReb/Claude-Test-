@@ -1,4 +1,4 @@
-import type { Neighborhood, Player, Street } from "../model/types";
+import type { Mischief, Neighborhood, Player, Street } from "../model/types";
 import { PREFIX, type KeyValueStorage, type LocalRepository } from "./LocalRepository";
 import { StreetTakenError, type Account, type ForeignStreet, type OnlineFeatures, type Repository } from "./Repository";
 
@@ -6,6 +6,7 @@ const AUTH_KEY = `${PREFIX}auth`;
 const OUTBOX_KEY = `${PREFIX}outbox`;
 const FOREIGN_KEY = `${PREFIX}foreign`;
 const NAMES_KEY = `${PREFIX}names`;
+const INBOX_KEY = `${PREFIX}inbox`;
 
 const TIMEOUT_MS = 8000;
 /** Spieler und Nachbarschaft ändern sich sekündlich (Miete) – gesammelt schicken. */
@@ -23,6 +24,8 @@ interface Outbox {
   player?: number;
   neighborhood?: number;
   streets: Record<string, number>;
+  /** Angekommene Bad Boys, deren Verarbeitung der Server noch erfahren muss. */
+  acks?: string[];
 }
 
 interface StreetEntry {
@@ -37,6 +40,8 @@ interface Snapshot {
   street: Street | null;
   neighborhood: Neighborhood | null;
   streets: StreetEntry[];
+  /** Bad Boys, die in der eigenen Straße angekommen sind. */
+  mischief?: Mischief[];
 }
 
 /** Antwort mit Fehlerstatus (im Gegensatz zu „Server nicht erreichbar“). */
@@ -92,6 +97,10 @@ export class ApiRepository implements Repository {
       fetchStreet: (id) => this.fetchStreet(id),
       recover: (code) => this.recover(code),
       playerNames: () => this.read<Record<string, string>>(NAMES_KEY) ?? {},
+      incomingMischief: () => this.read<Mischief[]>(INBOX_KEY) ?? [],
+      fetchMischief: () => this.fetchMischief(),
+      ackMischief: (ids) => this.ackMischief(ids),
+      sendMischief: (streetId, badBoyId) => this.sendMischief(streetId, badBoyId),
     };
   }
 
@@ -155,6 +164,7 @@ export class ApiRepository implements Repository {
     this.storage.removeItem(OUTBOX_KEY);
     this.storage.removeItem(FOREIGN_KEY);
     this.storage.removeItem(NAMES_KEY);
+    this.storage.removeItem(INBOX_KEY);
     await this.cache.reset();
   }
 
@@ -235,6 +245,41 @@ export class ApiRepository implements Repository {
     }
   }
 
+  private async fetchMischief(): Promise<Mischief[]> {
+    if (!this.auth.token) return [];
+    const { mischief } = await this.request<{ mischief: Mischief[] }>("GET", "/me/mischief");
+    this.receiveMischief(mischief);
+    return this.read<Mischief[]>(INBOX_KEY) ?? [];
+  }
+
+  /** Verarbeitete Bad Boys aus dem Posteingang nehmen; der Server erfährt es beim nächsten Senden. */
+  private async ackMischief(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const inbox = this.read<Mischief[]>(INBOX_KEY) ?? [];
+    this.write(INBOX_KEY, inbox.filter((m) => !ids.includes(m.id)));
+    this.outbox.acks = [...new Set([...(this.outbox.acks ?? []), ...ids])];
+    this.persistOutbox();
+    this.scheduleFlush();
+  }
+
+  private async sendMischief(streetId: string, badBoyId: string) {
+    try {
+      const { mischief } = await this.request<{ mischief: Mischief }>("POST", `/streets/${encodeURIComponent(streetId)}/mischief`, { badBoy: badBoyId });
+      return { ok: true as const, mischief };
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) return { ok: false as const, message: error.message };
+      return { ok: false as const, message: "Der Server ist gerade nicht erreichbar." };
+    }
+  }
+
+  private receiveMischief(list: Mischief[] | undefined) {
+    if (!list?.length) return;
+    const inbox = this.read<Mischief[]>(INBOX_KEY) ?? [];
+    const done = new Set(this.outbox.acks ?? []);
+    const known = new Set(inbox.map((m) => m.id));
+    this.write(INBOX_KEY, [...inbox, ...list.filter((m) => !known.has(m.id) && !done.has(m.id))]);
+  }
+
   // ---------- intern ----------
 
   private async registerDocs(docs: { player: Player; street: Street; neighborhood?: Neighborhood | null; streets?: Street[] }) {
@@ -280,6 +325,7 @@ export class ApiRepository implements Repository {
     if (snapshot.street) await this.cache.saveStreet(snapshot.street);
     if (snapshot.neighborhood) await this.cache.saveNeighborhood(snapshot.neighborhood);
     this.learnNames(snapshot.streets);
+    this.receiveMischief(snapshot.mischief);
     const owners: Record<string, string> = {};
     for (const entry of snapshot.streets) {
       await this.cache.saveStreet(entry.street);
@@ -313,6 +359,13 @@ export class ApiRepository implements Repository {
       const player = await this.cache.loadPlayer();
       if (player) await this.request("PUT", "/me", { player }).catch((error) => this.rethrowUnlessRejected(error));
       this.done("player", playerVersion);
+    }
+
+    const acks = this.outbox.acks ?? [];
+    if (acks.length > 0) {
+      await this.request("POST", "/me/mischief/ack", { ids: acks }).catch((error) => this.rethrowUnlessRejected(error));
+      this.outbox.acks = (this.outbox.acks ?? []).filter((id) => !acks.includes(id));
+      this.persistOutbox();
     }
 
     const hoodVersion = this.outbox.neighborhood;

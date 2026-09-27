@@ -1,4 +1,4 @@
-import type { Neighborhood, Player, Street } from "../model/types";
+import type { Mischief, Neighborhood, Player, Street } from "../model/types";
 
 /**
  * Persistenz-Schicht: LocalRepository (localStorage, nur dieses Gerät) oder
@@ -64,6 +64,14 @@ export interface OnlineFeatures {
   recover(code: string): Promise<boolean>;
   /** Bekannte Namen echter Spieler (Spieler-ID → Name). */
   playerNames(): Record<string, string>;
+  /** Bad Boys, die in der eigenen Straße angekommen sind (Stand der letzten Synchronisierung). */
+  incomingMischief(): Mischief[];
+  /** Posteingang frisch vom Server holen. */
+  fetchMischief(): Promise<Mischief[]>;
+  /** Verarbeitete Bad Boys bestätigen. */
+  ackMischief(ids: string[]): Promise<void>;
+  /** Einen Bad Boy in die Straße eines anderen Spielers schicken. */
+  sendMischief(streetId: string, badBoyId: string): Promise<{ ok: true; mischief: Mischief } | { ok: false; message: string }>;
 }
 
 export class StreetTakenError extends Error {

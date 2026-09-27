@@ -2,6 +2,8 @@
 
 namespace App\Tests\Functional;
 
+use App\Entity\Street;
+use App\Entity\StreetShare;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -121,7 +123,20 @@ final class ApiTest extends WebTestCase
         self::assertSame(['error' => 'street-taken', 'ownerName' => 'Kalle'], $result);
     }
 
-    public function testBuyingInAnotherPlayersStreet(): void
+    /** Grundstück aus früheren Regeln (v2), als man noch bei anderen kaufen konnte – direkt in der Datenbank. */
+    private function plantLegacyPlot(string $streetId, int $plot, string $playerId): void
+    {
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $street = $em->find(Street::class, $streetId);
+        $data = $street->getData();
+        $data['plots'][$plot] += ['purchasedAt' => 10, 'ownerId' => $playerId, 'building' => ['name' => 'Alt']];
+        $street->setData($data);
+        $em->persist(new StreetShare($streetId, $playerId));
+        $em->flush();
+        $em->clear();
+    }
+
+    public function testOtherPlayersStreetsCanBeSeenButNotBought(): void
     {
         $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
         $zoe = $this->register('player-zoe', 'Zoe', 'street-zoe', 'osm|zoe');
@@ -131,30 +146,35 @@ final class ApiTest extends WebTestCase
         self::assertCount(1, $city['streets']);
         self::assertSame('Kalle', $city['streets'][0]['ownerName']);
 
-        // … und kauft dort ein Grundstück.
+        // … kaufen kann sie dort aber nicht.
         $street = $city['streets'][0]['street'];
         $street['plots'][1] += ['purchasedAt' => 10, 'ownerId' => 'player-zoe'];
         $saved = $this->call('PUT', '/api/streets/street-kalle', ['street' => $street], $zoe['token']);
-        self::assertSame('player-zoe', $saved['street']['plots'][1]['ownerId']);
-        self::assertSame(['player-zoe' => 'Zoe'], $saved['names']);
+        self::assertArrayNotHasKey('ownerId', $saved['street']['plots'][1]);
+        self::assertArrayNotHasKey('purchasedAt', $saved['street']['plots'][1]);
+        self::assertNotEmpty($kalle['token']);
+    }
 
-        // Max war zu langsam.
-        $max = $this->register('player-max', 'Max', 'street-max');
-        $late = $city['streets'][0]['street'];
-        $late['plots'][1] += ['purchasedAt' => 11, 'ownerId' => 'player-max'];
-        $result = $this->call('PUT', '/api/streets/street-kalle', ['street' => $late], $max['token']);
-        self::assertSame('player-zoe', $result['street']['plots'][1]['ownerId']);
+    public function testOldPlotsInOtherStreetsAreReleased(): void
+    {
+        $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
+        $zoe = $this->register('player-zoe', 'Zoe', 'street-zoe', 'osm|zoe');
+        $this->plantLegacyPlot('street-kalle', 1, 'player-zoe');
 
-        // Kalle speichert einen alten Stand – Zoes Grundstück bleibt.
+        // Zoes Spiel sieht die Straße beim Start (mit Namen) …
+        $me = $this->call('GET', '/api/me', null, $zoe['token']);
+        self::assertSame(['street-kalle'], array_map(fn ($e) => $e['street']['id'], $me['streets']));
+        self::assertSame(['player-zoe' => 'Zoe'], $me['streets'][0]['names']);
+
+        // … Kalle kann das alte Grundstück nicht überschreiben …
         $stale = $this->street('street-kalle', 'player-kalle', 'osm|kalle');
-        $stale['name'] = 'Bahnhofstraße';
         $mine = $this->call('PUT', '/api/streets/street-kalle', ['street' => $stale], $kalle['token']);
         self::assertSame('player-zoe', $mine['street']['plots'][1]['ownerId']);
 
-        // Zoe sieht die Straße beim nächsten Start (dort liegt ihre Miete).
-        $me = $this->call('GET', '/api/me', null, $zoe['token']);
-        self::assertSame(['street-kalle'], array_map(fn ($e) => $e['street']['id'], $me['streets']));
-        self::assertSame('Kalle', $me['streets'][0]['ownerName']);
+        // … Zoe gibt es frei (Regeln v3) und die Straße verschwindet aus ihrem Spielstand.
+        $release = $this->call('PUT', '/api/streets/street-kalle', ['street' => $stale], $zoe['token']);
+        self::assertArrayNotHasKey('ownerId', $release['street']['plots'][1]);
+        self::assertSame([], $this->call('GET', '/api/me', null, $zoe['token'])['streets']);
     }
 
     public function testBotStreetsAndNeighborhood(): void
@@ -206,9 +226,7 @@ final class ApiTest extends WebTestCase
     {
         $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
         $zoe = $this->register('player-zoe', 'Zoe', 'street-zoe');
-        $street = $this->street('street-kalle', 'player-kalle', 'osm|kalle');
-        $street['plots'][1] += ['purchasedAt' => 10, 'ownerId' => 'player-zoe'];
-        $this->call('PUT', '/api/streets/street-kalle', ['street' => $street], $zoe['token']);
+        $this->plantLegacyPlot('street-kalle', 1, 'player-zoe');
 
         $this->call('DELETE', '/api/me', null, $zoe['token']);
         self::assertSame(200, $this->httpStatus());
@@ -221,6 +239,45 @@ final class ApiTest extends WebTestCase
         // Zoes Straße ist gelöscht.
         $this->call('GET', '/api/streets/street-zoe', null, $max['token']);
         self::assertSame(404, $this->httpStatus());
+    }
+
+    public function testBadBoysArriveInTheOtherStreet(): void
+    {
+        $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
+        $maxim = $this->register('player-maxim', 'Maxim', 'street-maxim', 'osm|maxim');
+
+        // Maxim schickt Sprühdosen-Kevin zu Kalle …
+        $sent = $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'spruehdosen-kevin'], $maxim['token']);
+        self::assertSame(201, $this->httpStatus());
+        self::assertSame('spruehdosen-kevin', $sent['mischief']['badBoyId']);
+        self::assertFalse($sent['mischief']['blocked']); // Kalle hat keinen Wachschutz
+
+        // … gleich nochmal geht nicht, in die eigene Straße auch nicht, Unsinn schon gar nicht.
+        $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'gassi-gabi'], $maxim['token']);
+        self::assertSame(429, $this->httpStatus());
+        $this->call('POST', '/api/streets/street-maxim/mischief', ['badBoy' => 'gassi-gabi'], $maxim['token']);
+        self::assertSame(400, $this->httpStatus());
+        $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'godzilla'], $kalle['token']);
+        self::assertSame(400, $this->httpStatus());
+
+        // Kalles Spiel findet ihn beim Start und im Posteingang, bestätigt – dann ist er weg.
+        $me = $this->call('GET', '/api/me', null, $kalle['token']);
+        self::assertCount(1, $me['mischief']);
+        self::assertSame('Maxim', $me['mischief'][0]['senderName']);
+        $inbox = $this->call('GET', '/api/me/mischief', null, $kalle['token']);
+        self::assertSame($me['mischief'], $inbox['mischief']);
+        $this->call('POST', '/api/me/mischief/ack', ['ids' => [$sent['mischief']['id']]], $maxim['token']); // fremde Bestätigung zählt nicht
+        self::assertCount(1, $this->call('GET', '/api/me/mischief', null, $kalle['token'])['mischief']);
+        $this->call('POST', '/api/me/mischief/ack', ['ids' => [$sent['mischief']['id']]], $kalle['token']);
+        self::assertSame([], $this->call('GET', '/api/me/mischief', null, $kalle['token'])['mischief']);
+    }
+
+    public function testSecurityIsStoredWithTheStreet(): void
+    {
+        $kalle = $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|kalle');
+        $street = $this->street('street-kalle', 'player-kalle', 'osm|kalle') + ['security' => 2];
+        $saved = $this->call('PUT', '/api/streets/street-kalle', ['street' => $street], $kalle['token']);
+        self::assertSame(2, $saved['street']['security']);
     }
 
     public function testRejectsBrokenDocuments(): void

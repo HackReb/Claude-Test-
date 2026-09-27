@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useOf, type Voice } from "../../game/life";
+import { residentsOf, useOf, type Voice } from "../../game/life";
 import type { LitterItem, LitterKind, Plot, Street } from "../../model/types";
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
@@ -117,8 +117,10 @@ export function StreetView({
   const roadMid = (roadTop + roadBottom) / 2;
   const owner = ownerName ? `${possessive(ownerName)} ` : "";
   const streetLabel = street.name.length > 24 ? `${street.name.slice(0, 23)}…` : street.name;
+  // Wie viele Menschen gerade in der Straße wohnen – steht auf der Fahrbahn neben dem Namen.
+  const people = ` · 👥 ${Math.round(residentsOf(street))}`;
   // Grobe Textbreite bei 20px fett – die Mittellinie beginnt hinter dem Namen.
-  const labelEnd = STREET.padX + 8 + (owner.length + streetLabel.length) * 12 + 24;
+  const labelEnd = STREET.padX + 8 + (owner.length + streetLabel.length + people.length) * 12 + 24;
 
   return (
     <div className="street-scroll" ref={scroller}>
@@ -145,6 +147,9 @@ export function StreetView({
         <text x={STREET.padX + 8} y={roadMid + 7} fontSize={20} fontWeight={900} fill="#fff">
           {owner && <tspan fill="#ffd166">{owner}</tspan>}
           <tspan>{streetLabel}</tspan>
+          <tspan fill="#cfd8ff" fontSize={17}>
+            {people}
+          </tspan>
         </text>
 
         {lots.map((lot) => (
@@ -212,7 +217,7 @@ function Lot({
 
   const label = (mine ? "Dein Grundstück: " : "") + (owned
     ? plot.building
-      ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}`
+      ? `${plot.building.name}, ${useOf(plot.building) === "residential" ? "Wohnhaus" : "Gewerbe"}, Grundstück ${plot.size}, Stufe ${plot.building.level}${plot.building.graffiti ? `, besprüht: „${plot.building.graffiti}“` : ""}${plot.building.damaged ? ", kaputt" : ""}`
       : plot.amenity === "playground"
         ? `Spielplatz, Grundstück ${plot.size}`
         : `Dein Bauplatz ${plot.size}`
@@ -338,8 +343,64 @@ function Building({ lot, groundY }: { lot: LotBox; groundY: number }) {
       <ellipse cx={lot.width / 2} cy={groundY} rx={width / 2 + 10} ry={8} fill="#000" opacity={0.15} />
       <g transform={`translate(${left} ${groundY - height})`}>
         <FacadeSvg facade={building.facade} size={lot.plot.size} />
+        {building.damaged && <Cracks width={width} height={height} />}
+        {building.graffiti && <Graffiti text={building.graffiti} width={width} height={height} />}
       </g>
     </g>
+  );
+}
+
+/** Eingeworfene Scheiben: Sprünge quer über die Fassade. */
+function Cracks({ width, height }: { width: number; height: number }) {
+  const cx = width * 0.62;
+  const cy = height * 0.45;
+  const rays = [
+    [-0.3, -0.25],
+    [0.25, -0.3],
+    [0.32, 0.12],
+    [-0.12, 0.3],
+    [-0.35, 0.05],
+  ];
+  return (
+    <g aria-hidden className="cracks">
+      {rays.map(([dx, dy], i) => (
+        <polyline
+          key={i}
+          points={`${cx},${cy} ${cx + dx * width * 0.45},${cy + dy * height * 0.3 + 4} ${cx + dx * width},${cy + dy * height}`}
+          fill="none"
+          stroke="#1b1b1b"
+          strokeWidth={2.2}
+          strokeLinejoin="round"
+        />
+      ))}
+      <text x={cx} y={cy + 7} textAnchor="middle" fontSize={20}>
+        💥
+      </text>
+    </g>
+  );
+}
+
+/** Gesprühter Spruch schräg über der Fassade. */
+function Graffiti({ text, width, height }: { text: string; width: number; height: number }) {
+  const size = Math.max(9, Math.min(22, (width * 0.95) / (text.length * 0.6)));
+  return (
+    <text
+      aria-hidden
+      className="graffiti"
+      x={width / 2}
+      y={height * 0.62}
+      textAnchor="middle"
+      fontSize={size}
+      fontWeight={900}
+      fontStyle="italic"
+      fill="#e0249a"
+      stroke="#fff"
+      strokeWidth={3}
+      paintOrder="stroke"
+      transform={`rotate(-9 ${width / 2} ${height * 0.62})`}
+    >
+      {text}
+    </text>
   );
 }
 

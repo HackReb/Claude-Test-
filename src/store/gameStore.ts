@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { claimStreet, verifyStreet, type ClaimInput } from "../game/claimStreet";
-import { migrateSave } from "../game/migrate";
+import { migrateSave, releaseForeignPlots } from "../game/migrate";
 import { createNeighborhood, simulateNeighborhood } from "../game/bots";
 import {
   belongsTo,
@@ -12,14 +12,40 @@ import {
   type BuyResult,
   type UpgradeResult,
 } from "../game/plots";
-import { BOTS, personaOf } from "../config/bots";
+import { BOTS } from "../config/bots";
 import { addLitter, buildPlayground, tapLitter, type AmenityResult, type CleanResult } from "../game/life";
 import { collectRent, simulate } from "../game/rent";
 import { unlockPart, type UnlockResult } from "../game/unlock";
 import { buyCar, updateCar, type BuyCarResult } from "../game/cars";
 import { findNeighborStreets } from "../geo/neighbors";
-import { digestOf, streetNews } from "../game/world";
-import type { Building, Car, LitterItem, LitterKind, NeighborEvent, Neighborhood, Player, Street, StreetLocation } from "../model/types";
+import { digestOf, nearbyStreets, streetNews } from "../game/world";
+import { inStreet, intoStreet } from "../game/names";
+import { makeIssue, paperDay, paperStats, type PaperStreet } from "../game/newspaper";
+import { badBoy } from "../config/badboys";
+import {
+  applyMischief,
+  botMischief,
+  buySecurity,
+  provokeBot,
+  repairBuilding,
+  rollBlocked,
+  scrubGraffiti,
+  type FixResult,
+} from "../game/mischief";
+import { createId } from "../game/ids";
+import type {
+  Building,
+  Car,
+  Incident,
+  LitterItem,
+  LitterKind,
+  Mischief,
+  NeighborEvent,
+  Neighborhood,
+  Player,
+  Street,
+  StreetLocation,
+} from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import { ApiRepository } from "../repository/ApiRepository";
 import type { Account, Repository } from "../repository/Repository";
@@ -57,7 +83,7 @@ interface GameState {
   tick(): Promise<void>;
   /** Überträgt die angesammelte Miete auf das Konto. */
   collect(): Promise<number>;
-  /** Kauft ein Grundstück – in der eigenen Straße oder (mit `streetId`) bei einem Nachbarn. */
+  /** Kauft ein Grundstück in der eigenen Straße (`streetId` nur zur Sicherheit: fremde Straßen gehen nicht). */
   buyPlot(plotId: string, streetId?: string): Promise<BuyOutcome>;
   upgrade(plotId: string, streetId?: string): Promise<UpgradeResult>;
   /** Neuigkeiten aus der Nachbarschaft als gelesen markieren. */
@@ -89,6 +115,17 @@ interface GameState {
   loadCity(): Promise<void>;
   /** Mit Wiederherstellungs-Code weiterspielen. */
   recover(code: string): Promise<boolean>;
+  /** Neue Ausgabe der Tageszeitung drucken, falls heute noch keine erschienen ist. */
+  publishPaper(): Promise<void>;
+  markPaperRead(): Promise<void>;
+  /** Einen Bad Boy in eine Nachbarstraße schicken (Bot-Straße sofort, Mitspieler über den Server). */
+  sendBadBoy(streetId: string, badBoyId: string): Promise<SendResult>;
+  /** Graffiti an einem eigenen Haus wegschrubben. */
+  scrubGraffiti(plotId: string): Promise<FixResult>;
+  /** Kaputtes eigenes Haus reparieren. */
+  repair(plotId: string): Promise<FixResult>;
+  /** Wachschutz für die eigene Straße kaufen bzw. verstärken. */
+  buySecurity(): Promise<FixResult>;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
 }
@@ -98,10 +135,14 @@ export interface OfflineReport {
   upkeep: number;
   movedIn: number;
   movedOut: number;
+  /** Einmalig: Erstattung für früher bei Nachbarn gekaufte Grundstücke. */
+  refund?: number;
 }
 
+export type SendResult = { ok: true; text: string; blocked: boolean } | { ok: false; message: string };
+
 /** Kauf kann online zu spät sein: ein anderer Spieler war schneller (Geld kommt zurück). */
-export type BuyOutcome = (BuyResult | { ok: false; reason: "taken" }) & { greeting?: string };
+export type BuyOutcome = BuyResult | { ok: false; reason: "taken" };
 
 export interface StoreDeps {
   /** Sucht echte Nachbarstraßen; austauschbar für Tests. */
@@ -222,6 +263,40 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       await repo.saveNeighborhood(updated);
     }
 
+    /** Neuigkeiten vorne anhängen (die neuesten zuerst). */
+    function withNews(neighborhood: Neighborhood, events: NeighborEvent[]): Neighborhood {
+      if (events.length === 0) return neighborhood;
+      const news = [...events, ...neighborhood.news].sort((a, b) => b.at - a.at).slice(0, NEWS_LIMIT);
+      return { ...neighborhood, news };
+    }
+
+    /** Was Bad Boys angestellt haben, als Neuigkeiten. */
+    function incidentNews(incidents: Incident[], streetId: string): NeighborEvent[] {
+      return incidents.map((i) => ({ streetId, at: i.at, text: i.text, emoji: i.blocked ? "🛡️" : (badBoy(i.badBoyId)?.emoji ?? "😈") }));
+    }
+
+    /** Bad Boys jetzt in der eigenen Straße ankommen lassen (live, während man spielt). */
+    async function receiveMischief(list: Mischief[]) {
+      const result = accrued();
+      if (!result || list.length === 0) return;
+      let street = result.street;
+      const incidents: Incident[] = [];
+      for (const m of list) {
+        const applied = applyMischief(street, m);
+        street = applied.street;
+        if (applied.incident) incidents.push(applied.incident);
+      }
+      set({ street });
+      await repo.saveStreet(street);
+      await repo.online?.ackMischief(list.map((m) => m.id));
+      const hood = get().neighborhood;
+      if (hood && incidents.length > 0) {
+        const updated = withNews(hood, incidentNews(incidents, street.id));
+        set({ neighborhood: updated });
+        await repo.saveNeighborhood(updated);
+      }
+    }
+
     async function saveNeighborhood(neighborhood: Neighborhood, streets: Street[]) {
       for (const street of streets) await repo.saveStreet(street);
       await repo.saveNeighborhood(neighborhood);
@@ -275,10 +350,21 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           const ownerNames = Object.fromEntries(foreign.map((f) => [f.street.id, f.ownerName]));
           set({ playerStreets, ownerNames, account: account() });
 
-          // Was ist passiert, während niemand zugeschaut hat? Stunde für Stunde: Müll, Umzüge, Miete, Kosten.
+          // Regeln v3: gekauft wird nur noch in der eigenen Straße – alte Käufe bei Nachbarn werden erstattet.
+          const released = releaseForeignPlots(migrated.player, [...hoodStreets, ...foreign.map((f) => f.street)]);
+          hoodStreets.splice(0, hoodStreets.length, ...released.streets.slice(0, hoodStreets.length));
+          const foreignStreets = released.streets.slice(hoodStreets.length);
+
+          // Bad Boys, die inzwischen angekommen sind: von Mitspielern (Server) und von Bots.
+          const fromBots = hood ? botMischief(hood, migrated.street, clock()) : null;
+          const serverMischief = repo.online?.incomingMischief() ?? [];
+          const incoming = [...serverMischief, ...(fromBots?.mischief ?? [])];
+
+          // Was ist passiert, während niemand zugeschaut hat? Stunde für Stunde: Müll, Bad Boys, Umzüge, Miete, Kosten.
           const away = clock() - migrated.player.lastSeen;
-          const before = [migrated.street, ...hoodStreets, ...foreign.map((f) => f.street)];
-          const sim = simulate(migrated.player, before, clock());
+          const before = [migrated.street, ...hoodStreets, ...foreignStreets];
+          const sim = simulate(released.player, before, clock(), incoming);
+          await repo.online?.ackMischief(serverMischief.map((m) => m.id));
           const { player } = sim;
           const [street, ...others] = sim.streets;
           hoodStreets.splice(0, hoodStreets.length, ...others.slice(0, hoodStreets.length));
@@ -287,12 +373,14 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           await save(player, street);
           for (const changed of foreignNow.filter((s, i) => s !== foreign[i].street)) await repo.saveStreet(changed);
           for (const s of sim.streets) lastSaved.set(s.id, visibleState(s));
-          const report = { income: sim.income, upkeep: sim.upkeep, movedIn: sim.movedIn, movedOut: sim.movedOut };
-          const offlineReport = away >= OFFLINE_NOTICE_MIN_MS && (report.income >= 1 || report.upkeep >= 1) ? report : null;
+          const report = { income: sim.income, upkeep: sim.upkeep, movedIn: sim.movedIn, movedOut: sim.movedOut, refund: released.refund };
+          const offlineReport =
+            (away >= OFFLINE_NOTICE_MIN_MS && (report.income >= 1 || report.upkeep >= 1)) || report.refund > 0 ? report : null;
 
           if (hood) {
             // Was haben die Bots seit dem letzten Besuch getan?
-            const simulated = simulateNeighborhood(hood, hoodStreets, clock());
+            const simulated = simulateNeighborhood(fromBots!.neighborhood, hoodStreets, clock());
+            simulated.neighborhood = withNews(simulated.neighborhood, incidentNews(sim.incidents, street.id));
             await saveNeighborhood(simulated.neighborhood, simulated.streets);
             set({
               status: "ready",
@@ -304,7 +392,11 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
             });
             // Was haben echte Mitspieler inzwischen getan – in meiner Straße und in ihren?
             await recordNews([street, ...foreignNow]);
-            if (repo.online) void get().loadCity();
+            // Erst die Mitspieler holen, dann die Zeitung drucken (sie berichtet auch über sie).
+            void (async () => {
+              if (repo.online) await get().loadCity();
+              await get().publishPaper();
+            })();
           } else {
             set({ status: "ready", player, street, offlineReport });
             void setupNeighborhood(street);
@@ -340,6 +432,8 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         await repo.savePlayer(result.player);
         // Straßen nur speichern, wenn man etwas sieht (Bewohner, Müll) – nicht jede Sekunde.
         await saveIfVisiblyChanged(allStreets());
+        // Neuer Tag, während man spielt → neue Zeitung.
+        if (get().neighborhood?.paper && get().neighborhood!.paper!.issue.day !== paperDay(clock())) await get().publishPaper();
       },
 
       async collect() {
@@ -356,6 +450,8 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         const target = streetById(streetId);
         const plot = target?.plots.find((p) => p.id === plotId);
         if (!result || !target || !plot) return { ok: false, reason: "not-found" };
+        // Gekauft wird nur in der eigenen Straße.
+        if (target.id !== result.street.id) return { ok: false, reason: "not-allowed" };
         const price = currentPrice(allStreets(), target, plot, result.player.id);
         const bought = buyPlot(result.player, target, plotId, clock(), price);
         if (!bought.ok) return bought;
@@ -371,18 +467,6 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           set({ player: refunded });
           await repo.savePlayer(refunded);
           return { ok: false, reason: "taken" };
-        }
-
-        // Beim Nachbarn eingekauft → der Bot sagt etwas dazu (steht auch in den Neuigkeiten).
-        const neighborhood = get().neighborhood;
-        const bot = neighborhood?.bots.find((b) => b.streetId === target.id);
-        const greeting = bot && personaOf(bot.character)?.greeting;
-        if (neighborhood && bot && greeting) {
-          const event = { botId: bot.id, streetId: target.id, at: clock(), text: `${bot.name}: „${greeting}“` };
-          const updated = { ...neighborhood, news: [event, ...neighborhood.news].slice(0, NEWS_LIMIT), newsSeenAt: clock() };
-          set({ neighborhood: updated });
-          await repo.saveNeighborhood(updated);
-          return { ...bought, greeting: `${bot.avatar} ${bot.name}: „${greeting}“` };
         }
         return bought;
       },
@@ -507,6 +591,8 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         const { street, playerStreets } = get();
         if (!online || !street) return;
         try {
+          // Neue Bad Boys im Posteingang?
+          await receiveMischief(await online.fetchMischief());
           const own = await online.fetchStreet(street.id);
           // Miete bis jetzt mit dem alten Stand verbuchen, dann den neuen übernehmen.
           if (own && get().street) {
@@ -564,6 +650,115 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
           console.warn("Mitspieler konnten nicht geladen werden", error);
           set({ cityStreetIds: get().cityStreetIds ?? [] });
         }
+      },
+
+      async publishPaper() {
+        const { neighborhood, street, player, neighborStreets, playerStreets, ownerNames } = get();
+        if (!neighborhood || !street || !player) return;
+        if (neighborhood.paper?.issue.day === paperDay(clock())) return;
+        const botNames = Object.fromEntries(neighborhood.bots.map((b) => [b.streetId, b.name]));
+        const nearby = nearbyStreets(street, Object.values(playerStreets)).filter((s) => ownerNames[s.id]).slice(0, 5);
+        const streets: PaperStreet[] = [
+          { street, ownerName: player.name, own: true },
+          ...Object.values(neighborStreets).flatMap((s) => (botNames[s.id] ? [{ street: s, ownerName: botNames[s.id], own: false }] : [])),
+          ...nearby.map((s) => ({ street: s, ownerName: ownerNames[s.id], own: false })),
+        ];
+        const since = neighborhood.paper?.issue.at ?? 0;
+        const issue = makeIssue({
+          streets,
+          previous: neighborhood.paper?.stats ?? {},
+          news: neighborhood.news.filter((n) => n.at > since),
+          coins: player.coins,
+          now: clock(),
+        });
+        const stats = Object.fromEntries(streets.map((s) => [s.street.id, paperStats(s.street)]));
+        const updated = { ...get().neighborhood!, paper: { issue, stats, read: false } };
+        set({ neighborhood: updated });
+        await repo.saveNeighborhood(updated);
+      },
+
+      async markPaperRead() {
+        const neighborhood = get().neighborhood;
+        if (!neighborhood?.paper || neighborhood.paper.read) return;
+        const updated = { ...neighborhood, paper: { ...neighborhood.paper, read: true } };
+        set({ neighborhood: updated });
+        await repo.saveNeighborhood(updated);
+      },
+
+      async sendBadBoy(streetId, badBoyId) {
+        const bb = badBoy(badBoyId);
+        const result = accrued();
+        const target = streetById(streetId);
+        if (!bb || !result || !target || target.id === result.street.id) return { ok: false, message: "Da kann niemand hin." };
+        if (result.player.coins < bb.price) return { ok: false, message: `Dafür fehlen dir 🪙 ${Math.ceil(bb.price - result.player.coins)}.` };
+
+        let text: string;
+        let blocked: boolean;
+        const botStreet = !!get().neighborStreets[streetId];
+        if (botStreet) {
+          // Bot-Straße: direkt anwenden – und der Bot sinnt auf Rache.
+          const id = createId();
+          const mischief = { id, badBoyId, at: clock(), blocked: rollBlocked(target, id), senderName: result.player.name };
+          const applied = applyMischief(target, mischief);
+          set(streetPatch(applied.street));
+          await repo.saveStreet(applied.street);
+          blocked = mischief.blocked;
+          text = applied.incident?.text ?? `${bb.name} ist unterwegs.`;
+          const hood = get().neighborhood;
+          if (hood) set({ neighborhood: provokeBot(hood, streetId, clock()) });
+        } else {
+          const sent = await repo.online?.sendMischief(streetId, badBoyId);
+          if (!sent) return { ok: false, message: "Mitspieler erreichst du nur mit Verbindung zum Server." };
+          if (!sent.ok) return { ok: false, message: sent.message };
+          blocked = sent.mischief.blocked;
+          text = blocked
+            ? `Mist! Der Wachschutz ${inStreet(target.name)} hat ${bb.name} erwischt – jetzt wissen alle, dass du es warst.`
+            : `${bb.name} ist unterwegs ${intoStreet(target.name)}. Sobald ${get().ownerNames[streetId] ?? "der Besitzer"} wieder reinschaut, geht es los. 😈`;
+        }
+
+        const player = { ...get().player!, coins: get().player!.coins - bb.price };
+        set({ player });
+        await repo.savePlayer(player);
+        const hood = get().neighborhood;
+        if (hood) {
+          const updated = withNews(hood, [{ streetId, at: clock(), text: `Du hast ${bb.name} geschickt: ${text}`, emoji: bb.emoji }]);
+          set({ neighborhood: { ...updated, newsSeenAt: clock() } });
+          await repo.saveNeighborhood(get().neighborhood!);
+        }
+        return { ok: true, text, blocked };
+      },
+
+      async scrubGraffiti(plotId) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-needed" };
+        const done = scrubGraffiti(result.player, result.street, plotId);
+        if (done.ok) {
+          set({ player: done.player, street: done.street });
+          await save(done.player, done.street);
+        }
+        return done;
+      },
+
+      async repair(plotId) {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-needed" };
+        const done = repairBuilding(result.player, result.street, plotId);
+        if (done.ok) {
+          set({ player: done.player, street: done.street });
+          await save(done.player, done.street);
+        }
+        return done;
+      },
+
+      async buySecurity() {
+        const result = accrued();
+        if (!result) return { ok: false, reason: "not-needed" };
+        const done = buySecurity(result.player, result.street);
+        if (done.ok) {
+          set({ player: done.player, street: done.street });
+          await save(done.player, done.street);
+        }
+        return done;
       },
 
       async recover(code) {

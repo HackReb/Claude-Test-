@@ -7,6 +7,7 @@ import { BuilderScreen } from "./screens/BuilderScreen";
 import { ClaimScreen } from "./screens/ClaimScreen";
 import { NeighborhoodScreen } from "./screens/NeighborhoodScreen";
 import { NeighborStreetScreen } from "./screens/NeighborStreetScreen";
+import { NewspaperScreen } from "./screens/NewspaperScreen";
 import { PlotScreen } from "./screens/PlotScreen";
 import { ShareScreen } from "./screens/ShareScreen";
 import { GarageScreen } from "./screens/GarageScreen";
@@ -43,6 +44,7 @@ export function App() {
             <Route path="/neighborhood/:streetId/plot/:plotId" element={<PlotScreen />} />
             <Route path="/neighborhood/:streetId/builder/:plotId" element={<BuilderScreen />} />
             <Route path={routes.share} element={<ShareScreen />} />
+            <Route path={routes.paper} element={<NewspaperScreen />} />
             <Route path={routes.garage} element={<GarageScreen />} />
           </Route>
         </Route>

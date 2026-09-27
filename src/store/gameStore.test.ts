@@ -135,8 +135,8 @@ describe("gameStore – Leben auf der Straße", () => {
   });
 });
 
-describe("gameStore – bei Nachbarn bauen", () => {
-  it("kaufen, bauen, Begrüßung, und die Miete von dort kommt auch offline an", async () => {
+describe("gameStore – nur in der eigenen Straße kaufen", () => {
+  it("in Nachbarstraßen kann man nicht kaufen; alte Käufe dort werden beim Start erstattet", async () => {
     const repo = new LocalRepository(memoryStorage());
     let now = 0;
     const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
@@ -147,29 +147,77 @@ describe("gameStore – bei Nachbarn bauen", () => {
     const zoeStreetId = hood.bots.find((b) => b.character === "sweet")!.streetId;
     const zoeStreet = store.getState().neighborStreets[zoeStreetId];
     const plot = zoeStreet.plots.find((p) => p.size === "S" && p.purchasedAt === undefined)!;
+    expect(await store.getState().buyPlot(plot.id, zoeStreetId)).toEqual({ ok: false, reason: "not-allowed" });
+    expect(store.getState().player!.coins).toBe(1000);
 
-    const bought = await store.getState().buyPlot(plot.id, zoeStreetId);
-    expect(bought.ok).toBe(true);
-    expect(bought.greeting).toContain("Zucker-Zoe");
-    expect(store.getState().player!.coins).toBe(1000 - 625);
-    expect(store.getState().neighborhood!.news[0].text).toContain("Willkommen");
+    // Alter Spielstand (Regeln v2): Kalle hatte bei Zoe ein Grundstück mit Kiosk
+    const player = store.getState().player!;
+    const kiosk = buildingFromTemplate(templatesFor("S").find((t) => t.id === "kiosk")!);
+    await repo.saveStreet({
+      ...zoeStreet,
+      plots: zoeStreet.plots.map((p) => (p.id === plot.id ? { ...p, purchasedAt: 1, ownerId: player.id, building: kiosk } : p)),
+    });
+    await repo.savePlayer({ ...player, economy: 2 });
 
-    const home = buildingFromTemplate(templatesFor("S").find((t) => t.id === "kiosk")!);
-    expect(await store.getState().build(plot.id, home, zoeStreetId)).toBe(true);
-    // Bauen auf Zoes eigenem Grundstück ist verboten
-    const zoesOwn = store.getState().neighborStreets[zoeStreetId].plots.find((p) => p.building && !p.ownerId)!;
-    expect(await store.getState().build(zoesOwn.id, home, zoeStreetId)).toBe(false);
-    expect((await store.getState().upgrade(zoesOwn.id, zoeStreetId)).ok).toBe(false);
-
-    // 1 h später neu starten: Miete aus beiden Straßen
-    now = 60 * MIN;
     const later = createGameStore(repo, () => now, { findNeighbors: async () => [] });
     await later.getState().init();
-    const saved = later.getState().neighborStreets[zoeStreetId].plots.find((p) => p.id === plot.id)!;
-    expect(saved.ownerId).toBe(later.getState().player!.id);
-    expect(saved.building).toBeDefined();
-    // Kosten für beide Kioske (je 1,5/Std), Miete auch aus Zoes Straße
-    expect(later.getState().offlineReport!.upkeep).toBeCloseTo(3);
-    expect(saved.building!.occupancy).toBeGreaterThan(0.25);
+    const freed = later.getState().neighborStreets[zoeStreetId].plots.find((p) => p.id === plot.id)!;
+    expect(freed.purchasedAt).toBeUndefined();
+    expect(freed.ownerId).toBeUndefined();
+    expect(freed.building).toBeUndefined();
+    expect(later.getState().player!.coins).toBe(1000 + 625); // 500 × 1,25 zurück
+    expect(later.getState().player!.economy).toBe(3);
+    expect(later.getState().offlineReport!.refund).toBe(625);
+    expect((await repo.loadStreet(zoeStreetId))!.plots.find((p) => p.id === plot.id)!.ownerId).toBeUndefined();
+  });
+});
+
+describe("gameStore – Bad Boys", () => {
+  it("in eine Bot-Straße schicken: kostet, wirkt sofort, steht in den Neuigkeiten – und der Bot rächt sich", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    let now = 0;
+    const store = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await vi.waitFor(() => expect(store.getState().neighborhood).not.toBeNull());
+    const chaos = store.getState().neighborhood!.bots.find((b) => b.character === "chaos")!;
+
+    const sent = await store.getState().sendBadBoy(chaos.streetId, "muelltonnen-marvin");
+    expect(sent).toMatchObject({ ok: true, blocked: false });
+    expect(store.getState().player!.coins).toBe(1000 - 160);
+    expect(store.getState().neighborStreets[chaos.streetId].litter).toHaveLength(6);
+    expect(store.getState().neighborhood!.news[0].text).toContain("Mülltonnen-Marvin");
+    expect((await repo.loadStreet(chaos.streetId))!.litter).toHaveLength(6);
+
+    // Zu wenig Geld / eigene Straße geht nicht
+    expect((await store.getState().sendBadBoy(store.getState().street!.id, "gassi-gabi")).ok).toBe(false);
+
+    // Chaos-Chris schickt bald jemanden zurück: 7 Stunden später war schon Besuch da.
+    await repo.saveNeighborhood(store.getState().neighborhood!);
+    now = 7 * 60 * MIN;
+    const later = createGameStore(repo, () => now, { findNeighbors: async () => [] });
+    await later.getState().init();
+    const street = later.getState().street!;
+    expect(street.incidents?.length).toBe(1);
+    expect(later.getState().neighborhood!.news.some((n) => n.text === street.incidents![0].text)).toBe(true);
+  });
+
+  it("Graffiti wegschrubben, Reparieren und Wachschutz kosten Münzen und werden gespeichert", async () => {
+    const repo = new LocalRepository(memoryStorage());
+    const store = createGameStore(repo, () => 0, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    const kiosk = store.getState().street!.plots.find((p) => p.building)!;
+    store.setState({
+      street: {
+        ...store.getState().street!,
+        plots: store.getState().street!.plots.map((p) => (p.id === kiosk.id ? { ...p, building: { ...p.building!, graffiti: "LOL", damaged: true } } : p)),
+      },
+    });
+    expect((await store.getState().scrubGraffiti(kiosk.id)).ok).toBe(true);
+    expect((await store.getState().repair(kiosk.id)).ok).toBe(true);
+    expect((await store.getState().buySecurity()).ok).toBe(true);
+    const saved = (await repo.loadStreet(store.getState().street!.id))!;
+    expect(saved.plots.find((p) => p.id === kiosk.id)!.building).not.toHaveProperty("graffiti");
+    expect(saved.security).toBe(1);
+    expect(store.getState().player!.coins).toBe(1000 - 25 - 60 - 400);
   });
 });

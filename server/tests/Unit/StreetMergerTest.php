@@ -43,25 +43,25 @@ final class StreetMergerTest extends TestCase
         return $street;
     }
 
-    public function testVisitorBuysAFreePlot(): void
+    public function testVisitorsCannotBuy(): void
     {
         $current = $this->street();
         $incoming = $this->withPlot($current, 'plot-2', ['purchasedAt' => 5, 'ownerId' => 'player-zoe']);
 
         $merged = (new StreetMerger())->merge($current, $incoming, 'player-zoe', false);
 
-        self::assertSame('player-zoe', $this->plot($merged, 'plot-2')['ownerId']);
-        self::assertSame('player-zoe', StreetMerger::plotOwner($this->plot($merged, 'plot-2'), 'player-kalle'));
+        self::assertSame($current, $merged);
     }
 
-    public function testFirstBuyerWins(): void
+    public function testVisitorReleasesAnOldPlot(): void
     {
-        $current = $this->withPlot($this->street(), 'plot-2', ['purchasedAt' => 5, 'ownerId' => 'player-zoe']);
-        $incoming = $this->withPlot($this->street(), 'plot-2', ['purchasedAt' => 6, 'ownerId' => 'player-max']);
+        $current = $this->withPlot($this->street(), 'plot-2', ['purchasedAt' => 5, 'ownerId' => 'player-zoe', 'building' => ['name' => 'Zoes Eisdiele']]);
+        $incoming = $this->street(); // Grundstück 2 wieder frei
 
-        $merged = (new StreetMerger())->merge($current, $incoming, 'player-max', false);
+        $plot = $this->plot((new StreetMerger())->merge($current, $incoming, 'player-zoe', false), 'plot-2');
 
-        self::assertSame('player-zoe', $this->plot($merged, 'plot-2')['ownerId']);
+        self::assertSame(['id' => 'plot-2', 'size' => 'M', 'side' => 'left', 'index' => 1, 'price' => 1500], $plot);
+        self::assertNull(StreetMerger::plotOwner($plot, 'player-kalle'));
     }
 
     public function testVisitorCannotTouchOtherPlotsOrStreetFields(): void
@@ -76,15 +76,12 @@ final class StreetMergerTest extends TestCase
         self::assertSame($current, $merged);
     }
 
-    public function testVisitorBuildsOnOwnPlot(): void
+    public function testVisitorCannotBuildOnOldPlotAnymore(): void
     {
         $current = $this->withPlot($this->street(), 'plot-2', ['purchasedAt' => 5, 'ownerId' => 'player-zoe']);
-        $incoming = $this->withPlot($current, 'plot-2', ['building' => ['name' => 'Zoes Eisdiele'], 'price' => 1]);
+        $incoming = $this->withPlot($current, 'plot-2', ['building' => ['name' => 'Zoes Eisdiele']]);
 
-        $plot = $this->plot((new StreetMerger())->merge($current, $incoming, 'player-zoe', false), 'plot-2');
-
-        self::assertSame('Zoes Eisdiele', $plot['building']['name']);
-        self::assertSame(1500, $plot['price'], 'Grundpreis bleibt');
+        self::assertSame($current, (new StreetMerger())->merge($current, $incoming, 'player-zoe', false));
     }
 
     public function testOwnerKeepsHandsOffForeignPlotsButEditsTheRest(): void

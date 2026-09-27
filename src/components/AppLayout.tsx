@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { formatCoins } from "../format";
+import { residentsOf } from "../game/life";
 import { ownedStreetName } from "../game/names";
 import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
@@ -16,6 +17,7 @@ export function AppLayout() {
   const street = useGameStore((s) => s.street)!;
   const tick = useGameStore((s) => s.tick);
   const refresh = useGameStore((s) => s.refresh);
+  const paperUnread = useGameStore((s) => !!s.neighborhood?.paper && !s.neighborhood.paper.read);
   const online = useGameStore((s) => s.account?.status === "online");
   const unreadNews = useGameStore(
     (s) => s.neighborhood?.news.filter((n) => n.at > s.neighborhood!.newsSeenAt).length ?? 0,
@@ -50,7 +52,9 @@ export function AppLayout() {
       <header className="topbar">
         <div className="topbar-street">
           <span className="topbar-street-name">{ownedStreetName(player.name, street.name)}</span>
-          <span className="topbar-city">{formatPlace(street)}</span>
+          <span className="topbar-city">
+            {formatPlace(street)} · 👥 {Math.round(residentsOf(street))}
+          </span>
         </div>
         <SoundToggle />
         <div className={`coins${player.coins < 0 ? " negative" : ""}`} aria-label={`${Math.floor(player.coins)} Münzen${player.coins < 0 ? " – im Minus" : ""}`}>
@@ -71,6 +75,14 @@ export function AppLayout() {
           {unreadNews > 0 && (
             <b className="nav-badge" aria-label={`${unreadNews} Neuigkeiten`}>
               {unreadNews > 9 ? "9+" : unreadNews}
+            </b>
+          )}
+        </NavLink>
+        <NavLink to={routes.paper}>
+          <span aria-hidden>📰</span>Zeitung
+          {paperUnread && (
+            <b className="nav-badge" aria-label="Neue Ausgabe">
+              !
             </b>
           )}
         </NavLink>

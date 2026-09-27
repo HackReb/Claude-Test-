@@ -1,4 +1,5 @@
 import { capacityOf, ECONOMY } from "../config/economy";
+import { MISCHIEF } from "../config/badboys";
 import { LIFE } from "../config/life";
 import type { Building, BuildingUse, LitterItem, LitterKind, Player, Plot, Street } from "../model/types";
 import { getPart } from "../parts/catalog";
@@ -22,6 +23,8 @@ export interface StreetStats {
   shops: number;
   playgrounds: number;
   litter: number;
+  graffiti: number;
+  damaged: number;
 }
 
 export function streetStats(street: Street): StreetStats {
@@ -31,6 +34,8 @@ export function streetStats(street: Street): StreetStats {
     shops: buildings.filter((p) => useOf(p.building) === "commercial").length,
     playgrounds: street.plots.filter((p) => p.purchasedAt !== undefined && p.amenity === "playground").length,
     litter: street.litter?.length ?? 0,
+    graffiti: buildings.filter((p) => p.building.graffiti).length,
+    damaged: buildings.filter((p) => p.building.damaged).length,
   };
 }
 
@@ -52,12 +57,15 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 /** Wohlfühl-Liste für Wohnhäuser in dieser Straße. */
 export function streetNeeds(street: Street): Need[] {
   const stats = streetStats(street);
-  const cleanliness = Math.max(LIFE.minCleanliness, 1 - stats.litter * LIFE.litterComfortLoss);
+  // Graffiti stört wie mehrere Dreck-Teile.
+  const dirt = stats.litter + stats.graffiti * MISCHIEF.graffitiAsLitter;
+  const cleanliness = Math.max(LIFE.minCleanliness, 1 - dirt * LIFE.litterComfortLoss);
+  const what = [stats.litter > 0 && `${stats.litter}× Dreck`, stats.graffiti > 0 && `${stats.graffiti}× Graffiti`].filter(Boolean).join(", ");
   return [
     {
       id: "clean",
-      label: stats.litter === 0 ? "Straße sauber" : stats.litter < LIFE.dirtyThreshold ? `Fast sauber (${stats.litter}× Dreck)` : `${stats.litter}× Dreck auf dem Gehweg`,
-      met: stats.litter < LIFE.dirtyThreshold,
+      label: dirt === 0 ? "Straße sauber" : dirt < LIFE.dirtyThreshold ? `Fast sauber (${what})` : `${what} in der Straße`,
+      met: dirt < LIFE.dirtyThreshold,
       factor: cleanliness,
     },
     { id: "playground", label: "Spielplatz für die Kinder", met: stats.playgrounds > 0, factor: stats.playgrounds > 0 ? 1 : LIFE.noPlaygroundFactor },
@@ -94,12 +102,14 @@ function shopPlacesOf(street: Street): number {
 
 /** Wohin sich die Belegung eines Gebäudes gerade bewegt (0–1). */
 export function targetOccupancy(street: Street, plot: Plot & { building: Building }): number {
-  if (useOf(plot.building) === "residential") return homeComfort(street);
+  // Kaputte Fenster: da will keiner wohnen oder einkaufen, bis repariert ist.
+  const damage = plot.building.damaged ? MISCHIEF.damagedFactor : 1;
+  if (useOf(plot.building) === "residential") return homeComfort(street) * damage;
   const litter = street.litter?.length ?? 0;
   const cleanliness = Math.max(LIFE.shopMinCleanliness, 1 - litter * LIFE.shopLitterLoss);
   const demand = shopPlacesOf(street);
   const customers = demand > 0 ? Math.min(1, residentsOf(street) / demand) : 0;
-  return clamp01(cleanliness * (LIFE.walkInCustomers + (1 - LIFE.walkInCustomers) * customers));
+  return clamp01(cleanliness * damage * (LIFE.walkInCustomers + (1 - LIFE.walkInCustomers) * customers));
 }
 
 /** Belegung nach `hours` Stunden: Einziehen geht schneller als Ausziehen. */
@@ -201,13 +211,18 @@ export function residentVoices(street: Street): Voice[] {
   const needs = Object.fromEntries(streetNeeds(street).map((n) => [n.id, n])) as Record<NeedId, Need>;
   const voices: Voice[] = [];
 
-  if (stats.litter >= LIFE.dirtyThreshold && buildings.length > 0) {
+  if (!needs.clean.met && buildings.length > 0) {
     const speaker = homes[0] ?? shops[0];
     voices.push({
       id: "dirty",
       emoji: "😠",
       speaker: `Bewohner von ${speaker.building.name}`,
-      quote: stats.litter >= 8 ? "Das ist ja eine Müllhalde hier! Wir ziehen weg!" : "Hier liegt überall Müll und Hundekacke …",
+      quote:
+        stats.graffiti > 0 && stats.litter < LIFE.dirtyThreshold
+          ? "Wer hat denn unsere Hauswand vollgeschmiert?!"
+          : stats.litter >= 8
+            ? "Das ist ja eine Müllhalde hier! Wir ziehen weg!"
+            : "Hier liegt überall Müll und Hundekacke …",
       effect: `Häuser werden höchstens zu ${pct(needs.clean.factor)} voll, bis es sauber ist – die Leute ziehen aus. Tipp den Dreck auf dem Gehweg an!`,
       tone: "complaint",
       plotId: speaker.id,
@@ -247,6 +262,19 @@ export function residentVoices(street: Street): Voice[] {
       effect: `Ohne Bewohner kommt nur Laufkundschaft (${pct(LIFE.walkInCustomers)}). Bau Wohnhäuser – Bewohner kaufen in deinen Läden ein.`,
       tone: "wish",
       plotId: shops[0].id,
+    });
+  }
+
+  const broken = buildings.find((p) => p.building.damaged);
+  if (broken) {
+    voices.push({
+      id: "damaged",
+      emoji: "🪟",
+      speaker: `Bewohner von ${broken.building.name}`,
+      quote: "Uns hat jemand das Fenster eingeworfen! Es zieht!",
+      effect: `Kaputte Häuser füllen sich höchstens zu ${pct(MISCHIEF.damagedFactor)} – lass es reparieren (tipp das Haus an).`,
+      tone: "complaint",
+      plotId: broken.id,
     });
   }
 

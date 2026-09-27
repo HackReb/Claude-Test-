@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountCard } from "../components/AccountCard";
+import { SecurityCard } from "../components/SecurityCard";
 import { WellbeingCard } from "../components/WellbeingCard";
 import { ambienceFor } from "../audio/ambience";
 import { sound } from "../audio/sound";
@@ -20,6 +21,7 @@ export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
   const player = useGameStore((s) => s.player)!;
   const offlineReport = useGameStore((s) => s.offlineReport);
+  const paper = useGameStore((s) => s.neighborhood?.paper);
   const dismissOfflineReport = useGameStore((s) => s.dismissOfflineReport);
   const collect = useGameStore((s) => s.collect);
   const reset = useGameStore((s) => s.reset);
@@ -85,6 +87,12 @@ export function StreetScreen() {
             {Math.round(offlineReport.movedIn) > 0 && ` ${Math.round(offlineReport.movedIn)} Bewohner eingezogen.`}
             {Math.round(offlineReport.movedOut) > 0 && ` 😢 ${Math.round(offlineReport.movedOut)} Bewohner ausgezogen – kümmer dich um deine Straße!`}
           </p>
+          {!!offlineReport.refund && (
+            <p>
+              Neu: Gekauft wird nur noch in deiner eigenen Straße. Deine Grundstücke bei Nachbarn wurden erstattet:{" "}
+              <strong>+🪙 {formatCoins(offlineReport.refund)}</strong> aufs Konto.
+            </p>
+          )}
           <div className="actions">
             <button
               type="button"
@@ -161,8 +169,18 @@ export function StreetScreen() {
       )}
       <p className="hint street-hint">Wisch zur Seite für die ganze Straße · tipp ein Grundstück an · Müll und 💩 wegtippen!</p>
 
+      {paper && !paper.read && paper.issue.stories[0] && (
+        <Link className="card paper-teaser" to={routes.paper}>
+          <span aria-hidden>📰</span>
+          <span>
+            <small>Neu im Babo-Anzeiger</small>
+            <strong>{paper.issue.stories[0].headline}</strong>
+          </span>
+        </Link>
+      )}
       <RentBar />
       <WellbeingCard street={street} playerId={player.id} />
+      <SecurityCard street={street} />
 
       <Link className="card garage-link" to={routes.garage}>
         <span aria-hidden>🚗</span>

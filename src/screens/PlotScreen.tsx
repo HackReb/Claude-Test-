@@ -5,6 +5,7 @@ import { BuildingNameField } from "../components/BuildingNameField";
 import { useLabel } from "../components/UsePicker";
 import { Playground } from "../components/street/Playground";
 import { sound } from "../audio/sound";
+import { MISCHIEF } from "../config/badboys";
 import { LIFE } from "../config/life";
 import { occupancyOf, streetNeeds, targetOccupancy, useOf } from "../game/life";
 import { possessive } from "../game/names";
@@ -22,7 +23,6 @@ export function PlotScreen() {
   const { plotId, streetId } = useParams();
   const ctx = useStreetContext(streetId);
   const playerId = useGameStore((s) => s.player!.id);
-  const [greeting, setGreeting] = useState<string | null>(null);
   const plot = ctx?.street.plots.find((p) => p.id === plotId);
   if (!ctx || !plot) return <Navigate to={ctx?.backRoute ?? routes.street} replace />;
 
@@ -43,18 +43,18 @@ export function PlotScreen() {
         {cfg.maxFloors > 1 ? "e" : ""}
       </p>
 
-      {greeting && (
-        <div className="notice card greeting" role="status">
-          <p>{greeting}</p>
-        </div>
-      )}
 
       {mine ? (
         <OwnedPlot plot={plot} ctx={ctx} />
       ) : isOwned(plot) ? (
         <ForeignPlot plot={plot} ctx={ctx} />
+      ) : ctx.own ? (
+        <PlotForSale plot={plot} ctx={ctx} />
       ) : (
-        <PlotForSale plot={plot} ctx={ctx} onGreeting={setGreeting} />
+        <p>
+          Dieses Grundstück ist noch frei – kaufen kann hier aber nur {ctx.ownerName || "der Besitzer der Straße"}. Du baust in deiner eigenen
+          Straße.
+        </p>
       )}
     </div>
   );
@@ -155,6 +155,7 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
             <span className="subtle"> · Kosten 🪙 {formatRate(plotUpkeepPerHour(plot))}/Std.</span>
           </li>
         </ul>
+        {ctx.own && (building.graffiti || building.damaged) && <DamageSection plot={plot} />}
         <UpgradeSection plot={plot} streetId={ctx.streetId} />
         <h2>Umbauen</h2>
         <p className="subtle">Ersetzt {building.name}. Die Upgrade-Stufe bleibt erhalten.</p>
@@ -250,6 +251,55 @@ function PlaygroundOffer({ plot }: { plot: Plot }) {
   );
 }
 
+/** Was Bad Boys angerichtet haben: wegschrubben bzw. reparieren. */
+function DamageSection({ plot }: { plot: Plot }) {
+  const coins = useGameStore((s) => s.player!.coins);
+  const scrub = useGameStore((s) => s.scrubGraffiti);
+  const repair = useGameStore((s) => s.repair);
+  const building = plot.building!;
+  const repairCost = MISCHIEF.repairCost[plot.size];
+  return (
+    <div className="card damage-card">
+      {building.graffiti && (
+        <>
+          <p>
+            🎨 Jemand hat <strong>„{building.graffiti}“</strong> an die Wand gesprüht. Die Nachbarn finden das gar nicht lustig.
+          </p>
+          <button
+            type="button"
+            className="btn"
+            disabled={coins < MISCHIEF.scrubCost}
+            onClick={async () => {
+              if ((await scrub(plot.id)).ok) sound.sparkle();
+              else sound.deny();
+            }}
+          >
+            🧽 Wegschrubben für 🪙 {formatCoins(MISCHIEF.scrubCost)}
+          </button>
+        </>
+      )}
+      {building.damaged && (
+        <>
+          <p>
+            💥 Fenster kaputt! Solange nicht repariert ist, füllt sich das Haus höchstens zu {Math.round(MISCHIEF.damagedFactor * 100)} %.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={coins < repairCost}
+            onClick={async () => {
+              if ((await repair(plot.id)).ok) sound.build();
+              else sound.deny();
+            }}
+          >
+            🔧 Reparieren für 🪙 {formatCoins(repairCost)}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function UpgradeSection({ plot, streetId }: { plot: Plot; streetId?: string }) {
   const coins = useGameStore((s) => s.player!.coins);
   const upgrade = useGameStore((s) => s.upgrade);
@@ -277,7 +327,7 @@ function UpgradeSection({ plot, streetId }: { plot: Plot; streetId?: string }) {
   );
 }
 
-function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext; onGreeting: (text: string) => void }) {
+function PlotForSale({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   const streets = useAllStreets();
   const player = useGameStore((s) => s.player)!;
   const buyPlot = useGameStore((s) => s.buyPlot);
@@ -297,10 +347,6 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
       const result = await buyPlot(plot.id, ctx.streetId);
       if (result.ok) {
         sound.cash();
-        if (result.greeting) {
-          onGreeting(result.greeting);
-          sound.bubble();
-        }
       } else {
         sound.deny();
         if (result.reason === "taken") setTooLate(true);
@@ -318,12 +364,6 @@ function PlotForSale({ plot, ctx, onGreeting }: { plot: Plot; ctx: StreetContext
         {price > basePrice && (
           <span className="subtle">
             Startpreis {formatCoins(basePrice)}, +{Math.round(ECONOMY.plotPriceIncrease * 100)} % je gekauftem Grundstück
-            {!ctx.own && `, +${Math.round((ECONOMY.neighborPriceFactor - 1) * 100)} % Aufpreis beim Nachbarn`}
-          </span>
-        )}
-        {!ctx.own && (
-          <span className="subtle">
-            Gehört dann dir – mitten in {possessive(ctx.ownerName)} {ctx.street.name}. Die Miete geht an dich.
           </span>
         )}
         <span className="subtle">

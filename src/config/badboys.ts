@@ -1,0 +1,74 @@
+/** Bad Boys: Man schickt sie gegen Geld in Nachbarstraßen, wo sie Ärger machen. Alle Werte hier anpassbar. */
+
+export type MischiefKind = "trash" | "poop" | "graffiti" | "smash";
+
+export interface BadBoy {
+  id: string;
+  name: string;
+  emoji: string;
+  price: number;
+  kind: MischiefKind;
+  /** Wie viel: Müll-/Haufen-Teile, bei Graffiti und Kaputtmachen immer 1 Gebäude. */
+  amount: number;
+  blurb: string;
+}
+
+export const BAD_BOYS: BadBoy[] = [
+  { id: "kaugummi-klaus", name: "Kaugummi-Klaus", emoji: "🫧", price: 80, kind: "trash", amount: 3, blurb: "Klebt Kaugummi an alles und lässt Chipstüten fallen." },
+  { id: "gassi-gabi", name: "Gassi-Gabi mit drei Dackeln", emoji: "🐕", price: 110, kind: "poop", amount: 3, blurb: "Geht dreimal täglich Gassi. Tüten hat sie nie dabei." },
+  { id: "muelltonnen-marvin", name: "Mülltonnen-Marvin", emoji: "🗑️", price: 160, kind: "trash", amount: 6, blurb: "Wirft aus Langeweile alle Mülltonnen um." },
+  { id: "spruehdosen-kevin", name: "Sprühdosen-Kevin", emoji: "🎨", price: 180, kind: "graffiti", amount: 1, blurb: "Hält sich für einen Künstler. Die Nachbarn nicht." },
+  { id: "knallfrosch-zwillinge", name: "Die Knallfrosch-Zwillinge", emoji: "🧨", price: 260, kind: "smash", amount: 1, blurb: "Machen Krach und dabei gern ein Fenster kaputt." },
+];
+
+export const badBoy = (id: string) => BAD_BOYS.find((b) => b.id === id);
+
+/** Sprüche, die Sprühdosen-Kevin & Co. an Häuser sprühen. */
+export const GRAFFITI_TAGS = [
+  "KEVIN WAR HIER",
+  "BABO?",
+  "LOL",
+  "Mett ist Gemüse",
+  "Wer das liest, ist doof",
+  "HUPEN!",
+  "Ich ♥ Dackel",
+  "Frag nicht",
+  "Döner > alles",
+  "Hier war Kunst",
+];
+
+export const MISCHIEF = {
+  /** Graffiti stört die Bewohner wie so viele Dreck-Teile. */
+  graffitiAsLitter: 2,
+  /** Kaputte Fenster: das Haus füllt sich höchstens noch zu diesem Anteil. */
+  damagedFactor: 0.5,
+  /** Graffiti wegschrubben kostet Reinigungsmittel. */
+  scrubCost: 25,
+  /** Reparatur je Grundstücksgröße. */
+  repairCost: { S: 60, M: 120, L: 250 },
+  /** So viele Vorfälle merkt sich eine Straße (für Neuigkeiten und die Zeitung). */
+  incidentLimit: 20,
+} as const;
+
+/** Wachschutz für die eigene Straße: fängt einen Teil der Bad Boys ab. */
+export const SECURITY = [
+  { level: 1, name: "Nachbarschaftswache", emoji: "🦺", price: 400, upkeepPerHour: 2, blockChance: 0.4 },
+  { level: 2, name: "Wachdienst mit Kameras", emoji: "📹", price: 1200, upkeepPerHour: 5, blockChance: 0.75 },
+] as const;
+
+export const securityOf = (level: number | undefined) => SECURITY.find((s) => s.level === level);
+
+/** Bots schicken auch mal jemanden vorbei: alle so viele Stunden (je Charakter), `null` = nie. */
+export const BOT_MISCHIEF = {
+  everyHours: { chaos: 20, party: 36, concrete: 60, sweet: null, nature: null } as Record<string, number | null>,
+  /** Wen welcher Bot bevorzugt schickt. */
+  favorites: {
+    chaos: ["spruehdosen-kevin", "muelltonnen-marvin", "knallfrosch-zwillinge"],
+    party: ["kaugummi-klaus", "knallfrosch-zwillinge"],
+    concrete: ["gassi-gabi"],
+  } as Record<string, string[]>,
+  /** Wer einen Bot ärgert, bekommt schneller Besuch zurück (in Stunden). */
+  revengeAfterHours: 6,
+  /** Höchstens so viele Bot-Streiche werden nach langer Abwesenheit nachgeholt. */
+  maxCatchUp: 3,
+} as const;

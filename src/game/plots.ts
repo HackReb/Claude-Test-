@@ -1,4 +1,4 @@
-import { ECONOMY, plotPrice, upgradeCost } from "../config/economy";
+import { plotPrice, upgradeCost } from "../config/economy";
 import type { Building, Player, Plot, Street } from "../model/types";
 import { LIFE } from "../config/life";
 import { useOf } from "./life";
@@ -18,29 +18,28 @@ export function plotsBought(streets: Street[], playerId: string): number {
   return streets.reduce((sum, s) => sum + s.plots.filter((p) => belongsTo(s, p, playerId) && !p.gifted).length, 0);
 }
 
-/** Kaufpreis inkl. Preisanstieg über alle Straßen und Aufpreis in fremden Straßen. */
-export function currentPrice(streets: Street[], street: Street, plot: Plot, playerId: string): number {
-  const base = plotPrice(plot.size, plotsBought(streets, playerId));
-  return street.ownerId === playerId ? base : Math.round(base * ECONOMY.neighborPriceFactor);
+/** Kaufpreis inkl. Preisanstieg je schon gekauftem Grundstück. */
+export function currentPrice(streets: Street[], _street: Street, plot: Plot, playerId: string): number {
+  return plotPrice(plot.size, plotsBought(streets, playerId));
 }
 
 export type BuyResult =
   | { ok: true; player: Player; street: Street; price: number }
-  | { ok: false; reason: "not-found" | "owned" | "too-expensive" };
+  | { ok: false; reason: "not-found" | "owned" | "too-expensive" | "not-allowed" };
 
 /**
- * Kauft ein freies Grundstück. In einer fremden Straße wird der Spieler als Käufer eingetragen.
+ * Kauft ein freies Grundstück – nur in der eigenen Straße (in fremden Straßen kauft man nicht).
  * `price` ohne Angabe: Preis, als gäbe es nur diese eine Straße.
  */
 export function buyPlot(player: Player, street: Street, plotId: string, now: number, price?: number): BuyResult {
   const plot = street.plots.find((p) => p.id === plotId);
   if (!plot) return { ok: false, reason: "not-found" };
+  if (street.ownerId !== player.id) return { ok: false, reason: "not-allowed" };
   if (isOwned(plot)) return { ok: false, reason: "owned" };
   const cost = price ?? currentPrice([street], street, plot, player.id);
   if (player.coins < cost) return { ok: false, reason: "too-expensive" };
 
-  const foreign = street.ownerId !== player.id;
-  const bought: Plot = { ...plot, purchasedAt: now, ...(foreign && { ownerId: player.id }) };
+  const bought: Plot = { ...plot, purchasedAt: now };
   return {
     ok: true,
     price: cost,

@@ -1,3 +1,4 @@
+import { inStreet } from "./names";
 import type { NeighborEvent, OsmStreetRef, Plot, Street, StreetDigest } from "../model/types";
 
 /** Bis zu dieser Entfernung (Luftlinie) gelten Straßen echter Mitspieler als Nachbarn auf der Karte. */
@@ -58,7 +59,7 @@ export interface NewsContext {
 export function streetNews(before: StreetDigest | undefined, street: Street, { me, names, at }: NewsContext): NeighborEvent[] {
   if (!before) return [];
   const mine = street.ownerId === me;
-  const where = mine ? "in deiner Straße" : `in der ${street.name}`;
+  const where = mine ? "in deiner Straße" : inStreet(street.name);
   const events: NeighborEvent[] = [];
   for (const plot of street.plots) {
     const owner = ownerOf(street, plot);

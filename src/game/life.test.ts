@@ -128,8 +128,9 @@ describe("Müll", () => {
     const litter = spawnLitter(kioskOnly, 24 * HOUR).litter!;
     expect(litter.length).toBeGreaterThan(0);
     expect(litter.every((l) => l.kind === "trash")).toBe(true);
-    const withHomes = { ...withPlot(start(), "L", "gummibaerchenschloss").street, id: "mithunden" };
-    const many = [1, 2, 3].reduce((st) => withPlot({ player: start().player, street: st }, "M", "wohnhaus").street, withHomes);
+    const castle = withPlot(start(), "L", "gummibaerchenschloss");
+    const withHomes = { ...castle.street, id: "mithunden" };
+    const many = [1, 2, 3].reduce((st) => withPlot({ player: castle.player, street: st }, "M", "wohnhaus").street, withHomes);
     expect(spawnLitter({ ...many, id: "mithunden" }, 24 * HOUR).litter!.some((l) => l.kind === "poop")).toBe(true);
   });
 

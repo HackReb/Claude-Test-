@@ -184,6 +184,32 @@ describe("ApiRepository", () => {
     expect(server.calls.at(-1)?.token).toBe("tok-2");
   });
 
+  it("Bad Boys: schicken, Posteingang und Bestätigung (auch offline nachgereicht)", async () => {
+    const kevin = { id: "m1", badBoyId: "spruehdosen-kevin", at: 5, blocked: false, senderName: "Maxim" };
+    const { repo, server } = setup((c) => {
+      if (c.path === "/streets/street-x/mischief") return { status: 201, body: { mischief: { ...kevin, id: "m9" } } };
+      if (c.path === "/streets/street-y/mischief") return { status: 429, body: { error: "Deine Bad Boys brauchen eine Pause." } };
+      if (c.path === "/me/mischief") return { status: 200, body: { mischief: [kevin] } };
+      return undefined;
+    });
+    const { player, street } = start();
+    await repo.online.register(player, street);
+
+    expect(await repo.online.sendMischief("street-x", "spruehdosen-kevin")).toMatchObject({ ok: true, mischief: { id: "m9" } });
+    expect(await repo.online.sendMischief("street-y", "gassi-gabi")).toEqual({ ok: false, message: "Deine Bad Boys brauchen eine Pause." });
+
+    expect(await repo.online.fetchMischief()).toEqual([kevin]);
+    server.setOffline(true);
+    await repo.online.ackMischief(["m1"]);
+    await repo.flush();
+    expect(repo.online.incomingMischief()).toEqual([]);
+    // Noch nicht bestätigt beim Server → kommt beim Abholen nicht wieder rein
+    server.setOffline(false);
+    expect(await repo.online.fetchMischief()).toEqual([]);
+    await repo.flush();
+    expect(server.calls.find((c) => c.path === "/me/mischief/ack")?.body).toEqual({ ids: ["m1"] });
+  });
+
   it("normalisiert Codes wie der Server", () => {
     expect(normalizeCode(" babo 7kqx-m2pd 9trw ")).toBe("BABO-7KQX-M2PD-9TRW");
     expect(normalizeCode("7KQXM2PD9TRW")).toBe("BABO-7KQX-M2PD-9TRW");

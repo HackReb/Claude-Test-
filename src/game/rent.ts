@@ -1,6 +1,8 @@
 import { capacityOf, ECONOMY, rentLevel, upkeepOf } from "../config/economy";
-import type { Building, Player, Plot, PlotSize, Street } from "../model/types";
+import type { Building, Incident, Mischief, Player, Plot, PlotSize, Street } from "../model/types";
 import { moveTowards, occupancyOf, spawnLitter, targetOccupancy, useOf } from "./life";
+import { securityOf } from "../config/badboys";
+import { applyMischief } from "./mischief";
 import { belongsTo } from "./plots";
 import { getPart } from "../parts/catalog";
 
@@ -39,8 +41,14 @@ export function streetIncomePerHour(street: Street, ownerId: string = street.own
   return street.plots.reduce((sum, plot) => (belongsTo(street, plot, ownerId) ? sum + plotIncomePerHour(street, plot) : sum), 0);
 }
 
+/** Laufende Kosten des Wachschutzes einer Straße (zahlt der Besitzer). */
+export function securityUpkeepPerHour(street: Street): number {
+  return securityOf(street.security)?.upkeepPerHour ?? 0;
+}
+
 export function streetUpkeepPerHour(street: Street, ownerId: string = street.ownerId): number {
-  return street.plots.reduce((sum, plot) => (belongsTo(street, plot, ownerId) ? sum + plotUpkeepPerHour(plot) : sum), 0);
+  const plots = street.plots.reduce((sum, plot) => (belongsTo(street, plot, ownerId) ? sum + plotUpkeepPerHour(plot) : sum), 0);
+  return plots + (ownerId === street.ownerId ? securityUpkeepPerHour(street) : 0);
 }
 
 /** Einnahmen eines Spielers über alle Straßen (eigene + Grundstücke bei Nachbarn). */
@@ -62,6 +70,8 @@ export interface Simulation {
   /** Ein- und ausgezogene Bewohner (Wohnhäuser, gerundet erst in der Anzeige). */
   movedIn: number;
   movedOut: number;
+  /** Was Bad Boys in der eigenen Straße angestellt haben. */
+  incidents: Incident[];
 }
 
 /**
@@ -69,9 +79,24 @@ export interface Simulation {
  * und Kosten gegenseitig beeinflussen (vermüllt die Straße über Nacht, ziehen Leute aus und die Miete sinkt).
  * Belegung ändert der Spieler nur bei eigenen Gebäuden; Müll entsteht nur in seiner eigenen Straße.
  */
-export function simulate(player: Player, streets: Street[], now: number): Simulation {
-  const result: Simulation = { player, streets, income: 0, upkeep: 0, movedIn: 0, movedOut: 0 };
-  if (now <= player.lastSeen) return result;
+export function simulate(player: Player, streets: Street[], now: number, incoming: Mischief[] = []): Simulation {
+  const result: Simulation = { player, streets, income: 0, upkeep: 0, movedIn: 0, movedOut: 0, incidents: [] };
+  // Bad Boys, die in der eigenen Straße ankommen – zu ihrer Zeit (verspätet eingetroffene sofort).
+  const pending = [...incoming].sort((a, b) => a.at - b.at);
+  const arrive = (street: Street, until: number): Street => {
+    let current = street;
+    while (pending.length > 0 && pending[0].at <= until) {
+      const applied = applyMischief(current, pending.shift()!);
+      current = applied.street;
+      if (applied.incident) result.incidents.push(applied.incident);
+    }
+    return current;
+  };
+  if (now <= player.lastSeen) {
+    if (pending.length === 0) return result;
+    const own = streets.map((s) => (s.id === player.streetId ? arrive(s, Infinity) : s));
+    return { ...result, streets: own };
+  }
 
   let current = streets;
   let t = Math.max(player.lastSeen, now - ECONOMY.maxOfflineHours * HOUR);
@@ -79,7 +104,7 @@ export function simulate(player: Player, streets: Street[], now: number): Simula
     const next = Math.min(now, (Math.floor(t / HOUR) + 1) * HOUR);
     const hours = (next - t) / HOUR;
     current = current.map((street) => {
-      const withLitter = street.id === player.streetId ? spawnLitter(street, t) : street;
+      const withLitter = street.id === player.streetId ? arrive(spawnLitter(street, t), t) : street;
       let changed = withLitter !== street;
       const plots = withLitter.plots.map((plot) => {
         if (!belongsTo(withLitter, plot, player.id)) return plot;
@@ -97,12 +122,13 @@ export function simulate(player: Player, streets: Street[], now: number): Simula
         changed = true;
         return { ...plot, building: { ...plot.building, occupancy: after } };
       });
+      if (street.ownerId === player.id) result.upkeep += securityUpkeepPerHour(street) * hours;
       return changed ? { ...withLitter, plots } : street;
     });
     t = next;
   }
-  // Müll bis genau jetzt nachwürfeln (volle Stunden).
-  current = current.map((street) => (street.id === player.streetId ? spawnLitter(street, now) : street));
+  // Müll bis genau jetzt nachwürfeln (volle Stunden), übrige Bad Boys kommen jetzt an.
+  current = current.map((street) => (street.id === player.streetId ? arrive(spawnLitter(street, now), Infinity) : street));
 
   return {
     ...result,

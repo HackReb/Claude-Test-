@@ -47,8 +47,6 @@ export const ECONOMY = {
 
   /** Preisanstieg je gekauftem Grundstück (0.15 = +15 %) – zählt über alle Straßen. */
   plotPriceIncrease: 0.15,
-  /** Aufpreis für Grundstücke in fremden Straßen (1.25 = +25 %). */
-  neighborPriceFactor: 1.25,
 
   /** Länger als so viele Stunden weg: die Zeit darüber hinaus wird nicht mehr gerechnet (die Welt pausiert). */
   maxOfflineHours: 14 * 24,
@@ -66,10 +64,15 @@ export const ECONOMY = {
 
   /** Spielstände aus der Zeit vor Bewohnern & Kosten: Guthaben wird einmalig auf höchstens so viel gekürzt. */
   legacyCoinsCap: 2000,
+  /** Früher gekaufte Grundstücke in fremden Straßen werden erstattet: Grundpreis × damaliger Aufpreis. */
+  legacyNeighborRefundFactor: 1.25,
 } as const;
 
-/** Version der Spielregeln: 2 = Bewohner & laufende Kosten (ältere Stände werden in `migrateSave` umgestellt). */
-export const CURRENT_ECONOMY = 2;
+/**
+ * Version der Spielregeln (ältere Stände werden in game/migrate.ts umgestellt):
+ * 2 = Bewohner & laufende Kosten, 3 = Kaufen nur noch in der eigenen Straße.
+ */
+export const CURRENT_ECONOMY = 3;
 
 /** Aktueller Kaufpreis eines Grundstücks, nachdem schon `plotsBought` Grundstücke gekauft wurden. */
 export function plotPrice(size: PlotSize, plotsBought: number): number {

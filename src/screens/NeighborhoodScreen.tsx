@@ -90,7 +90,7 @@ export function NeighborhoodScreen() {
             return (
               <li key={`${n.at}-${i}`} className={n.at > neighborhood.newsSeenAt ? "unread" : ""}>
                 <span className="news-avatar" aria-hidden>
-                  {bot?.avatar ?? (n.playerName ? "🧑" : "")}
+                  {n.emoji ?? bot?.avatar ?? (n.playerName ? "🧑" : "📰")}
                 </span>
                 <div>
                   <Link to={n.streetId === street.id ? routes.street : routes.neighborStreet(n.streetId)}>{n.text}</Link>

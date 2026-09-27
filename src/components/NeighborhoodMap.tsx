@@ -1,4 +1,5 @@
 import { bearing, largestGapMiddle, spreadBearings } from "../game/bots";
+import { residentsOf } from "../game/life";
 import { possessive } from "../game/names";
 import type { Bot, Neighborhood, Street } from "../model/types";
 
@@ -72,7 +73,8 @@ export function NeighborhoodMap({ neighborhood, players, playerStreet, playerNam
     const y = Math.min(SIZE - 44, Math.max(40, C - RADIUS * Math.sin(angle)));
     const built = entry.street.plots.filter((p) => p.building).length;
     const mine = entry.street.plots.filter((p) => p.ownerId === playerId).length;
-    return { ...entry, x, y, built, mine };
+    const people = Math.round(residentsOf(entry.street));
+    return { ...entry, x, y, built, mine, people };
   });
 
   return (
@@ -113,7 +115,7 @@ export function NeighborhoodMap({ neighborhood, players, playerStreet, playerNam
         </text>
       </g>
 
-      {nodes.map(({ street, avatar, owner, real, x, y, built, mine }) => {
+      {nodes.map(({ street, avatar, owner, real, x, y, built, mine, people }) => {
         const unread = unreadByStreet[street.id] ?? 0;
         return (
           <g
@@ -121,7 +123,7 @@ export function NeighborhoodMap({ neighborhood, players, playerStreet, playerNam
             className={`map-node${real ? " real" : ""}`}
             role="button"
             tabIndex={0}
-            aria-label={`${street.name} von ${owner}${real ? " (Mitspieler)" : ""}, ${built} Gebäude${mine ? `, ${mine} davon deine Grundstücke` : ""}${unread ? `, ${unread} Neuigkeiten` : ""}`}
+            aria-label={`${street.name} von ${owner}${real ? " (Mitspieler)" : ""}, ${built} Gebäude, ${people} Bewohner${mine ? `, ${mine} davon deine Grundstücke` : ""}${unread ? `, ${unread} Neuigkeiten` : ""}`}
             onClick={() => onSelect(street.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -144,7 +146,7 @@ export function NeighborhoodMap({ neighborhood, players, playerStreet, playerNam
               {shorten(street.name)}
             </text>
             <text x={x} y={y + 36} textAnchor="middle" fontSize={9} fontWeight={700} fill="#7a6a5a">
-              {mine ? `${mine}× deins · ${built} 🏠` : `${shorten(owner, 12)} · ${built} 🏠`}
+              {mine ? `${mine}× deins · 👥 ${people}` : `${shorten(owner, 11)} · 👥 ${people}`}
             </text>
             <circle className="map-avatar" cx={x} cy={y - 8} r={20} fill={real ? "#e3f6ff" : "#fff7e8"} stroke={real ? "#1a73e8" : INK} strokeWidth={real ? 3.5 : 2.5} />
             <text x={x} y={y - 1} textAnchor="middle" fontSize={20}>

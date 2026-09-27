@@ -63,11 +63,10 @@ describe("Neuigkeiten von Mitspielern", () => {
 
   it("wer in meiner Straße kauft, taucht auf – meine eigenen Änderungen nicht", () => {
     const before = digestOf(kalle.street);
+    // Alter Stand: Maxim hatte früher bei Kalle gekauft
     const plot = free(kalle.street);
-    const bought = buyPlot({ ...maxim.player, coins: 1e6 }, kalle.street, plot.id, 1);
-    if (!bought.ok) throw new Error();
-    expect(bought.street.plots.find((p) => p.id === plot.id)?.ownerId).toBe(maxim.player.id);
-    expect(streetNews(before, bought.street, { me: kalle.player.id, names, at: 7 }).map((n) => n.text)).toEqual([
+    const bought = { ...kalle.street, plots: kalle.street.plots.map((p) => (p.id === plot.id ? { ...p, purchasedAt: 1, ownerId: maxim.player.id } : p)) };
+    expect(streetNews(before, bought, { me: kalle.player.id, names, at: 7 }).map((n) => n.text)).toEqual([
       "Maxim hat in deiner Straße ein M-Grundstück gekauft.",
     ]);
     // Kalle baut selbst → keine Neuigkeit

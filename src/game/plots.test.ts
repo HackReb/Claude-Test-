@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
-import { belongsTo, buyPlot, currentPrice, nextUpgrade, placeBuilding, plotsBought, renameBuilding, upgradePlot } from "./plots";
-import { playerIncomePerHour, streetIncomePerHour } from "./rent";
-import { buildingFromTemplate, TEMPLATES } from "./templates";
+import { buyPlot, currentPrice, nextUpgrade, plotsBought, renameBuilding, upgradePlot } from "./plots";
 
 const start = () => claimStreet({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } }, 0);
 const free = (street: Street, size: "S" | "M" | "L") =>
@@ -81,39 +79,9 @@ describe("Umbenennen", () => {
 });
 
 describe("Grundstücke bei Nachbarn", () => {
-  const neighbor = () => {
-    const bot = claimStreet({ playerName: "Zoe", street: { name: "Zuckerallee", city: "Ulm" } }, 0).street;
-    return { ...bot, ownerId: "bot-zoe" };
-  };
-
-  it("kosten 25 % Aufpreis, zählen für den Preisanstieg überall und gehören dem Käufer", () => {
-    const { player, street } = start();
-    const zoe = neighbor();
-    const target = free(zoe, "S");
-    const price = currentPrice([street, zoe], zoe, target, player.id);
-    expect(price).toBe(625); // 500 × 1,25
-    const result = buyPlot(player, zoe, target.id, 5, price);
-    if (!result.ok) throw new Error(result.reason);
-    const bought = result.street.plots.find((p) => p.id === target.id)!;
-    expect(bought.ownerId).toBe(player.id);
-    expect(belongsTo(result.street, bought, player.id)).toBe(true);
-    expect(belongsTo(result.street, bought, "bot-zoe")).toBe(false);
-    // Preisanstieg gilt auch zu Hause
-    expect(plotsBought([street, result.street], player.id)).toBe(1);
-    expect(currentPrice([street, result.street], street, free(street, "S"), player.id)).toBe(575);
-  });
-
-  it("Miete aus fremden Straßen landet beim Käufer, nicht beim Straßenbesitzer", () => {
-    const { player, street } = start();
-    const zoe = neighbor();
-    const target = free(zoe, "M");
-    const bought = buyPlot({ ...player, coins: 99_999 }, zoe, target.id, 5)!;
-    if (!bought.ok) throw new Error();
-    const built = placeBuilding(bought.street, target.id, buildingFromTemplate(TEMPLATES.find((t) => t.id === "wohnhaus")!))!;
-    const mine = streetIncomePerHour(built, player.id);
-    expect(mine).toBeGreaterThan(0);
-    // Zoe kassiert nicht meine Miete – aber mein Wohnhaus bringt ihrem Kiosk Kundschaft.
-    expect(streetIncomePerHour(built)).toBeGreaterThan(streetIncomePerHour(zoe));
-    expect(playerIncomePerHour([street, built], player.id)).toBeCloseTo(streetIncomePerHour(street) + mine);
+  it("kann man nicht kaufen – gebaut wird nur in der eigenen Straße", () => {
+    const { player } = start();
+    const zoe = { ...claimStreet({ playerName: "Zoe", street: { name: "Zuckerallee", city: "Ulm" } }, 0).street, ownerId: "bot-zoe" };
+    expect(buyPlot({ ...player, coins: 99_999 }, zoe, free(zoe, "S").id, 5)).toEqual({ ok: false, reason: "not-allowed" });
   });
 });

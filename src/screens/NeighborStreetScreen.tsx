@@ -2,13 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ambienceFor } from "../audio/ambience";
 import { sound } from "../audio/sound";
+import { BadBoysCard } from "../components/BadBoysCard";
 import { StreetView } from "../components/street/StreetView";
 import { personaOf } from "../config/bots";
 import { formatRate } from "../format";
 import { streetIncomePerHour } from "../game/rent";
-import { currentPrice } from "../game/plots";
-import { ECONOMY } from "../config/economy";
-import { useAllStreets } from "../store/useStreetContext";
+import { residentsOf } from "../game/life";
 import { formatPlace } from "../geo/streetSearch";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
@@ -25,7 +24,6 @@ export function NeighborStreetScreen() {
   const loadPlayerStreet = useGameStore((s) => s.loadPlayerStreet);
   const [lookup, setLookup] = useState<"loading" | "done">(street ? "done" : "loading");
   const player = useGameStore((s) => s.player)!;
-  const allStreets = useAllStreets();
   const navigate = useNavigate();
   const onViewport = useCallback(
     (from: number, to: number) => {
@@ -56,7 +54,6 @@ export function NeighborStreetScreen() {
   if (!street || !owner) return <Navigate to={routes.neighborhood} replace />;
 
   const built = street.plots.filter((p) => p.building).length;
-  const mine = street.plots.filter((p) => p.ownerId === player.id);
   const free = street.plots.filter((p) => p.purchasedAt === undefined).length;
 
   return (
@@ -71,7 +68,7 @@ export function NeighborStreetScreen() {
         <div>
           <h1>{street.name}</h1>
           <p className="subtle">
-            {formatPlace(street)} · gehört {owner.name} ({owner.about})
+            {formatPlace(street)} · 👥 {Math.round(residentsOf(street))} Bewohner · gehört {owner.name} ({owner.about})
           </p>
         </div>
       </div>
@@ -82,27 +79,13 @@ export function NeighborStreetScreen() {
         onViewport={onViewport}
         mineId={player.id}
         coins={player.coins}
-        priceOf={(plot) => currentPrice(allStreets, street, plot, player.id)}
         onSelect={(plot) => {
           sound.tap();
           navigate(routes.neighborPlot(street.id, plot.id));
         }}
         onCarTap={({ model }) => sound.horn(model.horn)}
       />
-      {mine.length > 0 ? (
-        <div className="card neighbor-mine">
-          <strong>
-            Du hast hier {mine.length} Grundstück{mine.length > 1 ? "e" : ""} · bringt dir 🪙 {formatRate(streetIncomePerHour(street, player.id))} pro Stunde
-          </strong>
-        </div>
-      ) : (
-        free > 0 && (
-          <p className="hint left">
-            Tipp ein freies Grundstück an, um es zu kaufen – auch hier kannst du bauen (+{Math.round((ECONOMY.neighborPriceFactor - 1) * 100)} % Aufpreis
-            beim Nachbarn).
-          </p>
-        )
-      )}
+      <BadBoysCard streetId={street.id} streetName={street.name} />
       <p className="subtle">
         {built} von {street.plots.length} Grundstücken bebaut, {free} frei · {owner.name} verdient ca. 🪙 {formatRate(streetIncomePerHour(street))} pro
         Stunde

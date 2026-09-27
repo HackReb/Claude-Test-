@@ -104,7 +104,7 @@ p {
 
 .bottomnav {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 3px solid var(--border);
   background: var(--surface);
   padding-bottom: env(safe-area-inset-bottom);
@@ -1501,4 +1501,201 @@ h2 {
   color: var(--ink);
   font-weight: 700;
   text-decoration: none;
+}
+
+/* ---------- Bad Boys & Wachschutz ---------- */
+
+.badboys h2,
+.security h2 {
+  margin: 0 0 4px;
+}
+
+.security h2 small {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.security {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.security p {
+  margin: 0;
+}
+
+.badboy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.badboy-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.badboy-emoji {
+  font-size: 1.8rem;
+}
+
+.badboy-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.badboy-info small {
+  color: var(--muted);
+}
+
+.badboy-info .badboy-effect {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.badboy-result {
+  font-weight: 800;
+  color: #2d7a3e;
+}
+
+.damage-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border-color: var(--danger);
+}
+
+.damage-card p {
+  margin: 0;
+}
+
+/* ---------- Tageszeitung ---------- */
+
+.newspaper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #fbf8f1;
+  border: 3px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  font-family: Georgia, "Times New Roman", serif;
+  color: #1d1a16;
+}
+
+.paper-masthead {
+  text-align: center;
+  border-bottom: 4px double #1d1a16;
+  padding-bottom: 8px;
+}
+
+.paper-masthead h1 {
+  margin: 0;
+  font-size: clamp(2rem, 11vw, 2.8rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  font-style: italic;
+}
+
+.paper-masthead p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  padding-top: 4px;
+  border-top: 1px solid #1d1a16;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.newspaper a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.paper-lead h2 {
+  margin: 0 0 6px;
+  font-size: clamp(1.6rem, 8vw, 2.2rem);
+  line-height: 1.1;
+}
+
+.paper-lead p,
+.paper-story p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.paper-lead.bad h2,
+.paper-story.bad h3 {
+  color: #9d1c2e;
+}
+
+.paper-lead.good h2,
+.paper-story.good h3 {
+  color: #1f5f32;
+}
+
+.paper-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  border-top: 2px solid #1d1a16;
+  padding-top: 10px;
+}
+
+.paper-story h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.paper-footer {
+  margin: 0;
+  border-top: 1px solid #1d1a16;
+  padding-top: 6px;
+  font-size: 0.8rem;
+  font-style: italic;
+  text-align: center;
+}
+
+.paper-teaser {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  text-decoration: none;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.paper-teaser > span:first-child {
+  font-size: 2rem;
+}
+
+.paper-teaser span {
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-teaser small {
+  color: var(--muted);
+  font-family: inherit;
+}
+
+.badboy-list .btn {
+  padding: 8px 12px;
+  min-height: 0;
+  white-space: nowrap;
+  font-size: 0.95rem;
 }
