@@ -4,7 +4,9 @@ import type { Pet, LitterItem, LitterKind, Plot, Street } from "../../model/type
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
 import { possessive } from "../../game/names";
+import { FacadeLife } from "../FacadeLife";
 import { FacadeSvg } from "../FacadeSvg";
+import { Modernization } from "../Modernization";
 import { layoutStreet, STREET, type LotBox } from "./layout";
 import { Litter } from "./Litter";
 import { Playground } from "./Playground";
@@ -166,6 +168,7 @@ export function StreetView({
             voice={voiceByPlot.get(lot.plot.id)}
             onVoice={onVoice}
             mine={!!mineId && lot.plot.ownerId === mineId}
+            life={life}
           />
         ))}
 
@@ -205,6 +208,7 @@ function Lot({
   voice,
   onVoice,
   mine = false,
+  life = false,
 }: {
   lot: LotBox;
   price?: number;
@@ -214,6 +218,8 @@ function Lot({
   onVoice?: (voice: Voice) => void;
   /** Dein Grundstück in einer fremden Straße. */
   mine?: boolean;
+  /** Leute und kleine Szenen am Gebäude. */
+  life?: boolean;
 }) {
   const { plot, x, y, width } = lot;
   const h = STREET.lotHeight;
@@ -268,7 +274,7 @@ function Lot({
       )}
 
       {plot.building ? (
-        <Building lot={lot} groundY={groundY} />
+        <Building lot={lot} groundY={groundY} life={life} />
       ) : owned && plot.amenity === "playground" ? (
         <Playground width={width} groundY={groundY} />
       ) : owned ? (
@@ -339,7 +345,7 @@ function Lot({
   );
 }
 
-function Building({ lot, groundY }: { lot: LotBox; groundY: number }) {
+function Building({ lot, groundY, life }: { lot: LotBox; groundY: number; life: boolean }) {
   const building = lot.plot.building!;
   const { width, height } = facadeDimensions(lot.plot.size, building.facade.floors);
   const left = (lot.width - width) / 2;
@@ -348,9 +354,11 @@ function Building({ lot, groundY }: { lot: LotBox; groundY: number }) {
       <ellipse cx={lot.width / 2} cy={groundY} rx={width / 2 + 10} ry={8} fill="#000" opacity={0.15} />
       <g transform={`translate(${left} ${groundY - height})`}>
         <FacadeSvg facade={building.facade} size={lot.plot.size} />
+        <Modernization building={building} />
         {!!building.soot && <Soot level={building.soot} width={width} height={height} />}
         {building.damaged && <Cracks width={width} height={height} />}
         {building.graffiti && <Graffiti text={building.graffiti} width={width} height={height} />}
+        {life && <FacadeLife facade={building.facade} size={lot.plot.size} use={useOf(building)} seed={building.id} />}
       </g>
     </g>
   );

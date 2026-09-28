@@ -6,12 +6,13 @@ import type { Building, PlotSize } from "../model/types";
 
 /** Was ein Gebäude bringen kann: Plätze, Einnahmen wenn voll, laufende Kosten. */
 export function BuildingEconomy({ size, building }: { size: PlotSize; building: Building }) {
-  const places = capacityOf(size, building.level);
-  const home = useOf(building) === "residential";
+  const use = useOf(building);
+  const places = capacityOf(size, building.level, use);
+  const home = use === "residential";
   return (
     <p className="subtle building-economy">
       {home ? `👥 bis ${places} Bewohner` : `🛒 ${places} Kundenplätze`} · bis 🪙 {formatRate(buildingIncomePerHour(size, building))}/Std., wenn
-      voll · Kosten 🪙 {formatRate(upkeepOf(size, building.level))}/Std.
+      voll · Kosten 🪙 {formatRate(upkeepOf(size, building.level, use))}/Std.
     </p>
   );
 }

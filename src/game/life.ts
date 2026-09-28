@@ -58,12 +58,15 @@ export interface Need {
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
-/** Wohlfühl-Liste für Wohnhäuser in dieser Straße. */
-export function streetNeeds(street: Street): Need[] {
+/**
+ * Wohlfühl-Liste für Wohnhäuser in dieser Straße.
+ * `dirtTolerance` < 1: modernisierte Häuser – Dreck drückt die Belegung weniger.
+ */
+export function streetNeeds(street: Street, dirtTolerance = 1): Need[] {
   const stats = streetStats(street);
   // Graffiti stört wie mehrere Dreck-Teile.
   const dirt = stats.litter + stats.graffiti * MISCHIEF.graffitiAsLitter + stats.soot * CAR_OUTINGS.sootAsLitter;
-  const cleanliness = Math.max(LIFE.minCleanliness, 1 - dirt * LIFE.litterComfortLoss);
+  const cleanliness = Math.max(LIFE.minCleanliness, 1 - dirt * LIFE.litterComfortLoss * dirtTolerance);
   const what = [stats.litter > 0 && `${stats.litter}× Dreck`, stats.graffiti > 0 && `${stats.graffiti}× Graffiti`, stats.soot > 0 && `${stats.soot}× Ruß`]
     .filter(Boolean)
     .join(", ");
@@ -80,12 +83,12 @@ export function streetNeeds(street: Street): Need[] {
 }
 
 /** Wie voll Wohnhäuser hier höchstens werden (0–1). */
-export function homeComfort(street: Street): number {
-  return streetNeeds(street).reduce((product, need) => product * need.factor, 1);
+export function homeComfort(street: Street, dirtTolerance = 1): number {
+  return streetNeeds(street, dirtTolerance).reduce((product, need) => product * need.factor, 1);
 }
 
 /** Plätze eines Gebäudes (Bewohner bzw. Kunden). */
-export const placesOf = (plot: Plot & { building: Building }) => capacityOf(plot.size, plot.building.level);
+export const placesOf = (plot: Plot & { building: Building }) => capacityOf(plot.size, plot.building.level, useOf(plot.building));
 
 /** Aktuelle Belegung; ohne gespeicherten Wert (alte Stände, Bots) das, was die Straße hergibt. */
 export function occupancyOf(street: Street, plot: Plot & { building: Building }): number {
@@ -110,7 +113,7 @@ function shopPlacesOf(street: Street): number {
 export function targetOccupancy(street: Street, plot: Plot & { building: Building }): number {
   // Kaputte Fenster: da will keiner wohnen oder einkaufen, bis repariert ist.
   const damage = plot.building.damaged ? MISCHIEF.damagedFactor : 1;
-  if (useOf(plot.building) === "residential") return homeComfort(street) * damage;
+  if (useOf(plot.building) === "residential") return homeComfort(street, ECONOMY.upgradeLevels[plot.building.level].dirtTolerance) * damage;
   const litter = street.litter?.length ?? 0;
   const cleanliness = Math.max(LIFE.shopMinCleanliness, 1 - litter * LIFE.shopLitterLoss);
   const demand = shopPlacesOf(street);

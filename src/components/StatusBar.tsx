@@ -30,9 +30,9 @@ export function StatusBar({ onOpen }: { onOpen: (tab: StreetTab) => void }) {
   const homes = street.plots.filter(
     (p): p is Plot & { building: Building } => p.purchasedAt !== undefined && !!p.building && useOf(p.building) === "residential" && !p.ownerId,
   );
-  const places = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level), 0);
-  const people = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level) * occupancyOf(street, p), 0);
-  const target = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level) * targetOccupancy(street, p), 0);
+  const places = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential"), 0);
+  const people = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential") * occupancyOf(street, p), 0);
+  const target = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential") * targetOccupancy(street, p), 0);
   const trend = target > people + 0.5 ? "↗" : target < people - 0.5 ? "↘" : "";
   const clean = streetNeeds(street).find((n) => n.id === "clean")!;
   const missing = streetNeeds(street).filter((n) => !n.met).length;

@@ -8,10 +8,10 @@ import { sound } from "../audio/sound";
 import { MISCHIEF } from "../config/badboys";
 import { CAR_OUTINGS } from "../config/pets";
 import { LIFE } from "../config/life";
-import { occupancyOf, streetNeeds, targetOccupancy, useOf } from "../game/life";
+import { occupancyOf, placesOf, streetNeeds, targetOccupancy, useOf } from "../game/life";
 import { possessive } from "../game/names";
 import { FacadePreview } from "../components/FacadePreview";
-import { capacityOf, ECONOMY, upkeepOf } from "../config/economy";
+import { capacityOf, ECONOMY, rentFactorOf, upkeepOf } from "../config/economy";
 import { formatCoins, formatDuration, formatRate } from "../format";
 import { belongsTo, currentPrice, isOwned, nextUpgrade } from "../game/plots";
 import { playerIncomePerHour, plotIncomePerHour, plotUpkeepPerHour } from "../game/rent";
@@ -67,7 +67,7 @@ function ForeignPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
     <>
       {plot.building && (
         <div className="card plot-preview">
-          <FacadePreview facade={plot.building.facade} size={plot.size} label={plot.building.name} maxHeight={220} />
+          <FacadePreview facade={plot.building.facade} size={plot.size} label={plot.building.name} maxHeight={240} building={plot.building} life />
         </div>
       )}
       {plot.building && (
@@ -144,7 +144,7 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
     return (
       <>
         <div className="card plot-preview">
-          <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={220} />
+          <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={240} building={building} life />
         </div>
         <ul className="facts">
           <li>
@@ -188,8 +188,8 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
     <>
       <p>
         {ctx.own ? "Dein Bauplatz ist bereit." : `Dein Bauplatz in ${possessive(ctx.ownerName)} ${street.name} ist bereit.`} Ein Wohnhaus hier
-        hat Platz für <strong>{capacityOf(plot.size, 1)} Bewohner</strong>, ein Laden für {capacityOf(plot.size, 1)} Kunden gleichzeitig.
-        Laufende Kosten: 🪙 {formatRate(upkeepOf(plot.size, 1))}/Std.
+        hat Platz für <strong>{capacityOf(plot.size, 1, "residential")} Bewohner</strong>, ein Laden für{" "}
+        {capacityOf(plot.size, 1, "commercial")} Kunden gleichzeitig. Laufende Kosten: 🪙 {formatRate(upkeepOf(plot.size, 1, "residential"))}/Std.
       </p>
       {buildActions}
       {ctx.own && <PlaygroundOffer plot={plot} />}
@@ -199,7 +199,7 @@ function OwnedPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
 
 /** Bewohner bzw. Kundschaft eines Gebäudes, und ob gerade Leute ein- oder ausziehen – und warum. */
 function OccupancyFacts({ street, plot }: { street: Street; plot: Plot & { building: Building } }) {
-  const places = capacityOf(plot.size, plot.building.level);
+  const places = placesOf(plot);
   const now = occupancyOf(street, plot);
   const target = targetOccupancy(street, plot);
   const home = useOf(plot.building) === "residential";
@@ -327,20 +327,34 @@ function UpgradeSection({ plot, streetId }: { plot: Plot; streetId?: string }) {
   if (!plot.building) return null;
   if (!next) return <p className="badge">⭐ Höchste Stufe erreicht</p>;
 
-  const home = useOf(plot.building) === "residential";
-  const placesNow = capacityOf(plot.size, plot.building.level);
-  const placesNext = capacityOf(plot.size, next.level);
+  const level = plot.building.level;
+  const use = useOf(plot.building);
+  const home = use === "residential";
+  const costs = (
+    <>
+      Kosten 🪙 {formatRate(upkeepOf(plot.size, level, use))} → {formatRate(upkeepOf(plot.size, next.level, use))}/Std.
+    </>
+  );
+  const percent = (factor: number) => Math.round((factor - 1) * 100);
   return (
     <div className="card upgrade-card">
-      <h2>Ausbauen auf Stufe {next.level}</h2>
-      <p className="subtle">
-        Platz für {placesNow} → <strong>{placesNext}</strong> {home ? "Bewohner" : "Kunden"} · Kosten 🪙{" "}
-        {formatRate(upkeepOf(plot.size, plot.building.level))} → {formatRate(upkeepOf(plot.size, next.level))}/Std.
-      </p>
+      <h2>{home ? `Modernisieren auf Stufe ${next.level}` : `Angebot vergrößern auf Stufe ${next.level}`}</h2>
+      {home ? (
+        <p className="subtle">
+          {next.level === 2 ? "Blumenkästen, neue Bäder, frische Farbe" : "Balkone, Aufzug, Laternen an der Tür"}: gleich viele Wohnungen, aber
+          Miete <strong>+{percent(rentFactorOf(next.level, use))} %</strong> (bisher +{percent(rentFactorOf(level, use))} %), und Dreck
+          stört die Bewohner weniger. {costs}
+        </p>
+      ) : (
+        <p className="subtle">
+          Größerer Laden: Platz für {capacityOf(plot.size, level, use)} → <strong>{capacityOf(plot.size, next.level, use)}</strong> Kunden – wenn
+          genug Leute in der Straße wohnen. {costs}
+        </p>
+      )}
       <button type="button" className="btn btn-primary" disabled={coins < next.cost} onClick={async () => {
           if ((await upgrade(plot.id, streetId)).ok) sound.upgrade();
         }}>
-        Ausbauen für 🪙 {formatCoins(next.cost)}
+        {home ? "Modernisieren" : "Vergrößern"} für 🪙 {formatCoins(next.cost)}
       </button>
       {coins < next.cost && <p className="subtle">Dir fehlen noch 🪙 {formatCoins(next.cost - coins)}.</p>}
     </div>
@@ -387,7 +401,8 @@ function PlotForSale({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
           </span>
         )}
         <span className="subtle">
-          Mit Gebäude: Platz für {capacityOf(plot.size, 1)} Bewohner oder Kunden · Kosten ab 🪙 {formatRate(upkeepOf(plot.size, 1))}/Std.
+          Mit Gebäude: Platz für {capacityOf(plot.size, 1, "residential")} Bewohner oder Kunden · Kosten ab 🪙{" "}
+          {formatRate(upkeepOf(plot.size, 1, "residential"))}/Std.
         </span>
       </div>
 

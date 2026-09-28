@@ -42,7 +42,11 @@ describe("Einnahmen & Kosten", () => {
     const perResident = ECONOMY.rentPerResidentPerHour;
     expect(buildingIncomePerHour("S", home, 1) / (ECONOMY.plotSizes.S.capacity * perResident)).toBeGreaterThanOrEqual(1);
     expect(buildingIncomePerHour("S", home, 0.5)).toBeCloseTo(buildingIncomePerHour("S", home, 1) / 2);
-    expect(buildingIncomePerHour("S", { ...home, level: 3 }, 1)).toBeCloseTo(buildingIncomePerHour("S", home, 1) * (Math.round(4 * 2.2) / 4));
+    // Modernisiert: gleich viele Bewohner, höhere Miete je Bewohner.
+    expect(buildingIncomePerHour("S", { ...home, level: 3 }, 1)).toBeCloseTo(buildingIncomePerHour("S", home, 1) * ECONOMY.upgradeLevels[3].homeRent);
+    // Ein Laden wächst dagegen mit.
+    const shop = tpl("kiosk");
+    expect(buildingIncomePerHour("S", { ...shop, level: 3 }, 1)).toBeCloseTo(buildingIncomePerHour("S", shop, 1) * (Math.round(4 * 2.2) / 4));
   });
 
   it("Start: Kiosk plus Wohnhaus, voll und sauber – ein, zwei Tausend Münzen am Tag", () => {

@@ -10,7 +10,7 @@ import { isUnlocked } from "../parts/catalog";
 import { useGameStore } from "../store/gameStore";
 import { BuildingNameField } from "./BuildingNameField";
 import { FacadePreview } from "./FacadePreview";
-import { UsePicker } from "./UsePicker";
+import { UsePicker, useLabel } from "./UsePicker";
 import { sound } from "../audio/sound";
 
 export type BuildMode = "template" | "random";
@@ -43,10 +43,10 @@ const usePlayerName = () => useGameStore((s) => s.player!.name);
 function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDone: () => void }) {
   const place = useBuild(plot, streetId, onDone);
   const playerName = usePlayerName();
-  const templates = templatesFor(plot.size);
+  const [use, setUse] = useState<BuildingUse>("residential");
+  const templates = templatesFor(plot.size, use);
   const [chosen, setChosen] = useState<Template | null>(null);
   const [name, setName] = useState("");
-  const [use, setUse] = useState<BuildingUse>("residential");
 
   if (chosen) {
     const building = buildingFromTemplate(chosen);
@@ -62,9 +62,9 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
           <FacadePreview facade={chosen.facade} size={plot.size} label={chosen.name} maxHeight={200} />
         </div>
         <BuildingNameField value={name} onChange={setName} />
-        <UsePicker value={use} onChange={setUse} />
-        <BuildingEconomy size={plot.size} building={{ ...building, use }} />
-        <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name, use)}>
+        <p className="subtle">{useLabel(chosen.use)}</p>
+        <BuildingEconomy size={plot.size} building={building} />
+        <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name, chosen.use)}>
           Bauen
         </button>
       </section>
@@ -79,6 +79,7 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
           Abbrechen
         </button>
       </div>
+      <UsePicker value={use} onChange={setUse} />
       <div className="template-grid">
         {templates.map((template) => {
           const building = buildingFromTemplate(template);
@@ -90,13 +91,12 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
               onClick={() => {
                 setChosen(template);
                 setName(personalName(playerName, template.name));
-                setUse(template.use);
               }}
             >
               <FacadePreview facade={template.facade} size={plot.size} label={template.name} maxHeight={120} />
               <strong>{template.name}</strong>
               <span className="subtle">
-                {template.use === "residential" ? "🏠" : "🏪"} bis 🪙 {formatRate(buildingIncomePerHour(plot.size, building))}/Std.
+                bis 🪙 {formatRate(buildingIncomePerHour(plot.size, building))}/Std.
               </span>
             </button>
           );
@@ -110,14 +110,22 @@ function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDon
   const place = useBuild(plot, streetId, onDone);
   const unlockedParts = useGameStore((s) => s.player!.unlockedParts);
   // Würfeln nutzt nur freigeschaltete Bausteine (Vorlagen dagegen sind fertige Gebäude).
-  const roll = () => randomBuilding(plot.size, Math.random, { isAvailable: (part) => isUnlocked(part, unlockedParts) });
+  const roll = (use: BuildingUse) => randomBuilding(plot.size, Math.random, { use, isAvailable: (part) => isUnlocked(part, unlockedParts) });
   const playerName = usePlayerName();
-  const [building, setBuilding] = useState(roll);
+  const [use, setUse] = useState<BuildingUse>("residential");
+  const [building, setBuilding] = useState(() => roll(use));
   const [rolls, setRolls] = useState(1);
   const [name, setName] = useState(() => personalName(playerName, building.name));
   // Einen selbst getippten Namen nicht beim nächsten Wurf überschreiben.
   const [nameTouched, setNameTouched] = useState(false);
-  const [use, setUse] = useState<BuildingUse>(building.use ?? "residential");
+
+  function reroll(nextUse = use) {
+    const next = roll(nextUse);
+    sound.tap();
+    setBuilding(next);
+    setRolls((n) => n + 1);
+    if (!nameTouched) setName(personalName(playerName, next.name));
+  }
 
   return (
     <section className="picker" aria-label="Würfeln">
@@ -127,6 +135,13 @@ function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDon
           Abbrechen
         </button>
       </div>
+      <UsePicker
+        value={use}
+        onChange={(next) => {
+          setUse(next);
+          reroll(next);
+        }}
+      />
       <div className="card dice-preview" key={rolls}>
         <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={220} />
       </div>
@@ -137,23 +152,12 @@ function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDon
           setNameTouched(true);
         }}
       />
-      <UsePicker value={use} onChange={setUse} />
-      <BuildingEconomy size={plot.size} building={{ ...building, use }} />
+      <BuildingEconomy size={plot.size} building={building} />
       <div className="actions">
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            const next = roll();
-            sound.tap();
-            setBuilding(next);
-            setRolls((n) => n + 1);
-            if (!nameTouched) setName(personalName(playerName, next.name));
-          }}
-        >
+        <button type="button" className="btn" onClick={() => reroll()}>
           Nochmal 🎲
         </button>
-        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => void place(building, name, use)}>
+        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => void place(building, name, building.use ?? use)}>
           Bauen
         </button>
       </div>

@@ -1,4 +1,4 @@
-import { capacityOf, ECONOMY, rentLevel, upkeepOf } from "../config/economy";
+import { capacityOf, ECONOMY, rentFactorOf, rentLevel, upkeepOf } from "../config/economy";
 import type { Building, Incident, Mischief, Player, Plot, PlotSize, Street } from "../model/types";
 import { moveTowards, occupancyOf, spawnLitter, targetOccupancy, useOf } from "./life";
 import { securityOf } from "../config/badboys";
@@ -22,7 +22,8 @@ export function buildingRentLevel(building: Building): number {
 /** Einnahmen eines Gebäudes pro Stunde bei der Belegung `occupancy` (1 = voll). */
 export function buildingIncomePerHour(size: PlotSize, building: Building, occupancy = 1): number {
   const perPlace = useOf(building) === "residential" ? ECONOMY.rentPerResidentPerHour : ECONOMY.revenuePerCustomerPerHour;
-  return capacityOf(size, building.level) * occupancy * perPlace * buildingRentLevel(building);
+  const use = useOf(building);
+  return capacityOf(size, building.level, use) * occupancy * perPlace * buildingRentLevel(building) * rentFactorOf(building.level, use);
 }
 
 /** Einnahmen eines Grundstücks pro Stunde bei seiner aktuellen Belegung. */
@@ -33,7 +34,7 @@ export function plotIncomePerHour(street: Street, plot: Plot): number {
 /** Laufende Kosten eines Grundstücks pro Stunde (Gebäude oder Spielplatz; leere Grundstücke kosten nichts). */
 export function plotUpkeepPerHour(plot: Plot): number {
   if (plot.purchasedAt === undefined) return 0;
-  if (plot.building) return upkeepOf(plot.size, plot.building.level);
+  if (plot.building) return upkeepOf(plot.size, plot.building.level, useOf(plot.building));
   return plot.amenity === "playground" ? ECONOMY.playgroundUpkeepPerHour : 0;
 }
 
@@ -116,7 +117,7 @@ export function simulate(player: Player, streets: Street[], now: number, incomin
         // Mittel aus vorher und nachher: Einziehen geht schnell, innerhalb einer Stunde ändert sich viel.
         result.income += buildingIncomePerHour(plot.size, plot.building, (before + after) / 2) * hours;
         if (useOf(plot.building) === "residential") {
-          const people = (after - before) * capacityOf(plot.size, plot.building.level);
+          const people = (after - before) * capacityOf(plot.size, plot.building.level, "residential");
           if (people > 0) result.movedIn += people;
           else result.movedOut -= people;
         }

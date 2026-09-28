@@ -157,6 +157,8 @@ export interface Part {
   svg: string; // Inline-SVG-Symbol
   price: number; // 0 = Start-Set
   rentBonus: number; // z. B. 0.05
+  /** Typisch für Wohnhaus oder Gewerbe – Würfeln nimmt nur passende Teile; ohne Angabe passt es zu beidem. */
+  use?: BuildingUse;
 }
 
 export interface Player {
