@@ -7,7 +7,7 @@ import { facadeColumns } from "./grid";
 export const FACADE_RULES = {
   minDoors: 1,
   minWindows: 1,
-  maxWindows: 4,
+  maxWindows: 8,
   maxDeco: 3,
 } as const;
 

@@ -19,8 +19,8 @@ export function paperStats(street: Street): PaperStats {
   const stats = streetStats(street);
   const homes = built(street).filter((p) => useOf(p.building) === "residential");
   return {
-    residents: homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level) * occupancyOf(street, p), 0),
-    places: homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level), 0),
+    residents: homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential") * occupancyOf(street, p), 0),
+    places: homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential"), 0),
     income: streetIncomePerHour(street),
     litter: stats.litter,
     poop: street.litter?.filter((l) => l.kind === "poop").length ?? 0,

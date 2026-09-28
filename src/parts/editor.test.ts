@@ -29,11 +29,12 @@ describe("Baukasten", () => {
     const f = setFloors(starterFacade(), "M", 2);
     expect(placePart(f, "M", "door-shop", 0, 1)).toEqual({ ok: false, reason: "Ladentür gehört ins Erdgeschoss." });
     expect(placePart(f, "M", "deco-flag", 0, 0)).toEqual({ ok: false, reason: "Flagge gehört aufs Dach." });
-    let g = f;
-    for (const [x, y] of [[2, 0], [0, 1], [1, 1]]) g = ok(placePart(g, "M", "window-square", x, y));
-    expect(placePart(g, "M", "window-square", 2, 1)).toEqual({ ok: false, reason: "Höchstens 4 Fenster." });
+    let g = setFloors(starterFacade(), "L", 3);
+    const spots = [[2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2]];
+    for (const [x, y] of spots) g = ok(placePart(g, "L", "window-square", x, y));
+    expect(placePart(g, "L", "window-square", 1, 2)).toEqual({ ok: false, reason: "Höchstens 8 Fenster." });
     // ersetzen geht auch am Limit
-    expect(placePart(g, "M", "window-round", 1, 1).ok).toBe(true);
+    expect(placePart(g, "L", "window-round", 1, 1).ok).toBe(true);
   });
 
   it("entfernt das oberste Teil zuerst", () => {
@@ -56,8 +57,11 @@ describe("Baukasten", () => {
     expect(lower.floors).toBe(1);
     expect(lower.parts.every((p) => p.y === 0 || p.partId === "deco-flag")).toBe(true);
     expect(lower.parts.filter((p) => p.partId === "deco-flag").every((p) => p.y === 1)).toBe(true);
-    // Das Schloss hat nur oben Fenster → danach fehlt eins, der Baukasten zeigt das an.
-    expect(validateFacade(lower, "L")).toEqual(["1–4 Fenster erlaubt."]);
+    // Die Fenster im Erdgeschoss bleiben, die oberen fallen weg.
+    expect(lower.parts.filter((p) => p.partId.startsWith("window")).map((p) => p.y)).toEqual([0, 0]);
+    expect(validateFacade(lower, "L")).toEqual([]);
+    const topOnly = { ...castle, parts: castle.parts.filter((p) => !(p.partId.startsWith("window") && p.y === 0)) };
+    expect(validateFacade(setFloors(topOnly, "L", 1), "L")).toEqual(["1–8 Fenster erlaubt."]);
     expect(setFloors(starterFacade(), "S", 3).floors).toBe(1);
     expect(setFloors(starterFacade(), "M", 5).floors).toBe(2);
   });

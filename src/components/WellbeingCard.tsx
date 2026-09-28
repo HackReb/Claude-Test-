@@ -9,9 +9,9 @@ export function WellbeingCard({ street, playerId }: { street: Street; playerId: 
   const homes = street.plots.filter(
     (p): p is Built => p.purchasedAt !== undefined && !!p.building && useOf(p.building) === "residential" && (p.ownerId ?? street.ownerId) === playerId,
   );
-  const places = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level), 0);
-  const people = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level) * occupancyOf(street, p), 0);
-  const target = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level) * targetOccupancy(street, p), 0);
+  const places = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential"), 0);
+  const people = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential") * occupancyOf(street, p), 0);
+  const target = homes.reduce((sum, p) => sum + capacityOf(p.size, p.building.level, "residential") * targetOccupancy(street, p), 0);
   const needs = streetNeeds(street);
   const trend = target > people + 0.5 ? "up" : target < people - 0.5 ? "down" : "steady";
 

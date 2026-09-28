@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { seededRandom } from "../game/random";
-import { randomFacade } from "../game/randomBuilding";
+import { randomBuilding, randomFacade } from "../game/randomBuilding";
 import { TEMPLATES, templatesFor } from "../game/templates";
 import { getPart, PARTS, partsOf } from "./catalog";
 import { validateFacade } from "./rules";
@@ -50,6 +50,21 @@ describe("Zufallsgenerator", () => {
       [f.base, f.roof, ...f.parts].forEach((p) => seen.add(p.partId));
     }
     expect([...seen].sort()).toEqual(PARTS.map((p) => p.id).sort());
+  });
+
+  it("Würfeln nach Nutzung: Wohnhaus ohne Ladenteile, Laden mit Schild und Schaufenster", () => {
+    const random = seededRandom(5);
+    for (let i = 0; i < 300; i++) {
+      for (const size of ["S", "M", "L"] as const) {
+        const home = randomBuilding(size, random, { use: "residential" });
+        expect(home.use).toBe("residential");
+        expect(home.facade.parts.some((p) => getPart(p.partId)?.use === "commercial")).toBe(false);
+        const shop = randomBuilding(size, random, { use: "commercial" });
+        expect(validateFacade(shop.facade, size)).toEqual([]);
+        expect(shop.facade.parts.some((p) => getPart(p.partId)?.textFill && p.text)).toBe(true);
+        expect(shop.facade.parts.some((p) => p.y === 0 && getPart(p.partId)?.category === "window" && getPart(p.partId)?.use === "commercial")).toBe(true);
+      }
+    }
   });
 
   it("Schilder bekommen Text", () => {

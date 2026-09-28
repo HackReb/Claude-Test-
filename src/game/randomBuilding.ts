@@ -8,8 +8,21 @@ import { shuffle } from "./random";
 
 type Random = () => number;
 
-const SIGN_WORDS = ["BABO", "KIOSK", "DÖNER", "LECKER", "CHILL", "WOW", "YOLO", "EIS", "SPÄTI"];
-const NEON_WORDS = ["OPEN", "24/7", "BAR", "LOVE", "PARTY"];
+/** Läden zum Würfeln: Schild-Text + Namensideen. Das Schild entscheidet auch über den Gag in der Animation. */
+const BUSINESSES: { sign: string; names: string[]; window?: string }[] = [
+  { sign: "DÖNER", names: ["Dönerbude", "Döner-Palast", "Kebab-Eck"], window: "window-doner" },
+  { sign: "OPTIK", names: ["Optiker", "Brillen-Eck", "Scharfsicht"], window: "window-optician" },
+  { sign: "EIS", names: ["Eisdiele", "Eis-Café", "Gelateria"], window: "window-icecream" },
+  { sign: "PIZZA", names: ["Pizzeria", "Pizza-Blitz", "Da Babo"] },
+  { sign: "HAARE", names: ["Friseur", "Haarscharf", "Salon Schnipp"] },
+  { sign: "BÄCKER", names: ["Bäckerei", "Brezel-Eck", "Backstube"] },
+  { sign: "BLUMEN", names: ["Blumenladen", "Blütenzauber", "Blumen-Eck"] },
+  { sign: "SPÄTI", names: ["Späti", "Kiosk", "Büdchen"] },
+  { sign: "TATTOO", names: ["Tattoo-Studio", "Nadelwerk", "Ink-Eck"] },
+  { sign: "WASCH", names: ["Waschsalon", "Schleuder-Eck", "Blitzblank"] },
+  { sign: "KINO", names: ["Kino", "Filmpalast", "Popcorn-Kino"] },
+];
+const NEON_WORDS = ["OPEN", "24/7", "LOVE", "WOW"];
 
 const NAME_PREFIX: Record<string, string> = {
   "base-brick": "Backstein",
@@ -18,10 +31,10 @@ const NAME_PREFIX: Record<string, string> = {
   "base-gummy": "Gummi",
   "base-ice": "Eis",
 };
-const NAME_NOUN: Record<PlotSize, string[]> = {
-  S: ["Bude", "Hütte", "Kiste", "Ecke"],
-  M: ["Haus", "Laden", "Villa", "Treff"],
-  L: ["Palast", "Schloss", "Tempel", "Arena"],
+const HOME_NOUN: Record<PlotSize, string[]> = {
+  S: ["Häuschen", "Hütte", "Nest", "Bude"],
+  M: ["Haus", "Villa", "Stadthaus", "Heim"],
+  L: ["Palast", "Residenz", "Wohnschloss", "Block"],
 };
 
 const pick = <T>(items: readonly T[], random: Random): T => items[Math.floor(random() * items.length)];
@@ -52,20 +65,28 @@ const between = (min: number, max: number, random: Random) => min + Math.floor(r
 
 /**
  * Würfelt eine gültige Fassade (Konzept 6.2): genau ein Grundkörper, genau ein Dach,
- * mindestens eine Tür, 1–4 Fenster, 0–3 Deko-Teile.
+ * mindestens eine Tür, Fenster, ein paar Deko-Teile. Mit Nutzung sieht sie danach aus:
+ * Wohnhaus mit Haustür, gemischten Fenstern und Blumen, Gewerbe mit Schaufenster und Ladenschild.
  */
 export function randomFacade(size: PlotSize, random: Random = Math.random, options: RandomOptions = {}): Facade {
+  return rollFacade(size, random, options).facade;
+}
+
+function rollFacade(size: PlotSize, random: Random, options: RandomOptions): { facade: Facade; use: BuildingUse; business?: (typeof BUSINESSES)[number] } {
   const { isAvailable = () => true, weight } = options;
-  const usable = (category: Part["category"]) => partsOf(category).filter(isAvailable);
+  const use: BuildingUse = options.use ?? (random() < 0.5 ? "residential" : "commercial");
+  const fits = (part: Part) => !part.use || part.use === use;
+  const usable = (category: Part["category"]) => partsOf(category).filter(isAvailable).filter(fits);
   const floors = between(1, ECONOMY.plotSizes[size].maxFloors, random) as 1 | 2 | 3;
   const columns = facadeColumns(size);
   const used = new Set<string>();
   const parts: PlacedPart[] = [];
 
-  /** Setzt ein Teil auf einen zufälligen freien Platz; false, wenn keiner frei ist. */
-  function place(part: Part): boolean {
+  /** Setzt ein Teil auf einen zufälligen freien Platz (optional nur in bestimmten Reihen); false, wenn keiner frei ist. */
+  function place(part: Part, text?: string, rows?: number[]): boolean {
     const layer = layerOf(part);
-    const spots = allowedRows(part, floors).flatMap((y) => Array.from({ length: columns }, (_, x) => ({ x, y })));
+    const allowed = allowedRows(part, floors).filter((y) => !rows || rows.includes(y));
+    const spots = allowed.flatMap((y) => Array.from({ length: columns }, (_, x) => ({ x, y })));
     // Schilder nicht über Boden-Deko (Palme & Co.) hängen – die ragt in den oberen Streifen.
     const blocked = (s: { x: number; y: number }) => layer === "top" && used.has(cellKey(s, "ground-deco"));
     const free = shuffle(spots, random).find((s) => !used.has(cellKey(s, layer)) && !blocked(s));
@@ -73,8 +94,7 @@ export function randomFacade(size: PlotSize, random: Random = Math.random, optio
     used.add(cellKey(free, layer));
     if (part.category === "deco" && layer === "main") used.add(cellKey(free, "ground-deco"));
     const placed: PlacedPart = { partId: part.id, ...free };
-    if (part.id === "deco-sign") placed.text = pick(SIGN_WORDS, random);
-    if (part.id === "deco-neon") placed.text = pick(NEON_WORDS, random);
+    if (part.textFill) placed.text = text ?? (part.id === "deco-neon" ? pick(NEON_WORDS, random) : pick(BUSINESSES, random).sign);
     parts.push(placed);
     return true;
   }
@@ -82,24 +102,46 @@ export function randomFacade(size: PlotSize, random: Random = Math.random, optio
   // Fenster-Anzahl vorab begrenzen, damit neben Türen immer Platz bleibt.
   const doorCount = size === "S" ? 1 : between(1, 2, random);
   const mainCells = columns * floors;
-  const windowCount = Math.min(between(FACADE_RULES.minWindows, FACADE_RULES.maxWindows, random), mainCells - doorCount);
+  const windowCount = Math.min(between(FACADE_RULES.minWindows, Math.min(FACADE_RULES.maxWindows, mainCells), random), mainCells - doorCount);
 
   const door = pickWeighted(usable("door"), random, weight);
   for (let i = 0; i < doorCount; i++) place(door);
-  const window = pickWeighted(usable("window"), random, weight);
-  for (let i = 0; i < windowCount; i++) place(window);
+
+  const windows = usable("window");
+  let business: (typeof BUSINESSES)[number] | undefined;
+  let placedWindows = 0;
+  if (use === "commercial") {
+    // Unten ein Schaufenster – ein freigeschaltetes Spezial-Fenster (Dönergrill, Eistheke …) bestimmt den Laden.
+    const shopWindows = windows.filter((w) => w.use === "commercial");
+    const shopWindow = shopWindows.length > 0 ? pickWeighted(shopWindows, random, weight) : undefined;
+    business = BUSINESSES.find((b) => b.window === shopWindow?.id) ?? pick(BUSINESSES.filter((b) => !b.window), random);
+    if (shopWindow && place(shopWindow, undefined, [0])) placedWindows++;
+  }
+  // Wohnhäuser bekommen gemischte Fenster, Läden oben normale Fenster.
+  const otherWindows = use === "commercial" ? windows.filter((w) => !w.use) : windows;
+  for (let i = placedWindows; i < windowCount; i++) place(pickWeighted(otherWindows.length > 0 ? otherWindows : windows, random, weight));
+
+  // Läden haben immer ein Schild mit dem, was es gibt.
+  let decoBudget = between(0, FACADE_RULES.maxDeco, random);
+  if (business) {
+    const signs = usable("deco").filter((d) => d.textFill);
+    if (signs.length > 0 && place(pickWeighted(signs, random, weight), business.sign)) decoBudget = Math.max(0, decoBudget - 1);
+  }
 
   // Boden-Deko vor Wand-Deko setzen, damit Schilder ihr ausweichen können. Findet ein Teil keinen Platz, entfällt es.
-  const decoCount = between(0, FACADE_RULES.maxDeco, random);
-  const decos = weightedSample(usable("deco"), decoCount, random, weight)
+  const decos = weightedSample(usable("deco").filter((d) => !(business && d.textFill)), Math.min(decoBudget, FACADE_RULES.maxDeco - parts.filter((p) => p.partId.startsWith("deco")).length), random, weight)
     .sort((a, b) => Number(layerOf(a) === "top") - Number(layerOf(b) === "top"));
   for (const deco of decos) place(deco);
 
   return {
-    base: { partId: pickWeighted(usable("base"), random, weight).id },
-    roof: { partId: pickWeighted(usable("roof"), random, weight).id },
-    floors,
-    parts,
+    use,
+    business,
+    facade: {
+      base: { partId: pickWeighted(usable("base"), random, weight).id },
+      roof: { partId: pickWeighted(usable("roof"), random, weight).id },
+      floors,
+      parts,
+    },
   };
 }
 
@@ -117,11 +159,11 @@ function weightedSample(items: readonly Part[], count: number, random: Random, w
 
 export function randomBuildingName(facade: Facade, size: PlotSize, random: Random = Math.random): string {
   const prefix = NAME_PREFIX[facade.base.partId] ?? "Wunder";
-  return `${prefix}-${pick(NAME_NOUN[size], random)}`;
+  return `${prefix}-${pick(HOME_NOUN[size], random)}`;
 }
 
 export function randomBuilding(size: PlotSize, random: Random = Math.random, options?: RandomOptions): Building {
-  const facade = randomFacade(size, random, options);
-  const use = options?.use ?? (random() < 0.5 ? "residential" : "commercial");
-  return { id: createId(), name: randomBuildingName(facade, size, random), level: 1, createdBy: "random", use, facade };
+  const { facade, use, business } = rollFacade(size, random, options ?? {});
+  const name = business ? pick(business.names, random) : randomBuildingName(facade, size, random);
+  return { id: createId(), name, level: 1, createdBy: "random", use, facade };
 }

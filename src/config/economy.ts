@@ -1,7 +1,7 @@
 // Wirtschafts-Config – Balancing passiert ausschließlich hier (und in config/life.ts für Bewohner & Müll).
 // Alle Beträge in Münzen, alle Raten pro Stunde.
 
-import type { PlotSize } from "../model/types";
+import type { BuildingUse, PlotSize } from "../model/types";
 
 export interface PlotSizeConfig {
   /** Breite des Grundstücks in Kacheln. */
@@ -20,10 +20,16 @@ export interface PlotSizeConfig {
 }
 
 export interface UpgradeLevelConfig {
-  /** Mehr Plätze und mehr Kosten auf dieser Stufe (1.5 = +50 %). */
+  /** Gewerbe: Angebot vergrößern – mehr Kundenplätze und mehr Kosten auf dieser Stufe (1.5 = +50 %). */
   multiplier: number;
   /** Kosten für den Aufstieg auf diese Stufe, als Anteil des Grundstückpreises. */
   costFactor: number;
+  /** Wohnhaus: Modernisieren – gleich viele Wohnungen, aber mehr Miete je Bewohner (1.3 = +30 %). */
+  homeRent: number;
+  /** Wohnhaus: laufende Kosten auf dieser Stufe. */
+  homeUpkeep: number;
+  /** Wohnhaus: wie sehr Dreck die Bewohner stört (0.5 = nur noch halb so sehr). */
+  dirtTolerance: number;
 }
 
 export const ECONOMY = {
@@ -57,9 +63,9 @@ export const ECONOMY = {
   floorRentBonus: 0.2,
 
   upgradeLevels: {
-    1: { multiplier: 1, costFactor: 0 },
-    2: { multiplier: 1.5, costFactor: 0.5 },
-    3: { multiplier: 2.2, costFactor: 1 },
+    1: { multiplier: 1, costFactor: 0, homeRent: 1, homeUpkeep: 1, dirtTolerance: 1 },
+    2: { multiplier: 1.5, costFactor: 0.5, homeRent: 1.3, homeUpkeep: 1.2, dirtTolerance: 0.7 },
+    3: { multiplier: 2.2, costFactor: 1, homeRent: 1.7, homeUpkeep: 1.45, dirtTolerance: 0.5 },
   } satisfies Record<1 | 2 | 3, UpgradeLevelConfig>,
 
   /** Spielstände aus der Zeit vor Bewohnern & Kosten: Guthaben wird einmalig auf höchstens so viel gekürzt. */
@@ -85,14 +91,21 @@ export function upgradeCost(plotBasePrice: number, targetLevel: 2 | 3): number {
   return Math.round(plotBasePrice * ECONOMY.upgradeLevels[targetLevel].costFactor);
 }
 
-/** Plätze (Bewohner bzw. Kunden) eines Gebäudes. */
-export function capacityOf(size: PlotSize, level: 1 | 2 | 3): number {
-  return Math.round(ECONOMY.plotSizes[size].capacity * ECONOMY.upgradeLevels[level].multiplier);
+/** Plätze (Bewohner bzw. Kunden) eines Gebäudes. Modernisieren ändert die Zahl der Wohnungen nicht, nur Läden wachsen. */
+export function capacityOf(size: PlotSize, level: 1 | 2 | 3, use: BuildingUse): number {
+  const factor = use === "residential" ? 1 : ECONOMY.upgradeLevels[level].multiplier;
+  return Math.round(ECONOMY.plotSizes[size].capacity * factor);
 }
 
 /** Laufende Kosten eines Gebäudes pro Stunde. */
-export function upkeepOf(size: PlotSize, level: 1 | 2 | 3): number {
-  return ECONOMY.plotSizes[size].upkeepPerHour * ECONOMY.upgradeLevels[level].multiplier;
+export function upkeepOf(size: PlotSize, level: 1 | 2 | 3, use: BuildingUse): number {
+  const { multiplier, homeUpkeep } = ECONOMY.upgradeLevels[level];
+  return ECONOMY.plotSizes[size].upkeepPerHour * (use === "residential" ? homeUpkeep : multiplier);
+}
+
+/** Miete je Bewohner steigt mit der Modernisierung (Läden: 1). */
+export function rentFactorOf(level: 1 | 2 | 3, use: BuildingUse): number {
+  return use === "residential" ? ECONOMY.upgradeLevels[level].homeRent : 1;
 }
 
 /** Mietniveau durch die Fassade: 1 + Deko-Boni + Stockwerke (z. B. 2 Deko-Teile, 2 Stockwerke = 1,3). */

@@ -7,6 +7,7 @@ import {
   buildPlayground,
   homeComfort,
   moveTowards,
+  placesOf,
   residentsOf,
   residentVoices,
   spawnLitter,
@@ -172,5 +173,20 @@ describe("Stimmen der Bewohner", () => {
     const built = buildPlayground({ ...empty.player, coins: 1000 }, empty.street, empty.plotId);
     if (!built.ok) throw new Error();
     expect(residentVoices(built.street).map((v) => v.id)).toEqual(["happy"]);
+  });
+});
+
+describe("Modernisieren", () => {
+  it("modernisierte Wohnhäuser verzeihen Dreck eher – gleich viele Wohnungen", () => {
+    const { street, plotId } = withPlot(start(), "M", "wohnhaus");
+    const dirty: Street = { ...street, litter: Array.from({ length: 5 }, (_, i) => ({ id: `l${i}`, kind: "trash" as const, pos: 0.1 * i, side: "top" as const, taps: 0 })) };
+    const at = (level: 1 | 2 | 3) => {
+      const s: Street = { ...dirty, plots: dirty.plots.map((p) => (p.id === plotId ? { ...p, building: { ...p.building!, level } } : p)) };
+      const plot = s.plots.find((p) => p.id === plotId)! as Parameters<typeof targetOccupancy>[1];
+      return { target: targetOccupancy(s, plot), places: placesOf(plot) };
+    };
+    expect(at(2).target).toBeGreaterThan(at(1).target);
+    expect(at(3).target).toBeGreaterThan(at(2).target);
+    expect(new Set([at(1).places, at(2).places, at(3).places]).size).toBe(1);
   });
 });
