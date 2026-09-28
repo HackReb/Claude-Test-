@@ -6,8 +6,10 @@ use App\Entity\Street;
 use App\Entity\StreetShare;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 final class ApiTest extends WebTestCase
 {
@@ -220,6 +222,24 @@ final class ApiTest extends WebTestCase
 
         $this->call('POST', '/api/recover', ['code' => 'BABO-AAAA-AAAA-AAAA']);
         self::assertSame(404, $this->httpStatus());
+    }
+
+    public function testNewCodeCommandWhenPhoneIsLost(): void
+    {
+        $old = $this->register('player-maxim', 'Maxim', 'street-maxim');
+        $this->register('player-kalle', 'Kalle', 'street-kalle');
+        $tester = new CommandTester((new Application(self::$kernel))->find('babo:neuer-code'));
+
+        self::assertSame(1, $tester->execute(['spieler' => 'Niemand']));
+        self::assertSame(0, $tester->execute(['spieler' => 'maxim']));
+        self::assertMatchesRegularExpression('/BABO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/', $tester->getDisplay());
+        preg_match('/BABO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/', $tester->getDisplay(), $match);
+
+        $this->call('POST', '/api/recover', ['code' => $old['recoveryCode']]);
+        self::assertSame(404, $this->httpStatus(), 'alter Code gilt nicht mehr');
+        $result = $this->call('POST', '/api/recover', ['code' => $match[0]]);
+        self::assertSame(200, $this->httpStatus());
+        self::assertSame('Maxim', $result['player']['name']);
     }
 
     public function testDeleteFreesPlotsAndStreet(): void

@@ -133,6 +133,8 @@ interface GameState {
   washFacade(plotId: string): Promise<FixResult>;
   /** Tier in der Tierhandlung kaufen. */
   buyPet(speciesId: string, name: string): Promise<BuyPetResult>;
+  /** Dieses Gerät abmelden, der Spielstand bleibt auf dem Server. `false` = Server nicht erreichbar. */
+  signOut(): Promise<boolean>;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
 }
@@ -845,21 +847,32 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         return true;
       },
 
+      async signOut() {
+        if (!repo.online || !(await repo.online.signOut())) return false;
+        forget();
+        return true;
+      },
+
       async reset() {
         await repo.reset();
-        set({
-          player: null,
-          street: null,
-          offlineReport: null,
-          neighborhood: null,
-          neighborStreets: {},
-          playerStreets: {},
-          ownerNames: {},
-          cityStreetIds: null,
-          account: account(),
-        });
+        forget();
       },
     };
+
+    /** Nach Abmelden/Zurücksetzen: zurück zum Start. */
+    function forget() {
+      set({
+        player: null,
+        street: null,
+        offlineReport: null,
+        neighborhood: null,
+        neighborStreets: {},
+        playerStreets: {},
+        ownerNames: {},
+        cityStreetIds: null,
+        account: account(),
+      });
+    }
   });
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AccountCard } from "../components/AccountCard";
 import { StreetView } from "../components/street/StreetView";
 import { formatRate } from "../format";
 import { ownedStreetName } from "../game/names";
@@ -78,6 +79,9 @@ export function ShareScreen() {
       )}
       <p className="hint left">Klappt Speichern nicht? Bild gedrückt halten (Handy) oder Rechtsklick → „Bild speichern“.</p>
       {notice && <p className="error">{notice}</p>}
+
+      <h2>Dein Konto</h2>
+      <AccountCard />
 
       {/* Vorlage fürs Bild: unsichtbar gerendert, damit das SVG vollständig im DOM steht */}
       <div ref={source} className="share-source" aria-hidden>

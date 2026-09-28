@@ -159,6 +159,49 @@ describe("ApiRepository", () => {
     expect(server.calls).toHaveLength(0);
   });
 
+  it("Abmelden: erst alles hochladen, dann nur das Gerät leeren – der Server behält den Spielstand", async () => {
+    const { repo, server } = setup();
+    const { player, street } = start();
+    await repo.online.register(player, street);
+    await repo.savePlayer({ ...player, coins: 7 });
+
+    server.setOffline(true);
+    expect(await repo.online.signOut()).toBe(false); // nichts verloren, noch angemeldet
+    expect((await repo.loadPlayer())?.coins).toBe(7);
+    expect(repo.online.account().status).toBe("online");
+
+    server.setOffline(false);
+    expect(await repo.online.signOut()).toBe(true);
+    expect(server.paths()).not.toContain("DELETE /me");
+    expect(server.calls.filter((c) => c.path === "/me" && c.method === "PUT").at(-1)?.body.player.coins).toBe(7);
+    expect(await repo.loadPlayer()).toBeNull();
+    expect(repo.online.account()).toEqual({ status: "pending", recoveryCode: undefined, takenBy: undefined });
+  });
+
+  it("Spiel: Abmelden führt zurück zum Start, mit dem Code geht es weiter", async () => {
+    const { repo } = setup();
+    const store = createGameStore(repo, () => 0, { findNeighbors: async () => [] });
+    await store.getState().claim({ playerName: "Kalle", street: { name: "Weg", city: "Ulm" } });
+    await new Promise((r) => setTimeout(r, 20)); // Nachbarschaft entsteht im Hintergrund
+    expect(await store.getState().signOut()).toBe(true);
+    expect(store.getState().player).toBeNull();
+    expect(store.getState().street).toBeNull();
+  });
+
+  it("abgemeldetes Gerät (Code woanders benutzt) räumt beim Abmelden nur auf", async () => {
+    const { repo, server } = setup((c) => (c.method === "PUT" ? { status: 401, body: { error: "Unbekannter Schlüssel" } } : undefined));
+    const { player, street } = start();
+    await repo.online.register(player, street);
+    await repo.savePlayer({ ...player, coins: 7 });
+    await repo.flush();
+    expect(repo.online.account().status).toBe("signed-out");
+
+    const before = server.calls.length;
+    expect(await repo.online.signOut()).toBe(true);
+    expect(server.calls.length).toBe(before);
+    expect(await repo.loadPlayer()).toBeNull();
+  });
+
   it("Code auf neuem Gerät: Spielstand vom Server übernehmen", async () => {
     const kalle = start();
     const zoeStreet = start("Zoe").street;

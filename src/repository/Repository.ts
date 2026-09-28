@@ -62,6 +62,11 @@ export interface OnlineFeatures {
   fetchStreet(id: string): Promise<{ street: Street; ownerName: string | null } | null>;
   /** Mit Wiederherstellungs-Code auf diesem Gerät weiterspielen. `false` = Code unbekannt. */
   recover(code: string): Promise<boolean>;
+  /**
+   * Dieses Gerät abmelden: erst alles Ausstehende zum Server schicken, dann die Daten hier löschen.
+   * Auf dem Server bleibt alles – mit dem Code geht es woanders weiter. `false` = Server nicht erreichbar, nichts gelöscht.
+   */
+  signOut(): Promise<boolean>;
   /** Bekannte Namen echter Spieler (Spieler-ID → Name). */
   playerNames(): Record<string, string>;
   /** Bad Boys, die in der eigenen Straße angekommen sind (Stand der letzten Synchronisierung). */

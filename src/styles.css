@@ -289,6 +289,11 @@ p {
   margin-bottom: 20px;
 }
 
+.claim-login {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
 .claim-hero img {
   border-radius: 22px;
   border: 3px solid var(--border);

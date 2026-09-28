@@ -35,7 +35,8 @@ Ohne Server speichert das Spiel nur auf dem Gerät. Mit dem Symfony-Server in [`
 teilen alle Spieler eine Welt:
 
 - **Anmelden ohne Passwort:** Beim Claimen bekommt das Gerät einen geheimen Schlüssel, dazu einen
-  Wiederherstellungs-Code (`BABO-XXXX-XXXX-XXXX`, unter *Straße → Auf anderem Gerät weiterspielen*).
+  Anmelde-Code (`BABO-XXXX-XXXX-XXXX`, unter *Teilen → Dein Konto*). Dort kann man sich auch abmelden;
+  auf dem neuen Gerät: *Mit Code anmelden*.
 - **Wer zuerst kommt:** Jede echte Straße (OSM-Kennung) gehört nur einem Spieler.
 - **Mitspieler in der Nähe** erscheinen auf der Nachbarschaftskarte; was sie bauen, steht in den
   Neuigkeiten und in der Tageszeitung. Gekauft wird nur in der eigenen Straße.
