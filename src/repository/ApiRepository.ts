@@ -96,6 +96,7 @@ export class ApiRepository implements Repository {
       cityStreets: (city) => this.cityStreets(city),
       fetchStreet: (id) => this.fetchStreet(id),
       recover: (code) => this.recover(code),
+      signOut: () => this.signOut(),
       playerNames: () => this.read<Record<string, string>>(NAMES_KEY) ?? {},
       incomingMischief: () => this.read<Mischief[]>(INBOX_KEY) ?? [],
       fetchMischief: () => this.fetchMischief(),
@@ -157,6 +158,32 @@ export class ApiRepository implements Repository {
     if (this.auth.token) {
       await this.request("DELETE", "/me").catch((error) => console.warn("Spielstand auf dem Server nicht gelöscht", error));
     }
+    await this.clearDevice();
+  }
+
+  private async signOut(): Promise<boolean> {
+    // Noch nie beim Server angekommen: Abmelden würde den Spielstand verlieren.
+    if (!this.auth.token && this.auth.status !== "signed-out") return false;
+    // Ein bereits abgemeldetes Gerät darf nichts mehr hochladen – dort wird nur aufgeräumt.
+    if (this.auth.status !== "signed-out") {
+      // Was während des Hochladens noch gespeichert wird, kommt in der nächsten Runde mit.
+      for (let round = 0; round < 3 && this.hasPending(); round++) await this.flush();
+      // flush() kann das Gerät abmelden (401) – dann ist ohnehin nichts mehr zu retten.
+      if ((this.auth.status as string | undefined) !== "signed-out" && this.hasPending()) return false;
+    }
+    await this.clearDevice();
+    return true;
+  }
+
+  private hasPending(): boolean {
+    const o = this.outbox;
+    return Object.keys(o.streets).length > 0 || o.player !== undefined || o.neighborhood !== undefined || (o.acks?.length ?? 0) > 0;
+  }
+
+  /** Alles auf diesem Gerät vergessen (der Server bleibt unberührt). */
+  private async clearDevice(): Promise<void> {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
     this.auth = {};
     this.outbox = { streets: {} };
     this.merged.clear();

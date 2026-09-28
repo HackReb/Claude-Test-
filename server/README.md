@@ -35,6 +35,16 @@ PWA dagegen starten: `VITE_API_URL=http://127.0.0.1:8000 npm run dev` (im Haupto
 Anmeldung: Header `Authorization: Bearer <Schlüssel>`. Gespeichert werden nur SHA-256-Hashes von
 Schlüssel und Code.
 
+## Code vergessen?
+
+Handy weg und Code nicht notiert: auf dem Server einen neuen Code ausstellen (der alte wird ungültig).
+
+```bash
+cd /var/www/babo-api && php bin/console babo:neuer-code Maxim
+```
+
+Heißen mehrere Spieler so, listet der Befehl sie mit Spieler-ID auf – dann mit der ID nochmal aufrufen.
+
 ## Auf den eigenen Webspace
 
 Voraussetzungen: PHP ≥ 8.2 mit `pdo_sqlite` (oder `pdo_mysql`), **HTTPS** (die PWA läuft auf https –

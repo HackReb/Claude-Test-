@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { StreetSearch } from "../components/StreetSearch";
 import { ECONOMY } from "../config/economy";
 import { NAME_MAX_LENGTH, validateClaim } from "../game/claimStreet";
@@ -55,6 +55,8 @@ export function ClaimScreen() {
         <h1>Claim deine Straße!</h1>
         <p>Bau verrückte Häuser in deiner echten Straße, kassier Miete und zeig's deinen Freunden.</p>
       </div>
+
+      {online && <RecoverForm />}
 
       <form className="card claim-form" onSubmit={onSubmit} noValidate>
         <label className="field">
@@ -145,8 +147,6 @@ export function ClaimScreen() {
           {ECONOMY.giftPlotSize}-Grundstück mit Kiosk.
         </p>
       </form>
-
-      {online && <RecoverForm />}
     </div>
   );
 }
@@ -155,14 +155,16 @@ export function ClaimScreen() {
 function RecoverForm() {
   const recover = useGameStore((s) => s.recover);
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  // Nach dem Abmelden direkt das Code-Feld zeigen.
+  const [open, setOpen] = useState(() => (location.state as { login?: boolean } | null)?.login === true);
   const [code, setCode] = useState("");
   const [state, setState] = useState<"idle" | "busy" | "unknown" | "offline">("idle");
 
   if (!open) {
     return (
-      <button type="button" className="btn btn-link" onClick={() => setOpen(true)}>
-        Ich habe schon einen Code
+      <button type="button" className="btn claim-login" onClick={() => setOpen(true)}>
+        🔑 Ich habe schon eine Straße – mit Code anmelden
       </button>
     );
   }
@@ -179,9 +181,9 @@ function RecoverForm() {
   }
 
   return (
-    <form className="card claim-form" onSubmit={onSubmit}>
+    <form className="card claim-form claim-login" onSubmit={onSubmit}>
       <label className="field">
-        <span>Dein Code</span>
+        <span>Dein Anmelde-Code</span>
         <input
           value={code}
           placeholder="BABO-XXXX-XXXX-XXXX"

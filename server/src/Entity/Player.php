@@ -71,4 +71,14 @@ class Player
     {
         $this->tokenHash = $tokenHash;
     }
+
+    public function setRecoveryHash(string $recoveryHash): void
+    {
+        $this->recoveryHash = $recoveryHash;
+    }
+
+    public function getUpdatedAt(): \DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
 }
