@@ -8,6 +8,21 @@ Die Spiellogik läuft in der PWA; der Server achtet darauf, dass niemand fremdes
 - Datenbank: standardmäßig **SQLite** (`var/babo.db`, kein Datenbank-Server nötig), MySQL/MariaDB möglich
 - Alle Tabellen beginnen mit `babo_` – passt auch in eine bestehende Datenbank
 
+## Umzug auf MariaDB/MySQL
+
+Einmalig als root auf dem Server – legt eine eigene Datenbank `babo` mit eigenem Benutzer an (andere
+Datenbanken bleiben unberührt), kopiert alle Spieldaten aus `var/babo.db` und stellt `.env.local` um:
+
+```bash
+apt install php8.5-mysql && systemctl reload php8.5-fpm   # falls pdo_mysql noch fehlt
+bash /var/www/babo-api/deploy/setup-mariadb.sh
+```
+
+Am Ende stehen die Zugangsdaten für PhpStorm (*Data Source → MariaDB*, Host `127.0.0.1`, Port `3306`,
+Reiter *SSH/SSL* mit Tunnel über den Server). Die SQLite-Datei bleibt als Sicherung liegen. Der Umzug
+allein: `php bin/console babo:db-umzug --von=var/babo.db` (nach `doctrine:migrations:migrate` in der neuen
+Datenbank).
+
 ## Lokal
 
 ```bash

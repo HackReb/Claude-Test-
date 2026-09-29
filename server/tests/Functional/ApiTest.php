@@ -229,6 +229,28 @@ final class ApiTest extends WebTestCase
         self::assertSame(200, $this->httpStatus());
     }
 
+    public function testMoveFromSqliteFile(): void
+    {
+        $session = $this->account('Papa Matthias');
+        $this->register('player-a', 'Matthias', 'street-a', null, [], $session);
+        $this->register('player-b', 'Zoe', 'street-b');
+        $dir = self::getContainer()->getParameter('kernel.project_dir');
+        $copy = $dir.'/var/umzug-test.db';
+        copy($dir.'/var/test.db', $copy);
+
+        $tester = new CommandTester((new Application(self::$kernel))->find('babo:db-umzug'));
+        self::assertSame(1, $tester->execute(['--von' => $dir.'/var/fehlt.db']));
+        self::assertSame(1, $tester->execute(['--von' => $copy]), 'Ziel nicht leer');
+        self::assertStringContainsString('--ueberschreiben', $tester->getDisplay());
+        self::assertSame(0, $tester->execute(['--von' => $copy, '--ueberschreiben' => true]), $tester->getDisplay());
+        unlink($copy);
+
+        // Nach dem Umzug geht alles wie vorher: anmelden, Straßen sehen, spielen.
+        $login = $this->call('POST', '/api/account/login', ['name' => 'Papa Matthias', 'password' => 'geheim123']);
+        self::assertSame(['street-a'], array_column($login['streets'], 'streetId'));
+        self::assertSame('street-a', $this->call('GET', '/api/me', null, $login['token'], 'player-a')['street']['id']);
+    }
+
     public function testNewStreetNeedsAccount(): void
     {
         $this->call('POST', '/api/register', [
@@ -421,7 +443,8 @@ final class ApiTest extends WebTestCase
         self::assertSame(201, $this->httpStatus());
 
         $inbox = $this->call('GET', '/api/me/mischief', null, $kalle['token'])['mischief'];
-        self::assertSame(['tier-elefant', 'auto-mottenwerke-xprotz'], array_column($inbox, 'badBoyId'));
+        // Reihenfolge egal: MariaDB speichert Zeiten nur sekundengenau, das Spiel sortiert selbst nach Zeit.
+        self::assertEqualsCanonicalizing(['tier-elefant', 'auto-mottenwerke-xprotz'], array_column($inbox, 'badBoyId'));
 
         $this->call('POST', '/api/streets/street-kalle/mischief', ['badBoy' => 'tier-'], $maxim['token']);
         self::assertSame(400, $this->httpStatus());
