@@ -14,9 +14,13 @@ Einmalig als root auf dem Server – legt eine eigene Datenbank `babo` mit eigen
 Datenbanken bleiben unberührt), kopiert alle Spieldaten aus `var/babo.db` und stellt `.env.local` um:
 
 ```bash
-apt install php8.5-mysql && systemctl reload php8.5-fpm   # falls pdo_mysql noch fehlt
-bash /var/www/babo-api/deploy/setup-mariadb.sh
+bash /var/www/babo-api/deploy/setup-mariadb.sh --pruefen   # nur nachsehen, ändert nichts
+bash /var/www/babo-api/deploy/setup-mariadb.sh             # umziehen
 ```
+
+Das Skript installiert nichts und startet keinen Dienst neu. Gibt es Datenbank oder Benutzer „babo“
+schon für etwas anderes, bricht es ab (andere Namen: `BABO_DB_NAME=… BABO_DB_USER=…`). Fehlt PHP die
+Erweiterung `pdo_mysql`, sagt es, was zu installieren ist.
 
 Am Ende stehen die Zugangsdaten für PhpStorm (*Data Source → MariaDB*, Host `127.0.0.1`, Port `3306`,
 Reiter *SSH/SSL* mit Tunnel über den Server). Die SQLite-Datei bleibt als Sicherung liegen. Der Umzug
