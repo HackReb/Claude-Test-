@@ -61,7 +61,10 @@ describe("Zufallsgenerator", () => {
         expect(home.facade.parts.some((p) => getPart(p.partId)?.use === "commercial")).toBe(false);
         const shop = randomBuilding(size, random, { use: "commercial" });
         expect(validateFacade(shop.facade, size)).toEqual([]);
-        expect(shop.facade.parts.some((p) => getPart(p.partId)?.textFill && p.text)).toBe(true);
+        // Ladenwand und Ladendach – sieht nicht aus wie ein Wohnhaus; der Name kommt aufs Ladenschild.
+        expect(getPart(shop.facade.base.partId)?.use).toBe("commercial");
+        expect(getPart(shop.facade.roof.partId)?.use).toBe("commercial");
+        expect(shop.name).toBeTruthy();
         expect(shop.facade.parts.some((p) => p.y === 0 && getPart(p.partId)?.category === "window" && getPart(p.partId)?.use === "commercial")).toBe(true);
       }
     }
