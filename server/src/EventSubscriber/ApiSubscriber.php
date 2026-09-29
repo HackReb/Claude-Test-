@@ -58,7 +58,7 @@ final class ApiSubscriber implements EventSubscriberInterface
         }
         $response->headers->set('Access-Control-Allow-Origin', in_array('*', $this->allowedOrigins, true) ? '*' : $origin);
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+        $response->headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Babo-Player');
         $response->headers->set('Access-Control-Max-Age', '86400');
         $response->setVary('Origin', false);
     }

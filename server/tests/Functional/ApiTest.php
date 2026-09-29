@@ -2,6 +2,7 @@
 
 namespace App\Tests\Functional;
 
+use App\Entity\Player;
 use App\Entity\Street;
 use App\Entity\StreetShare;
 use Doctrine\ORM\EntityManagerInterface;
@@ -29,7 +30,7 @@ final class ApiTest extends WebTestCase
     {
         $street = [
             'id' => $id,
-            'name' => 'Bahnhofstraße',
+            'name' => "Weg $id",
             'city' => $city,
             'ownerId' => $ownerId,
             'plots' => [
@@ -50,11 +51,14 @@ final class ApiTest extends WebTestCase
         return ['id' => $id, 'name' => $name, 'coins' => 1000, 'pendingRent' => 0, 'unlockedParts' => [], 'streetId' => $streetId, 'lastSeen' => 1];
     }
 
-    private function call(string $method, string $uri, ?array $body = null, ?string $token = null): array
+    private function call(string $method, string $uri, ?array $body = null, ?string $token = null, ?string $playerId = null): array
     {
         $headers = ['CONTENT_TYPE' => 'application/json', 'HTTP_ORIGIN' => 'https://babo.example'];
         if (null !== $token) {
             $headers['HTTP_AUTHORIZATION'] = "Bearer $token";
+        }
+        if (null !== $playerId) {
+            $headers['HTTP_X_BABO_PLAYER'] = $playerId;
         }
         $this->client->request($method, $uri, [], [], $headers, null === $body ? '' : json_encode($body));
 
@@ -66,13 +70,23 @@ final class ApiTest extends WebTestCase
         return $this->client->getResponse()->getStatusCode();
     }
 
-    /** @return array{token: string, recoveryCode: string} */
-    private function register(string $playerId, string $name, string $streetId, ?string $osmKey = null, array $extra = []): array
+    /** Neues Konto, liefert den Sitzungs-Schlüssel. */
+    private function account(string $name, string $password = 'geheim123'): string
     {
+        $result = $this->call('POST', '/api/account/register', ['name' => $name, 'password' => $password]);
+        self::assertSame(201, $this->httpStatus(), json_encode($result));
+
+        return $result['token'];
+    }
+
+    /** @return array{token: string, recoveryCode: string} */
+    private function register(string $playerId, string $name, string $streetId, ?string $osmKey = null, array $extra = [], ?string $session = null): array
+    {
+        $session ??= $this->account(mb_substr("Konto $playerId", 0, 20));
         $result = $this->call('POST', '/api/register', [
             'player' => $this->player($playerId, $name, $streetId),
             'street' => $this->street($streetId, $playerId, $osmKey),
-        ] + $extra);
+        ] + $extra, $session);
         self::assertSame(201, $this->httpStatus(), json_encode($result));
 
         return $result;
@@ -116,13 +130,112 @@ final class ApiTest extends WebTestCase
     {
         $this->register('player-kalle', 'Kalle', 'street-kalle', 'osm|de|78532|tuttlingen|bahnhofstraße');
 
+        $zoe = $this->account('Zoe');
         $result = $this->call('POST', '/api/register', [
             'player' => $this->player('player-zoe', 'Zoe', 'street-zoe'),
             'street' => $this->street('street-zoe', 'player-zoe', 'osm|de|78532|tuttlingen|bahnhofstraße'),
-        ]);
+        ], $zoe);
 
         self::assertSame(409, $this->httpStatus());
         self::assertSame(['error' => 'street-taken', 'ownerName' => 'Kalle'], $result);
+    }
+
+    public function testStreetOnlyOnceEvenWithoutMapCheck(): void
+    {
+        $this->register('player-kalle', 'Kalle', 'street-kalle');
+        $zoe = $this->account('Zoe');
+        // Gleicher Name, gleicher Ort, nur anders geschrieben – ohne Kartenprüfung.
+        $street = ['name' => 'weg street-KALLE ', 'city' => ' tuttlingen'] + $this->street('street-zoe', 'player-zoe');
+        $result = $this->call('POST', '/api/register', ['player' => $this->player('player-zoe', 'Zoe', 'street-zoe'), 'street' => $street], $zoe);
+        self::assertSame(409, $this->httpStatus());
+        self::assertSame('Kalle', $result['ownerName']);
+
+        // Anderer Ort – kein Problem.
+        $street['city'] = 'Ulm';
+        $this->call('POST', '/api/register', ['player' => $this->player('player-zoe', 'Zoe', 'street-zoe'), 'street' => $street], $zoe);
+        self::assertSame(201, $this->httpStatus());
+    }
+
+    public function testAccountWithUpToThreeStreets(): void
+    {
+        $session = $this->account('Papa Matthias');
+        $this->call('POST', '/api/account/register', ['name' => 'papa  matthias', 'password' => 'andersrum']);
+        self::assertSame(409, $this->httpStatus(), 'Name schon vergeben (Groß-/Kleinschreibung egal)');
+        $this->call('POST', '/api/account/register', ['name' => 'Ab', 'password' => 'geheim123']);
+        self::assertSame(400, $this->httpStatus());
+
+        foreach (['a', 'b', 'c'] as $i => $x) {
+            $this->register("player-$x", 'Matthias', "street-$x", null, [], $session);
+            self::assertCount($i + 1, $this->call('GET', '/api/account', null, $session)['streets']);
+        }
+        $this->call('POST', '/api/register', [
+            'player' => $this->player('player-d', 'Matthias', 'street-d'),
+            'street' => $this->street('street-d', 'player-d'),
+        ], $session);
+        self::assertSame(409, $this->httpStatus(), 'höchstens drei Straßen');
+
+        // Spielen mit Sitzung + gewählter Straße
+        $me = $this->call('GET', '/api/me', null, $session, 'player-b');
+        self::assertSame('street-b', $me['street']['id']);
+        $zoe = $this->register('player-zoe', 'Zoe', 'street-zoe');
+        $this->call('GET', '/api/me', null, $session, 'player-zoe');
+        self::assertSame(403, $this->httpStatus(), 'fremde Straße');
+
+        // Straße löschen macht wieder Platz
+        $this->call('DELETE', '/api/me', null, $session, 'player-c');
+        self::assertCount(2, $this->call('GET', '/api/account', null, $session)['streets']);
+
+        // Anmelden auf einem anderen Gerät, Abmelden
+        $this->call('POST', '/api/account/login', ['name' => 'PAPA MATTHIAS', 'password' => 'falsch']);
+        self::assertSame(401, $this->httpStatus());
+        $login = $this->call('POST', '/api/account/login', ['name' => 'PAPA MATTHIAS', 'password' => 'geheim123']);
+        self::assertSame(['Weg street-a', 'Weg street-b'], array_column($login['streets'], 'streetName'));
+        $this->call('POST', '/api/account/logout', null, $login['token']);
+        $this->call('GET', '/api/account', null, $login['token']);
+        self::assertSame(401, $this->httpStatus());
+        $this->call('GET', '/api/account', null, $session);
+        self::assertSame(200, $this->httpStatus(), 'das andere Gerät bleibt angemeldet');
+        self::assertNotEmpty($zoe['token']);
+    }
+
+    public function testOldSaveMovesIntoAccountAndMoreViaCode(): void
+    {
+        // Zwei alte Spielstände ohne Konto (wie vor den Konten) …
+        $first = $this->register('player-a', 'Kalle', 'street-a');
+        $second = $this->register('player-b', 'Kalle', 'street-b');
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        foreach (['player-a', 'player-b'] as $id) {
+            $em->find(Player::class, $id)->setAccountId(null);
+        }
+        $em->flush();
+
+        // … das erste Gerät richtet ein Konto ein und bringt seinen Spielstand mit.
+        $result = $this->call('POST', '/api/account/register', ['name' => 'Kalle', 'password' => 'geheim123'], $first['token']);
+        self::assertSame(['street-a'], array_column($result['streets'], 'streetId'));
+        $session = $result['token'];
+
+        // Den zweiten hängt man mit seinem BABO-Code an.
+        $this->call('POST', '/api/account/attach', ['code' => 'BABO-AAAA-AAAA-AAAA'], $session);
+        self::assertSame(404, $this->httpStatus());
+        $attached = $this->call('POST', '/api/account/attach', ['code' => $second['recoveryCode']], $session);
+        self::assertSame(['street-a', 'street-b'], array_column($attached['streets'], 'streetId'));
+
+        // Ein anderes Konto kann ihn nicht mehr klauen.
+        $this->call('POST', '/api/account/attach', ['code' => $second['recoveryCode']], $this->account('Dieb'));
+        self::assertSame(409, $this->httpStatus());
+
+        // Der alte Geräte-Schlüssel funktioniert weiter, bis das Gerät sich anmeldet.
+        $this->call('GET', '/api/me', null, $second['token']);
+        self::assertSame(200, $this->httpStatus());
+    }
+
+    public function testNewStreetNeedsAccount(): void
+    {
+        $this->call('POST', '/api/register', [
+            'player' => $this->player('player-x', 'X', 'street-x'),
+            'street' => $this->street('street-x', 'player-x'),
+        ]);
+        self::assertSame(401, $this->httpStatus());
     }
 
     /** Grundstück aus früheren Regeln (v2), als man noch bei anderen kaufen konnte – direkt in der Datenbank. */
@@ -324,10 +437,11 @@ final class ApiTest extends WebTestCase
 
     public function testRejectsBrokenDocuments(): void
     {
-        $this->call('POST', '/api/register', ['player' => ['id' => 'x']]);
+        $session = $this->account('Kaputt');
+        $this->call('POST', '/api/register', ['player' => ['id' => 'x']], $session);
         self::assertSame(400, $this->httpStatus());
 
-        $this->client->request('POST', '/api/register', [], [], ['CONTENT_TYPE' => 'application/json'], '{kaputt');
+        $this->client->request('POST', '/api/register', [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer $session"], '{kaputt');
         self::assertSame(400, $this->httpStatus());
     }
 }

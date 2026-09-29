@@ -17,6 +17,22 @@ export function distanceKm(a: Pick<OsmStreetRef, "lat" | "lon">, b: Pick<OsmStre
  * Straßen echter Mitspieler in der Nähe, die nächste zuerst. Ohne Koordinaten (ungeprüfte Straßen)
  * zählt der gleiche Ort – die kommen nach denen mit bekannter Entfernung.
  */
+/** Straßenname zum Vergleichen (wie der Server): „Bahnhof-Str.“ = „bahnhofstr“ = „Bahnhofstraße“. */
+export function streetNameKey(name: string): string {
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-.]+(?=str)/gu, "")
+    .replace(/(str\.?|strasse)$/u, "straße");
+  return key.replace(/[\s-]+/gu, "");
+}
+
+/** Dieselbe echte Straße? Karten-Kennung oder Name + Ort. */
+export function sameStreet(a: Street, b: Street): boolean {
+  if (a.osm?.key && a.osm.key === b.osm?.key) return true;
+  return a.city.trim().toLowerCase() === b.city.trim().toLowerCase() && streetNameKey(a.name) === streetNameKey(b.name);
+}
+
 export function nearbyStreets(own: Street, candidates: Street[], maxKm = NEARBY_KM): Street[] {
   const withDistance = candidates
     .filter((s) => s.id !== own.id)

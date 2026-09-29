@@ -25,17 +25,39 @@ PWA dagegen starten: `VITE_API_URL=http://127.0.0.1:8000 npm run dev` (im Haupto
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
 | GET | `/api/health` | Lebenszeichen |
-| POST | `/api/register` | neuer Spieler + Straße (optional mit altem lokalem Spielstand) → Schlüssel + Code; `409 street-taken` |
+| POST | `/api/account/register` | Konto anlegen (Name + Passwort) → Sitzung; ein älterer Spielstand kommt mit (Geräte-Schlüssel im Header) |
+| POST | `/api/account/login` · `/api/account/logout` | anmelden → Sitzung + Straßen · Gerät abmelden |
+| GET | `/api/account` | Konto und seine Straßen (höchstens 3) |
+| POST | `/api/account/attach` | ältere Straße per BABO-Code ans Konto hängen |
+| POST | `/api/register` | neue Straße im Konto (Sitzung nötig, höchstens 3); `409 street-taken` |
 | POST | `/api/recover` | Code → neuer Schlüssel + Spielstand (altes Gerät wird abgemeldet) |
 | GET/PUT/DELETE | `/api/me` | eigener Spielstand laden / Spieler speichern / alles löschen |
 | PUT | `/api/me/neighborhood` | Bot-Nachbarschaft speichern |
 | GET/PUT | `/api/streets/{id}` | Straße laden / speichern (Antwort = zusammengeführter Stand) |
 | GET | `/api/city?name=Ort` | Straßen anderer Spieler im Ort |
 
-Anmeldung: Header `Authorization: Bearer <Schlüssel>`. Gespeichert werden nur SHA-256-Hashes von
+Anmeldung: Header `Authorization: Bearer <Sitzung>` plus `X-Babo-Player: <Spieler-ID>` (welche Straße des
+Kontos); ältere Spielstände ohne Konto schicken ihren Geräte-Schlüssel. Gespeichert werden nur SHA-256-Hashes von
 Schlüssel und Code.
 
-## Code vergessen?
+## Passwort vergessen?
+
+```bash
+cd /var/www/babo-api && php bin/console babo:passwort "Papa Matthias"
+```
+
+Stellt ein neues Passwort aus und meldet alle Geräte des Kontos ab.
+
+## Doppelte Straßen aufräumen
+
+Aus der Zeit vor „jede Straße nur einmal“ kann es Straßen geben, die mehrere Spieler geclaimt haben:
+
+```bash
+cd /var/www/babo-api && php bin/console babo:doppelte-strassen
+php bin/console babo:doppelte-strassen --loeschen=<Spieler-ID>   # löscht diesen Spielstand samt Straße
+```
+
+## Code vergessen? (ältere Spielstände ohne Konto)
 
 Handy weg und Code nicht notiert: auf dem Server einen neuen Code ausstellen (der alte wird ungültig).
 

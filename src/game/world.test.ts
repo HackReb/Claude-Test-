@@ -3,7 +3,7 @@ import type { Street } from "../model/types";
 import { claimStreet } from "./claimStreet";
 import { buyPlot, placeBuilding, upgradePlot } from "./plots";
 import { buildingFromTemplate, TEMPLATES } from "./templates";
-import { digestOf, distanceKm, nearbyStreets, streetNews } from "./world";
+import { digestOf, distanceKm, nearbyStreets, sameStreet, streetNameKey, streetNews } from "./world";
 
 const tpl = (id: string) => buildingFromTemplate(TEMPLATES.find((t) => t.id === id)!);
 const at = (lat: number, lon: number) => ({ key: `osm|${lat}|${lon}`, wayId: "W1", lat, lon });
@@ -73,5 +73,16 @@ describe("Neuigkeiten von Mitspielern", () => {
     const own = kalle.street.plots.find((p) => p.gifted)!;
     const rebuilt = placeBuilding(kalle.street, own.id, tpl("imbiss"))!;
     expect(streetNews(before, rebuilt, { me: kalle.player.id, names, at: 8 })).toEqual([]);
+  });
+});
+
+describe("dieselbe Straße", () => {
+  const street = (name: string, city: string, key?: string) =>
+    ({ id: name, name, city, ownerId: "x", plots: [], ...(key && { osm: { key, wayId: "W1", lat: 0, lon: 0 } }) }) as unknown as Street;
+  it("erkennt Schreibweisen und Karten-Kennung", () => {
+    expect(streetNameKey("Bahnhof-Str.")).toBe(streetNameKey("Bahnhofstraße"));
+    expect(sameStreet(street("Bahnhofstr", "Tuttlingen"), street("Bahnhofstraße", " tuttlingen"))).toBe(true);
+    expect(sameStreet(street("Bahnhofstraße", "Ulm"), street("Bahnhofstraße", "Tuttlingen"))).toBe(false);
+    expect(sameStreet(street("A", "X", "osm|1"), street("B", "Y", "osm|1"))).toBe(true);
   });
 });

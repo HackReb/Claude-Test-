@@ -29,6 +29,7 @@ export function StreetScreen() {
   const street = useGameStore((s) => s.street)!;
   const player = useGameStore((s) => s.player)!;
   const offlineReport = useGameStore((s) => s.offlineReport);
+  const accountStatus = useGameStore((s) => s.account?.status);
   const paper = useGameStore((s) => s.neighborhood?.paper);
   const dismissOfflineReport = useGameStore((s) => s.dismissOfflineReport);
   const collect = useGameStore((s) => s.collect);
@@ -96,6 +97,18 @@ export function StreetScreen() {
 
   return (
     <div className="street-screen">
+      {accountStatus === "legacy" && (
+        <div className="notice card">
+          <p>
+            <strong>Neu: Konten!</strong> Sichere deine Straße mit Name und Passwort – dann kannst du dich überall anmelden und bis zu drei
+            Straßen haben.
+          </p>
+          <Link className="btn btn-primary" to={routes.share}>
+            Konto einrichten
+          </Link>
+        </div>
+      )}
+
       {offlineReport !== null && (
         <div className="notice card" role="status">
           <p>

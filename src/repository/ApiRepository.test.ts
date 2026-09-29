@@ -11,6 +11,8 @@ interface Call {
   path: string;
   body: any;
   token: string | null;
+  /** Gewählte Straße (Header X-Babo-Player). */
+  player: string | null;
 }
 
 type Reply = { status: number; body?: unknown } | "offline";
@@ -25,6 +27,7 @@ function fakeServer(handle: (call: Call) => Reply | undefined = () => undefined)
       path: url.replace("https://api.test/api", ""),
       body: init.body ? JSON.parse(init.body as string) : undefined,
       token: (init.headers as Record<string, string>).Authorization?.replace("Bearer ", "") ?? null,
+      player: (init.headers as Record<string, string>)["X-Babo-Player"] ?? null,
     };
     calls.push(call);
     const reply = offline ? "offline" : (handle(call) ?? defaultReply(call));
@@ -39,7 +42,10 @@ function fakeServer(handle: (call: Call) => Reply | undefined = () => undefined)
   };
 }
 
+const ACCOUNT = { name: "Kalle", maxStreets: 3 };
+
 function defaultReply(call: Call): Reply {
+  if (call.path === "/account/login" || call.path === "/account/register") return { status: 200, body: { token: "sess-1", account: ACCOUNT, streets: [] } };
   if (call.path === "/register") return { status: 201, body: { token: "tok-1", recoveryCode: "BABO-AAAA-BBBB-CCCC" } };
   if (call.method === "PUT" && call.path.startsWith("/streets/")) return { status: 200, body: { street: call.body.street, ownerName: null } };
   return { status: 200, body: { ok: true } };
@@ -55,19 +61,97 @@ function setup(handle?: (call: Call) => Reply | undefined) {
 const start = (name = "Kalle") => claimStreet({ playerName: name, street: { name: "Weg", city: "Ulm" } }, 0);
 
 describe("ApiRepository", () => {
-  it("meldet an und schickt danach mit Geräte-Schlüssel", async () => {
+  it("Konto: anmelden, Straße claimen, dann mit Sitzung + gewählter Straße speichern", async () => {
     const { repo, server } = setup();
+    expect(repo.online.account().status).toBe("logged-out");
+    expect(await repo.online.login("Kalle", "geheim123")).toEqual({ ok: true });
+    expect(repo.online.account()).toMatchObject({ status: "choose", name: "Kalle", streets: [], maxStreets: 3 });
+
     const { player, street } = start();
     await repo.online.register(player, street);
-    expect(repo.online.account()).toEqual({ status: "online", recoveryCode: "BABO-AAAA-BBBB-CCCC" });
+    expect(repo.online.account()).toMatchObject({ status: "online", activePlayerId: player.id, streets: [{ playerId: player.id, streetName: "Weg" }] });
+    await repo.savePlayer({ ...player, coins: 5 });
+    await repo.flush();
+    expect(server.paths()).toEqual(["POST /account/login", "POST /register", "PUT /me"]);
+    expect(server.calls[1]).toMatchObject({ token: "sess-1", player: null });
+    expect(server.calls[2]).toMatchObject({ token: "sess-1", player: player.id });
+  });
+
+  it("falsches Passwort: Meldung vom Server", async () => {
+    const { repo } = setup((c) => (c.path === "/account/login" ? { status: 401, body: { error: "Name oder Passwort stimmt nicht." } } : undefined));
+    expect(await repo.online.login("Kalle", "falsch")).toEqual({ ok: false, message: "Name oder Passwort stimmt nicht." });
+    expect(repo.online.account().status).toBe("logged-out");
+  });
+
+  it("Straßen wechseln, neue Straße anfangen, Code anhängen, abmelden", async () => {
+    const kalle = start();
+    const other = start("Kalle");
+    const streets = [
+      { playerId: kalle.player.id, playerName: "Kalle", streetId: kalle.street.id, streetName: "Weg", city: "Ulm" },
+      { playerId: other.player.id, playerName: "Kalle", streetId: other.street.id, streetName: "Weg", city: "Ulm" },
+    ];
+    const snapshotOf = (id: string | null) => {
+      const s = id === other.player.id ? other : kalle;
+      return { player: s.player, street: s.street, neighborhood: null, streets: [] };
+    };
+    const { repo, server } = setup((c) =>
+      c.path === "/account/login"
+        ? { status: 200, body: { token: "sess-1", account: ACCOUNT, streets } }
+        : c.method === "GET" && c.path === "/me"
+          ? { status: 200, body: snapshotOf(c.player) }
+          : c.path === "/account/attach"
+            ? c.body.code === "BABO-AAAA-BBBB-CCCC"
+              ? { status: 200, body: { account: ACCOUNT, streets: [...streets, { ...streets[0], playerId: "p3" }] } }
+              : { status: 409, body: { error: "Diese Straße gehört schon zu einem anderen Konto." } }
+            : undefined,
+    );
+    await repo.online.login("Kalle", "geheim123");
+    expect(await repo.online.selectStreet(kalle.player.id)).toBe(true);
+    expect((await repo.loadPlayer())?.id).toBe(kalle.player.id);
+    await repo.savePlayer({ ...kalle.player, coins: 42 });
+
+    // Wechsel: erst wird hochgeladen, dann die andere Straße geholt.
+    expect(await repo.online.selectStreet(other.player.id)).toBe(true);
+    expect(server.calls.find((c) => c.method === "PUT" && c.path === "/me")).toMatchObject({ player: kalle.player.id });
+    expect((await repo.loadPlayer())?.id).toBe(other.player.id);
+    expect(repo.online.account().activePlayerId).toBe(other.player.id);
+
+    // Neue Straße: das Gerät wird frei, das Konto bleibt angemeldet.
+    expect(await repo.online.startNewStreet()).toBe(true);
+    expect(await repo.loadPlayer()).toBeNull();
+    expect(repo.online.account().status).toBe("choose");
+
+    expect(await repo.online.attachCode("babo aaaa bbbb cccc")).toEqual({ ok: true });
+    expect(repo.online.account().streets).toHaveLength(3);
+    expect(await repo.online.attachCode("BABO-XXXX-XXXX-XXXX")).toEqual({ ok: false, message: "Diese Straße gehört schon zu einem anderen Konto." });
+
+    expect(await repo.online.signOut()).toBe(true);
+    expect(server.paths()).toContain("POST /account/logout");
+    expect(repo.online.account().status).toBe("logged-out");
+  });
+
+  it("älterer Spielstand ohne Konto: spielt mit Geräte-Schlüssel, Konto einrichten nimmt ihn mit", async () => {
+    const { repo, server } = setup((c) =>
+      c.path === "/account/register" ? { status: 201, body: { token: "sess-9", account: ACCOUNT, streets: [{ playerId: c.body && lastId, playerName: "Kalle", streetId: "s", streetName: "Weg", city: "Ulm" }] } } : undefined,
+    );
+    let lastId = "";
+    const { player, street } = start();
+    lastId = player.id;
+    await repo.online.register(player, street);
+    expect(repo.online.account()).toEqual({ status: "legacy", recoveryCode: "BABO-AAAA-BBBB-CCCC" });
 
     await repo.saveStreet(street);
     await repo.savePlayer({ ...player, coins: 5 });
     await repo.flush();
-
     expect(server.paths()).toEqual(["POST /register", `PUT /streets/${street.id}`, "PUT /me"]);
     expect(server.calls[1].token).toBe("tok-1");
     expect(server.calls[2].body.player.coins).toBe(5);
+
+    // Konto einrichten: der alte Geräte-Schlüssel geht mit, danach läuft alles über die Sitzung.
+    expect(await repo.online.createAccount("Kalle", "geheim123")).toEqual({ ok: true });
+    expect(server.calls.at(-1)).toMatchObject({ path: "/account/register", token: "tok-1" });
+    expect(repo.online.account()).toMatchObject({ status: "online", activePlayerId: player.id });
+    expect((await repo.loadPlayer())?.coins).toBe(5);
   });
 
   it("echte Straße schon vergeben → StreetTakenError mit Namen", async () => {
@@ -121,9 +205,13 @@ describe("ApiRepository", () => {
 
     const server = fakeServer();
     const repo = new ApiRepository("https://api.test", local, storage, server.fetcher);
+    // Ohne Konto passiert nichts – nach dem Anmelden kommt der lokale Spielstand mit ins Konto.
     expect((await repo.loadPlayer())?.id).toBe(player.id);
-    expect(server.paths()).toEqual(["POST /register"]);
-    expect(server.calls[0].body.street.id).toBe(street.id);
+    expect(server.paths()).toEqual([]);
+    await repo.online.login("Kalle", "geheim123");
+    expect((await repo.loadPlayer())?.id).toBe(player.id);
+    expect(server.paths()).toEqual(["POST /account/login", "POST /register"]);
+    expect(server.calls[1].body.street.id).toBe(street.id);
     expect(repo.online.account().status).toBe("online");
   });
 
@@ -136,11 +224,12 @@ describe("ApiRepository", () => {
     const server = fakeServer((c) => (c.path === "/register" ? { status: 409, body: { error: "street-taken", ownerName: "Zoe" } } : undefined));
 
     const repo = new ApiRepository("https://api.test", local, storage, server.fetcher);
+    await repo.online.login("Kalle", "geheim123");
     expect((await repo.loadPlayer())?.id).toBe(player.id);
     expect(repo.online.account()).toMatchObject({ status: "street-taken", takenBy: "Zoe" });
 
     await new ApiRepository("https://api.test", local, storage, server.fetcher).loadPlayer();
-    expect(server.calls).toHaveLength(1);
+    expect(server.calls).toHaveLength(2);
   });
 
   it("abgemeldetes Gerät (401) spielt lokal weiter", async () => {
@@ -168,14 +257,14 @@ describe("ApiRepository", () => {
     server.setOffline(true);
     expect(await repo.online.signOut()).toBe(false); // nichts verloren, noch angemeldet
     expect((await repo.loadPlayer())?.coins).toBe(7);
-    expect(repo.online.account().status).toBe("online");
+    expect(repo.online.account().status).toBe("legacy");
 
     server.setOffline(false);
     expect(await repo.online.signOut()).toBe(true);
     expect(server.paths()).not.toContain("DELETE /me");
     expect(server.calls.filter((c) => c.path === "/me" && c.method === "PUT").at(-1)?.body.player.coins).toBe(7);
     expect(await repo.loadPlayer()).toBeNull();
-    expect(repo.online.account()).toEqual({ status: "pending", recoveryCode: undefined, takenBy: undefined });
+    expect(repo.online.account()).toEqual({ status: "logged-out", recoveryCode: undefined, takenBy: undefined });
   });
 
   it("Spiel: Abmelden führt zurück zum Start, mit dem Code geht es weiter", async () => {
@@ -223,7 +312,7 @@ describe("ApiRepository", () => {
     expect(await repo.online.recover("babo aaaa bbbb cccc")).toBe(true);
     expect((await repo.loadPlayer())?.id).toBe(kalle.player.id);
     expect(await repo.online.foreignStreets()).toEqual([{ street: zoeStreet, ownerName: "Zoe" }]);
-    expect(repo.online.account()).toEqual({ status: "online", recoveryCode: "BABO-AAAA-BBBB-CCCC" });
+    expect(repo.online.account()).toEqual({ status: "legacy", recoveryCode: "BABO-AAAA-BBBB-CCCC" });
     expect(server.calls.at(-1)?.token).toBe("tok-2");
   });
 

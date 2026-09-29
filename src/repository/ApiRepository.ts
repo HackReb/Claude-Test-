@@ -1,6 +1,6 @@
 import type { Mischief, Neighborhood, Player, Street } from "../model/types";
 import { PREFIX, type KeyValueStorage, type LocalRepository } from "./LocalRepository";
-import { StreetTakenError, type Account, type ForeignStreet, type OnlineFeatures, type Repository } from "./Repository";
+import { ClaimRejectedError, StreetTakenError, type Account, type AccountResult, type AccountStreet, type ForeignStreet, type OnlineFeatures, type Repository } from "./Repository";
 
 const AUTH_KEY = `${PREFIX}auth`;
 const OUTBOX_KEY = `${PREFIX}outbox`;
@@ -13,10 +13,24 @@ const TIMEOUT_MS = 8000;
 const DEBOUNCE_MS = 3000;
 
 interface AuthState {
+  /** Konto-Sitzung dieses Geräts. */
+  session?: string;
+  /** Mit Sitzung: die gerade gespielte Straße (Spieler-ID). */
+  playerId?: string;
+  accountName?: string;
+  streets?: AccountStreet[];
+  maxStreets?: number;
+  /** Älterer Geräte-Schlüssel eines einzelnen Spielstands (bis das Konto eingerichtet ist). */
   token?: string;
   recoveryCode?: string;
   status?: "street-taken" | "signed-out";
   takenBy?: string;
+}
+
+interface AccountResponse {
+  token?: string;
+  account: { name: string; maxStreets: number };
+  streets: AccountStreet[];
 }
 
 /** Was noch zum Server muss; die Zahl ist eine Version, damit neuere Änderungen nicht verloren gehen. */
@@ -97,6 +111,12 @@ export class ApiRepository implements Repository {
       fetchStreet: (id) => this.fetchStreet(id),
       recover: (code) => this.recover(code),
       signOut: () => this.signOut(),
+      login: (name, password) => this.login(name, password),
+      createAccount: (name, password) => this.createAccount(name, password),
+      refreshAccount: () => this.refreshAccount(),
+      selectStreet: (playerId) => this.selectStreet(playerId),
+      startNewStreet: () => this.startNewStreet(),
+      attachCode: (code) => this.attachCode(code),
       playerNames: () => this.read<Record<string, string>>(NAMES_KEY) ?? {},
       incomingMischief: () => this.read<Mischief[]>(INBOX_KEY) ?? [],
       fetchMischief: () => this.fetchMischief(),
@@ -109,8 +129,9 @@ export class ApiRepository implements Repository {
 
   async loadPlayer(): Promise<Player | null> {
     try {
-      if (this.auth.token) await this.sync();
-      else if (!this.auth.status) await this.migrate();
+      if (this.canSync()) await this.sync();
+      // Alter lokaler Spielstand (von vor dem Server): mit Konto beim Server anmelden.
+      else if (this.auth.session && !this.auth.status) await this.migrate();
     } catch (error) {
       if (!this.handleAuthError(error)) console.warn("Server nicht erreichbar – spiele mit dem lokalen Stand.", error);
     }
@@ -133,7 +154,7 @@ export class ApiRepository implements Repository {
     const version = this.nextVersion();
     this.outbox.streets[street.id] = version;
     this.persistOutbox();
-    if (!this.auth.token) return;
+    if (!this.canSync()) return;
     await this.flush();
     const merged = this.merged.get(street.id);
     return merged?.version === version ? merged.street : undefined;
@@ -155,15 +176,32 @@ export class ApiRepository implements Repository {
   }
 
   async reset(): Promise<void> {
-    if (this.auth.token) {
+    if (this.canSync()) {
       await this.request("DELETE", "/me").catch((error) => console.warn("Spielstand auf dem Server nicht gelöscht", error));
+    }
+    if (this.auth.session) {
+      // Nur diese Straße ist weg – das Konto bleibt angemeldet und hat wieder einen Platz frei.
+      await this.clearStreetData();
+      this.setAuth({ ...this.auth, playerId: undefined, streets: (this.auth.streets ?? []).filter((s) => s.playerId !== this.auth.playerId) });
+      await this.refreshAccount().catch(() => undefined);
+      return;
     }
     await this.clearDevice();
   }
 
+  /** Abmelden: erst alles hochladen, dann das Gerät leeren. Mit Konto wird auch die Sitzung beendet. */
   private async signOut(): Promise<boolean> {
+    if (!(await this.uploadEverything())) return false;
+    if (this.auth.session) await this.request("POST", "/account/logout").catch(() => undefined);
+    await this.clearDevice();
+    return true;
+  }
+
+  /** Alles Ausstehende hochladen; false = ging nicht (Server nicht erreichbar), dann nichts löschen. */
+  private async uploadEverything(): Promise<boolean> {
     // Noch nie beim Server angekommen: Abmelden würde den Spielstand verlieren.
-    if (!this.auth.token && this.auth.status !== "signed-out") return false;
+    if (!this.canSync() && !this.auth.session && this.auth.status !== "signed-out") return false;
+    if (!this.canSync()) return true;
     // Ein bereits abgemeldetes Gerät darf nichts mehr hochladen – dort wird nur aufgeräumt.
     if (this.auth.status !== "signed-out") {
       // Was während des Hochladens noch gespeichert wird, kommt in der nächsten Runde mit.
@@ -171,7 +209,6 @@ export class ApiRepository implements Repository {
       // flush() kann das Gerät abmelden (401) – dann ist ohnehin nichts mehr zu retten.
       if ((this.auth.status as string | undefined) !== "signed-out" && this.hasPending()) return false;
     }
-    await this.clearDevice();
     return true;
   }
 
@@ -182,12 +219,17 @@ export class ApiRepository implements Repository {
 
   /** Alles auf diesem Gerät vergessen (der Server bleibt unberührt). */
   private async clearDevice(): Promise<void> {
+    this.auth = {};
+    this.storage.removeItem(AUTH_KEY);
+    await this.clearStreetData();
+  }
+
+  /** Den Spielstand der aktuellen Straße vom Gerät nehmen (Sitzung bleibt). */
+  private async clearStreetData(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    this.auth = {};
     this.outbox = { streets: {} };
     this.merged.clear();
-    this.storage.removeItem(AUTH_KEY);
     this.storage.removeItem(OUTBOX_KEY);
     this.storage.removeItem(FOREIGN_KEY);
     this.storage.removeItem(NAMES_KEY);
@@ -208,9 +250,101 @@ export class ApiRepository implements Repository {
 
   // ---------- Online ----------
 
+  /** Kann dieses Gerät mit dem Server sprechen – mit Konto und gewählter Straße oder mit altem Geräte-Schlüssel? */
+  private canSync(): boolean {
+    return this.auth.status !== "signed-out" && (!!(this.auth.session && this.auth.playerId) || !!this.auth.token);
+  }
+
   private account(): Account {
-    const status = this.auth.status ?? (this.auth.token ? "online" : "pending");
-    return { status, recoveryCode: this.auth.recoveryCode, takenBy: this.auth.takenBy };
+    const { session, playerId, token } = this.auth;
+    const status =
+      this.auth.status ?? (session ? (playerId ? "online" : "choose") : token ? "legacy" : "logged-out");
+    return {
+      status,
+      recoveryCode: this.auth.recoveryCode,
+      takenBy: this.auth.takenBy,
+      ...(session && { name: this.auth.accountName, streets: this.auth.streets ?? [], maxStreets: this.auth.maxStreets ?? 3, activePlayerId: playerId }),
+    };
+  }
+
+  // ---------- Konto ----------
+
+  private async createAccount(name: string, password: string): Promise<AccountResult> {
+    // Ein älterer Spielstand auf diesem Gerät kommt über seinen Geräte-Schlüssel mit ins Konto.
+    return this.signIn("POST", "/account/register", { name, password }, !!this.auth.token);
+  }
+
+  private async login(name: string, password: string): Promise<AccountResult> {
+    return this.signIn("POST", "/account/login", { name, password }, false);
+  }
+
+  private async signIn(method: string, path: string, body: unknown, withLegacyToken: boolean): Promise<AccountResult> {
+    try {
+      const result = await this.request<AccountResponse>(method, path, body, withLegacyToken);
+      const local = await this.cache.loadPlayer();
+      // Spielt dieses Gerät gerade eine der Straßen des Kontos, geht es nahtlos weiter.
+      const keep = local && result.streets.some((s) => s.playerId === local.id) ? local.id : undefined;
+      // Ein Spielstand, der schon beim Server liegt, aber nicht zu diesem Konto gehört, bleibt dort (per Code anhängbar).
+      // Ein nur lokaler Spielstand bleibt dagegen hier und wird gleich mit dem Konto angemeldet.
+      if (!keep && local && this.auth.token) await this.clearStreetData();
+      this.setAuth({
+        session: result.token,
+        playerId: keep,
+        accountName: result.account.name,
+        streets: result.streets,
+        maxStreets: result.account.maxStreets,
+      });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: messageOf(error) };
+    }
+  }
+
+  private async refreshAccount(): Promise<void> {
+    if (!this.auth.session) return;
+    try {
+      const result = await this.request<AccountResponse>("GET", "/account");
+      this.setAuth({ ...this.auth, accountName: result.account.name, streets: result.streets, maxStreets: result.account.maxStreets });
+    } catch (error) {
+      if (!this.handleAuthError(error)) throw error;
+    }
+  }
+
+  /** Zu einer anderen Straße des Kontos wechseln: erst alles hochladen, dann ihren Stand vom Server holen. */
+  private async selectStreet(playerId: string): Promise<boolean> {
+    if (!this.auth.session) return false;
+    if (playerId === this.auth.playerId) return true;
+    if (!(await this.uploadEverything())) return false;
+    await this.clearStreetData();
+    this.setAuth({ ...this.auth, playerId });
+    try {
+      await this.sync();
+      return true;
+    } catch (error) {
+      this.setAuth({ ...this.auth, playerId: undefined });
+      if (!this.handleAuthError(error)) console.warn("Straße konnte nicht geladen werden", error);
+      return false;
+    }
+  }
+
+  /** Platz machen für eine neue Straße: aktuelle hochladen und vom Gerät nehmen, das Konto bleibt angemeldet. */
+  private async startNewStreet(): Promise<boolean> {
+    if (!this.auth.session) return false;
+    if (!(await this.uploadEverything())) return false;
+    await this.clearStreetData();
+    this.setAuth({ ...this.auth, playerId: undefined });
+    return true;
+  }
+
+  /** Eine ältere Straße per BABO-Code ans Konto hängen. */
+  private async attachCode(code: string): Promise<AccountResult> {
+    try {
+      const result = await this.request<AccountResponse>("POST", "/account/attach", { code: normalizeCode(code) });
+      this.setAuth({ ...this.auth, streets: result.streets, maxStreets: result.account.maxStreets });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: messageOf(error) };
+    }
   }
 
   private async register(player: Player, street: Street): Promise<void> {
@@ -218,6 +352,7 @@ export class ApiRepository implements Repository {
       await this.registerDocs({ player, street });
     } catch (error) {
       if (error instanceof StreetTakenError) throw error;
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) throw new ClaimRejectedError(error.message);
       // Server nicht erreichbar: lokal loslegen, angemeldet wird beim nächsten Start.
       console.warn("Anmeldung beim Server fehlgeschlagen – wird nachgeholt.", error);
     }
@@ -235,14 +370,14 @@ export class ApiRepository implements Repository {
   }
 
   private async cityStreets(city: string): Promise<ForeignStreet[]> {
-    if (!this.auth.token) return [];
+    if (!this.canSync()) return [];
     const { streets } = await this.request<{ streets: StreetEntry[] }>("GET", `/city?name=${encodeURIComponent(city)}`);
     this.learnNames(streets);
     return streets.filter((e): e is ForeignStreet => e.ownerName !== null);
   }
 
   private async fetchStreet(id: string) {
-    if (!this.auth.token) return null;
+    if (!this.canSync()) return null;
     await this.flush();
     try {
       const entry = await this.request<StreetEntry>("GET", `/streets/${encodeURIComponent(id)}`);
@@ -273,7 +408,7 @@ export class ApiRepository implements Repository {
   }
 
   private async fetchMischief(): Promise<Mischief[]> {
-    if (!this.auth.token) return [];
+    if (!this.canSync()) return [];
     const { mischief } = await this.request<{ mischief: Mischief[] }>("GET", "/me/mischief");
     this.receiveMischief(mischief);
     return this.read<Mischief[]>(INBOX_KEY) ?? [];
@@ -312,8 +447,20 @@ export class ApiRepository implements Repository {
 
   private async registerDocs(docs: { player: Player; street: Street; neighborhood?: Neighborhood | null; streets?: Street[] }) {
     try {
-      const result = await this.request<{ token: string; recoveryCode: string }>("POST", "/register", docs, false);
-      this.setAuth({ token: result.token, recoveryCode: result.recoveryCode });
+      if (this.auth.session) {
+        await this.request("POST", "/register", docs);
+        const entry: AccountStreet = {
+          playerId: docs.player.id,
+          playerName: docs.player.name,
+          streetId: docs.street.id,
+          streetName: docs.street.name,
+          city: docs.street.city,
+        };
+        this.setAuth({ ...this.auth, playerId: docs.player.id, streets: [...(this.auth.streets ?? []), entry], status: undefined });
+      } else {
+        const result = await this.request<{ token: string; recoveryCode: string }>("POST", "/register", docs, false);
+        this.setAuth({ token: result.token, recoveryCode: result.recoveryCode });
+      }
       // Alles, was bei der Anmeldung dabei war, ist jetzt auf dem Server.
       this.outbox = { streets: {} };
       this.persistOutbox();
@@ -363,7 +510,7 @@ export class ApiRepository implements Repository {
   }
 
   private async flushNow(): Promise<void> {
-    if (!this.auth.token) return;
+    if (!this.canSync()) return;
     for (const [id, version] of Object.entries(this.outbox.streets)) {
       const street = await this.cache.loadStreet(id);
       try {
@@ -422,7 +569,7 @@ export class ApiRepository implements Repository {
     console.warn("Server hat die Änderung abgelehnt", error);
   }
 
-  /** 401: Schlüssel ungültig (z. B. Code auf einem anderen Gerät benutzt). */
+  /** 401: Schlüssel ungültig (Code auf einem anderen Gerät benutzt, Sitzung beendet, neues Passwort). */
   private handleAuthError(error: unknown): boolean {
     if (!(error instanceof ApiError) || error.status !== 401) return false;
     this.setAuth({ recoveryCode: this.auth.recoveryCode, status: "signed-out" });
@@ -446,7 +593,7 @@ export class ApiRepository implements Repository {
   }
 
   private scheduleFlush() {
-    if (!this.auth.token || this.timer) return;
+    if (!this.canSync() || this.timer) return;
     this.timer = setTimeout(() => void this.flush(), DEBOUNCE_MS);
   }
 
@@ -466,7 +613,14 @@ export class ApiRepository implements Repository {
   private async request<T = unknown>(method: string, path: string, body?: unknown, withToken = true): Promise<T> {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    if (withToken && this.auth.token) headers.Authorization = `Bearer ${this.auth.token}`;
+    if (withToken) {
+      if (this.auth.session) {
+        headers.Authorization = `Bearer ${this.auth.session}`;
+        if (this.auth.playerId) headers["X-Babo-Player"] = this.auth.playerId;
+      } else if (this.auth.token) {
+        headers.Authorization = `Bearer ${this.auth.token}`;
+      }
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
@@ -496,6 +650,12 @@ export class ApiRepository implements Repository {
   private write(key: string, value: unknown) {
     this.storage.setItem(key, JSON.stringify(value));
   }
+}
+
+/** Fehlermeldung des Servers für die Anzeige. */
+function messageOf(error: unknown): string {
+  if (error instanceof ApiError) return error.status >= 500 ? "Der Server hat gerade ein Problem. Versuch es gleich nochmal." : error.message;
+  return "Der Server ist gerade nicht erreichbar.";
 }
 
 /** „babo 7kqx m2pd 9trw“ → „BABO-7KQX-M2PD-9TRW“ (wie der Server). */

@@ -51,7 +51,9 @@ import type {
 } from "../model/types";
 import { LocalRepository } from "../repository/LocalRepository";
 import { ApiRepository } from "../repository/ApiRepository";
-import type { Account, Repository } from "../repository/Repository";
+import type { Account, AccountResult, Repository } from "../repository/Repository";
+
+const OFFLINE: AccountResult = { ok: false, message: "Ohne Server gibt es keine Konten." };
 
 type Status = "loading" | "ready" | "error";
 
@@ -135,6 +137,16 @@ interface GameState {
   buyPet(speciesId: string, name: string): Promise<BuyPetResult>;
   /** Dieses Gerät abmelden, der Spielstand bleibt auf dem Server. `false` = Server nicht erreichbar. */
   signOut(): Promise<boolean>;
+  /** Mit Konto anmelden bzw. eins anlegen (ein älterer Spielstand auf dem Gerät kommt mit). */
+  login(name: string, password: string): Promise<AccountResult>;
+  createAccount(name: string, password: string): Promise<AccountResult>;
+  refreshAccount(): Promise<void>;
+  /** Zu einer anderen Straße des Kontos wechseln. */
+  selectStreet(playerId: string): Promise<boolean>;
+  /** Aktuelle Straße weglegen und eine neue claimen (höchstens drei pro Konto). */
+  startNewStreet(): Promise<boolean>;
+  /** Ältere Straße per BABO-Code ans Konto hängen. */
+  attachCode(code: string): Promise<AccountResult>;
   /** Spielstand komplett löschen (Debug / Neustart). */
   reset(): Promise<void>;
 }
@@ -853,11 +865,58 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         return true;
       },
 
+      async login(name, password) {
+        if (!repo.online) return OFFLINE;
+        const result = await repo.online.login(name, password);
+        if (result.ok) await reload();
+        return result;
+      },
+
+      async createAccount(name, password) {
+        if (!repo.online) return OFFLINE;
+        const result = await repo.online.createAccount(name, password);
+        if (result.ok) await reload();
+        return result;
+      },
+
+      async refreshAccount() {
+        await repo.online?.refreshAccount().catch(() => undefined);
+        set({ account: account() });
+      },
+
+      async selectStreet(playerId) {
+        if (!repo.online || !(await repo.online.selectStreet(playerId))) {
+          set({ account: account() });
+          return false;
+        }
+        await reload();
+        return true;
+      },
+
+      async startNewStreet() {
+        if (!repo.online || !(await repo.online.startNewStreet())) return false;
+        forget();
+        return true;
+      },
+
+      async attachCode(code) {
+        if (!repo.online) return OFFLINE;
+        const result = await repo.online.attachCode(code);
+        set({ account: account() });
+        return result;
+      },
+
       async reset() {
         await repo.reset();
         forget();
       },
     };
+
+    /** Nach Anmelden oder Straßenwechsel: alles neu laden. */
+    async function reload() {
+      set({ status: "loading", player: null, street: null, offlineReport: null, neighborhood: null, neighborStreets: {}, playerStreets: {}, ownerNames: {}, cityStreetIds: null });
+      await get().init();
+    }
 
     /** Nach Abmelden/Zurücksetzen: zurück zum Start. */
     function forget() {

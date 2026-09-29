@@ -1333,6 +1333,82 @@ h2 {
   margin: 0;
 }
 
+.account-streets {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.street-choice {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.street-choice-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.street-choice-item > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.street-choice-item small {
+  color: var(--muted, #7a6a5a);
+}
+
+.street-choice-item em {
+  font-style: normal;
+  font-weight: 800;
+  color: #ff7a45;
+  white-space: nowrap;
+}
+
+.street-choice-item:disabled {
+  opacity: 1;
+}
+
+.street-choice-item.active {
+  border-color: #ff7a45;
+  cursor: default;
+}
+
+.street-choice-item.active em {
+  color: #2d6a4f;
+}
+
+.account-form .segmented {
+  margin-bottom: 4px;
+}
+
+.claim-intro {
+  text-align: center;
+}
+
+.claim-streets {
+  margin-bottom: 16px;
+}
+
+.attach-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
 .account-card.warn {
   border-color: var(--danger);
 }

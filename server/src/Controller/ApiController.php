@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Account;
 use App\Entity\Mischief;
 use App\Entity\Neighborhood;
 use App\Entity\Player;
@@ -11,6 +12,7 @@ use App\Service\Auth;
 use App\Service\BadBoys;
 use App\Service\Credentials;
 use App\Service\Documents;
+use App\Service\PlayerRemover;
 use App\Service\StreetMerger;
 use App\Service\StreetTakenException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -37,6 +39,7 @@ final class ApiController
         private readonly EntityManagerInterface $em,
         private readonly Auth $auth,
         private readonly StreetMerger $merger,
+        private readonly PlayerRemover $remover,
     ) {
     }
 
@@ -53,6 +56,11 @@ final class ApiController
     #[Route('/register', methods: ['POST'])]
     public function register(Request $request): JsonResponse
     {
+        // Neue Straßen gibt es nur mit Konto – höchstens drei gleichzeitig.
+        $account = $this->auth->account($request);
+        if (\count($this->em->getRepository(Player::class)->findBy(['accountId' => $account->getId()])) >= Account::MAX_STREETS) {
+            throw new ConflictHttpException(\sprintf('Höchstens %d Straßen pro Konto.', Account::MAX_STREETS));
+        }
         $body = Documents::json($request->getContent());
         $playerDoc = Documents::player($body['player'] ?? null);
         $streetDoc = Documents::street($body['street'] ?? null);
@@ -63,12 +71,13 @@ final class ApiController
         if (null !== $this->em->find(Player::class, $playerId) || null !== $this->em->find(Street::class, $streetDoc['id'])) {
             throw new ConflictHttpException('Diesen Spielstand gibt es schon.');
         }
-        $this->assertStreetFree(Documents::osmKey($streetDoc), null);
+        $this->assertStreetFree($streetDoc, null);
 
         $token = Credentials::newToken();
         $recoveryCode = Credentials::newRecoveryCode();
         $player = new Player($playerId, $playerDoc['name'], Credentials::hash($token), Credentials::hash($recoveryCode), $playerDoc);
         $player->setData($playerDoc);
+        $player->setAccountId($account->getId());
         $this->em->persist($player);
         $this->em->persist($this->newStreet($this->sanitizeNewStreet($streetDoc, $playerId), null));
 
@@ -139,29 +148,7 @@ final class ApiController
     #[Route('/me', methods: ['DELETE'])]
     public function deletePlayer(Request $request): JsonResponse
     {
-        $player = $this->auth->player($request);
-        $playerId = $player->getId();
-        $streets = $this->em->getRepository(Street::class);
-
-        foreach ([...$streets->findBy(['ownerId' => $playerId]), ...$streets->findBy(['controllerId' => $playerId])] as $street) {
-            $this->em->remove($street);
-        }
-        foreach ($this->em->getRepository(StreetShare::class)->findBy(['playerId' => $playerId]) as $share) {
-            $street = $this->em->find(Street::class, $share->getStreetId());
-            if ($street instanceof Street) {
-                $street->setData($this->releasePlots($street->getData(), $playerId));
-            }
-            $this->em->remove($share);
-        }
-        $this->em->createQueryBuilder()->delete(Mischief::class, 'm')
-            ->where('m.senderId = :me')->orWhere('m.streetId = :street')
-            ->setParameter('me', $playerId)->setParameter('street', $player->getStreetId())
-            ->getQuery()->execute();
-        $hood = $this->em->find(Neighborhood::class, $playerId);
-        if (null !== $hood) {
-            $this->em->remove($hood);
-        }
-        $this->em->remove($player);
+        $this->remover->remove($this->auth->player($request));
         $this->em->flush();
 
         return new JsonResponse(['ok' => true]);
@@ -220,7 +207,7 @@ final class ApiController
                 throw new AccessDeniedHttpException('Diese Straße darfst du nicht anlegen.');
             }
             if ($own) {
-                $this->assertStreetFree(Documents::osmKey($doc), null);
+                $this->assertStreetFree($doc, null);
             }
             $street = $this->newStreet($this->sanitizeNewStreet($doc, $playerId), $own ? null : $playerId);
             $this->em->persist($street);
@@ -229,7 +216,12 @@ final class ApiController
             $merged = $this->merger->merge($street->getData(), $doc, $playerId, $manages);
             if ($manages && !$street->isBotStreet()) {
                 $osmKey = Documents::osmKey($merged);
-                $this->assertStreetFree($osmKey, $street->getId());
+                // Nur beim Bestätigen auf der Karte (neue Kennung oder neuer Name) prüfen – ältere Doppelte laufen weiter.
+                $before = $street->getData();
+                if ($osmKey !== Documents::osmKey($before) || Street::nameKey((string) $merged['name']) !== Street::nameKey((string) ($before['name'] ?? ''))
+                    || Street::cityKey((string) $merged['city']) !== Street::cityKey((string) ($before['city'] ?? ''))) {
+                    $this->assertStreetFree($merged, $street->getId());
+                }
                 $street->setOsmKey($osmKey);
             }
             $street->setData($merged);
@@ -431,15 +423,29 @@ final class ApiController
         return $doc;
     }
 
-    /** Wer zuerst kommt: Eine echte Straße gehört nur einem Spieler. */
-    private function assertStreetFree(?string $osmKey, ?string $exceptStreetId): void
+    /**
+     * Wer zuerst kommt: Jede Straße gehört nur einem Spieler – erkannt an der Karten-Kennung
+     * und, auch ohne Kartenprüfung, an Name + Ort („Bahnhofstr.“ = „Bahnhofstraße“).
+     */
+    private function assertStreetFree(array $doc, ?string $exceptStreetId): void
     {
-        if (null === $osmKey) {
-            return;
+        $osmKey = Documents::osmKey($doc);
+        if (null !== $osmKey) {
+            $taken = $this->em->getRepository(Street::class)->findOneBy(['osmKey' => $osmKey]);
+            if ($taken instanceof Street && $taken->getId() !== $exceptStreetId) {
+                $this->throwStreetTaken($taken);
+            }
         }
-        $taken = $this->em->getRepository(Street::class)->findOneBy(['osmKey' => $osmKey]);
-        if ($taken instanceof Street && $taken->getId() !== $exceptStreetId) {
-            $this->throwStreetTaken($taken);
+        $name = Street::nameKey((string) ($doc['name'] ?? ''));
+        $sameCity = $this->em->createQueryBuilder()
+            ->select('s')->from(Street::class, 's')
+            ->where('s.cityKey = :city')->andWhere('s.controllerId IS NULL')
+            ->setParameter('city', Street::cityKey((string) ($doc['city'] ?? '')))
+            ->getQuery()->getResult();
+        foreach ($sameCity as $street) {
+            if ($street->getId() !== $exceptStreetId && Street::nameKey((string) ($street->getData()['name'] ?? '')) === $name) {
+                $this->throwStreetTaken($street);
+            }
         }
     }
 
@@ -465,17 +471,6 @@ final class ApiController
         } elseif (!$owns && null !== $share) {
             $this->em->remove($share);
         }
-    }
-
-    private function releasePlots(array $doc, string $playerId): array
-    {
-        foreach ((array) ($doc['plots'] ?? []) as $i => $plot) {
-            if (($plot['ownerId'] ?? null) === $playerId) {
-                $doc['plots'][$i] = array_intersect_key($plot, array_flip(['id', 'size', 'side', 'index', 'price']));
-            }
-        }
-
-        return $doc;
     }
 
     /** Zwei gleichzeitige Anmeldungen für dieselbe Straße: die zweite verliert. */

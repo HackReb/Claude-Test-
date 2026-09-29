@@ -88,4 +88,13 @@ class Street
     {
         return mb_substr(mb_strtolower(trim($city)), 0, 80);
     }
+
+    /** Straßenname zum Vergleichen: „Bahnhof-Str.“, „bahnhofstr“ und „Bahnhofstraße“ sind dieselbe Straße. */
+    public static function nameKey(string $name): string
+    {
+        $key = mb_strtolower(trim($name));
+        $key = (string) preg_replace('/str\.?$|strasse$/u', 'straße', (string) preg_replace('/[\s\-.]+(?=str)/u', '', $key));
+
+        return (string) preg_replace('/[\s\-]+/u', '', $key);
+    }
 }
