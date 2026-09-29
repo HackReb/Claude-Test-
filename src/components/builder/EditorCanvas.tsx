@@ -1,7 +1,8 @@
-import type { Facade, Part, PlotSize } from "../../model/types";
+import type { Building, Facade, Part, PlotSize } from "../../model/types";
 import { FACADE_GRID, facadeColumns, facadeDimensions } from "../../parts/grid";
 import { allowedRows } from "../../parts/rules";
 import { FacadeSvg } from "../FacadeSvg";
+import { ShopSign } from "../ShopSign";
 
 const { cellWidth, cellHeight, roofHeight, topOverflow } = FACADE_GRID;
 const PAD = 10;
@@ -14,10 +15,12 @@ interface Props {
   erasing: boolean;
   active: { x: number; y: number } | null;
   onCell: (x: number, y: number) => void;
+  /** Das entstehende Gebäude – Läden zeigen ihren Namen auf dem Ladenschild. */
+  building?: Building;
 }
 
 /** Fassade mit antippbarem Raster (Stockwerke + Dachreihe). */
-export function EditorCanvas({ facade, size, tool, erasing, active, onCell }: Props) {
+export function EditorCanvas({ facade, size, tool, erasing, active, onCell, building }: Props) {
   const { width, height } = facadeDimensions(size, facade.floors);
   const columns = facadeColumns(size);
   const allowed = new Set(tool ? allowedRows(tool, facade.floors) : []);
@@ -62,6 +65,7 @@ export function EditorCanvas({ facade, size, tool, erasing, active, onCell }: Pr
       aria-label="Fassade bearbeiten"
     >
       <FacadeSvg facade={facade} size={size} />
+      {building && <ShopSign building={{ ...building, facade }} size={size} />}
       {cells}
     </svg>
   );

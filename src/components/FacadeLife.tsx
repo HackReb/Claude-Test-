@@ -40,6 +40,8 @@ interface Props {
   facade: Facade;
   size: PlotSize;
   use: BuildingUse;
+  /** Name des Gebäudes – bei Läden entscheidet er mit über den Gag („Kalles Dönerbude“). */
+  name?: string;
   /** Für reproduzierbare, aber je Gebäude verschiedene Abläufe (z. B. Gebäude-ID). */
   seed: string;
   /** Detailansicht: mehr los als in der Straße. */
@@ -47,7 +49,7 @@ interface Props {
 }
 
 /** Leute an der Tür, Plausch vor dem Haus, Rollläden – und je Laden ein kleiner Gag. */
-export function FacadeLife({ facade, size, use, seed, detail = false }: Props) {
+export function FacadeLife({ facade, size, use, name, seed, detail = false }: Props) {
   if (prefersReducedMotion()) return null;
   const random = seededRandom(hashString(`life:${seed}`));
   const { width, height } = facadeDimensions(size, facade.floors);
@@ -58,7 +60,7 @@ export function FacadeLife({ facade, size, use, seed, detail = false }: Props) {
   const shutterWindows = facade.parts.filter((p) => SHUTTER_AREA[p.partId]);
   const homes = use === "residential";
   const shutters = homes ? shuffled(shutterWindows, random).slice(0, detail ? shutterWindows.length : 3) : [];
-  const gags = use === "commercial" ? gagsOf(facade) : [];
+  const gags = use === "commercial" ? gagsOf(facade, name) : [];
   // Nicht vor der Tür und nicht vor dem Gag plaudern.
   const busy = new Set([...doors.map((d) => d.x), ...gags.map((g) => g.x)]);
   const columns = width / CW;

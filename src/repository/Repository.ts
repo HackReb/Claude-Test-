@@ -33,8 +33,14 @@ export interface ForeignStreet {
 }
 
 export type AccountStatus =
-  /** Mit dem Server verbunden. */
+  /** Mit Konto angemeldet und eine Straße gewählt. */
   | "online"
+  /** Mit Konto angemeldet, aber noch keine Straße gewählt (oder gerade eine neue am Claimen). */
+  | "choose"
+  /** Nicht angemeldet – erst anmelden oder ein Konto anlegen. */
+  | "logged-out"
+  /** Älterer Spielstand ohne Konto: spielt weiter, soll aber ein Konto einrichten. */
+  | "legacy"
   /** Noch nicht angemeldet (Server war nicht erreichbar) – wird beim nächsten Start nachgeholt. */
   | "pending"
   /** Die eigene echte Straße gehörte online schon jemand anderem. */
@@ -44,11 +50,30 @@ export type AccountStatus =
 
 export interface Account {
   status: AccountStatus;
-  /** Zum Weiterspielen auf einem anderen Gerät. */
+  /** Älterer Spielstand: sein BABO-Code (damit hängt man ihn an ein Konto). */
   recoveryCode?: string;
   /** Bei „street-taken“: wem die Straße gehört. */
   takenBy?: string;
+  /** Mit Konto: Name, Straßen (höchstens `maxStreets`) und die gerade gespielte. */
+  name?: string;
+  streets?: AccountStreet[];
+  maxStreets?: number;
+  activePlayerId?: string;
 }
+
+/** Eine Straße im Konto – jede ist ein eigener Spielstand. */
+export interface AccountStreet {
+  playerId: string;
+  playerName: string;
+  streetId: string;
+  streetName: string;
+  city: string;
+}
+
+export type AccountResult = { ok: true } | { ok: false; message: string };
+
+/** Der Server lehnt die neue Straße ab (z. B. schon drei Straßen im Konto). */
+export class ClaimRejectedError extends Error {}
 
 export interface OnlineFeatures {
   account(): Account;
@@ -67,6 +92,18 @@ export interface OnlineFeatures {
    * Auf dem Server bleibt alles – mit dem Code geht es woanders weiter. `false` = Server nicht erreichbar, nichts gelöscht.
    */
   signOut(): Promise<boolean>;
+  /** Mit Name + Passwort anmelden. */
+  login(name: string, password: string): Promise<AccountResult>;
+  /** Konto anlegen – ein älterer Spielstand auf diesem Gerät kommt mit. */
+  createAccount(name: string, password: string): Promise<AccountResult>;
+  /** Straßenliste des Kontos neu laden. */
+  refreshAccount(): Promise<void>;
+  /** Zu einer Straße des Kontos wechseln. `false` = ging nicht (Server nicht erreichbar). */
+  selectStreet(playerId: string): Promise<boolean>;
+  /** Aktuelle Straße weglegen, um eine neue zu claimen (das Konto bleibt angemeldet). */
+  startNewStreet(): Promise<boolean>;
+  /** Ältere Straße per BABO-Code ans Konto hängen. */
+  attachCode(code: string): Promise<AccountResult>;
   /** Bekannte Namen echter Spieler (Spieler-ID → Name). */
   playerNames(): Record<string, string>;
   /** Bad Boys, die in der eigenen Straße angekommen sind (Stand der letzten Synchronisierung). */

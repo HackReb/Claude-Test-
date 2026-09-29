@@ -1,5 +1,5 @@
 import { ECONOMY } from "../config/economy";
-import type { Facade, PlacedPart, PlotSize } from "../model/types";
+import type { BuildingUse, Facade, PlacedPart, PlotSize } from "../model/types";
 import { getPart } from "./catalog";
 import { facadeColumns } from "./grid";
 import { allowedRows, FACADE_RULES, layerOf } from "./rules";
@@ -72,14 +72,24 @@ export function setFloors(facade: Facade, size: PlotSize, floors: number): Facad
 }
 
 /** Neue Fassade für den Baukasten: einfaches, gültiges Häuschen. */
-export function starterFacade(): Facade {
-  return {
-    base: { partId: "base-brick" },
-    roof: { partId: "roof-flat" },
-    floors: 1,
-    parts: [
-      { partId: "door-shop", x: 0, y: 0 },
-      { partId: "window-square", x: 1, y: 0 },
-    ],
-  };
+export function starterFacade(use: BuildingUse): Facade {
+  return use === "commercial"
+    ? {
+        base: { partId: "base-glass" },
+        roof: { partId: "roof-shopfront" },
+        floors: 1,
+        parts: [
+          { partId: "door-shop", x: 0, y: 0 },
+          { partId: "window-shop", x: 1, y: 0 },
+        ],
+      }
+    : {
+        base: { partId: "base-brick" },
+        roof: { partId: "roof-pitched" },
+        floors: 1,
+        parts: [
+          { partId: "door-house", x: 0, y: 0 },
+          { partId: "window-square", x: 1, y: 0 },
+        ],
+      };
 }

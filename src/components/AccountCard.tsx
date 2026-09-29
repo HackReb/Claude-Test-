@@ -1,33 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
+import { AccountStreets, LoginForm } from "./AccountForms";
 
-/** Server-Konto: Anmelde-Code fürs Weiterspielen auf einem anderen Gerät, Abmelden, Hinweise bei Problemen. */
+/** Konto: angemeldet mit Name + Passwort, bis zu drei Straßen, Abmelden – und Hinweise bei älteren Spielständen. */
 export function AccountCard() {
   const account = useGameStore((s) => s.account);
   const signOut = useGameStore((s) => s.signOut);
-  const navigate = useNavigate();
-  const [shown, setShown] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [state, setState] = useState<"idle" | "busy" | "offline">("idle");
   if (!account) return null;
 
   async function onSignOut() {
     setState("busy");
-    if (await signOut()) navigate(routes.start, { replace: true, state: { login: true } });
-    else setState("offline");
-  }
-
-  async function onCopy(code: string) {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setShown(true); // Kopieren gesperrt: dann eben abschreiben.
-    }
+    if (!(await signOut())) setState("offline");
   }
 
   if (account.status === "street-taken") {
@@ -41,15 +26,28 @@ export function AccountCard() {
       </div>
     );
   }
-  if (account.status === "signed-out") {
+  if (account.status === "signed-out" || account.status === "logged-out") {
     return (
       <div className="card account-card warn">
         <strong>Dieses Gerät ist abgemeldet</strong>
-        <p className="subtle">Dein Code wurde auf einem anderen Gerät benutzt. Dort geht dein Spiel weiter – hier wird nichts mehr gespeichert.</p>
-        {account.recoveryCode && <code className="recovery-code">{account.recoveryCode}</code>}
-        <button type="button" className="btn btn-primary" disabled={state === "busy"} onClick={() => void onSignOut()}>
-          🔑 Mit Code anmelden
-        </button>
+        <p className="subtle">Melde dich mit Name und Passwort an – dann geht es mit deinen Straßen weiter.</p>
+        <LoginForm />
+      </div>
+    );
+  }
+  if (account.status === "legacy") {
+    return (
+      <div className="card account-card">
+        <strong>🔐 Konto einrichten</strong>
+        <p className="subtle">
+          Sichere deine Straße mit Name und Passwort. Dann kannst du dich auf jedem Handy anmelden und bis zu drei Straßen haben.
+        </p>
+        {account.recoveryCode && (
+          <p className="subtle">
+            Dein bisheriger Code: <code className="recovery-code">{account.recoveryCode}</code>
+          </p>
+        )}
+        <LoginForm initial="register" legacy />
       </div>
     );
   }
@@ -57,59 +55,33 @@ export function AccountCard() {
     return (
       <div className="card account-card">
         <strong>Noch nicht online</strong>
-        <p className="subtle">
-          Der Server war nicht erreichbar. Beim nächsten Start meldet sich das Spiel von selbst an – dann bekommst du hier deinen Anmelde-Code.
-        </p>
+        <p className="subtle">Der Server war nicht erreichbar. Beim nächsten Start meldet sich das Spiel von selbst an.</p>
       </div>
     );
   }
 
-  const code = account.recoveryCode;
   return (
     <div className="card account-card">
-      <strong>🔑 Dein Anmelde-Code</strong>
-      {!code ? (
-        <p className="subtle">Auf diesem Gerät ist kein Code gespeichert.</p>
-      ) : (
-        <>
-          {shown ? (
-            <code className="recovery-code">{code}</code>
-          ) : (
-            <button type="button" className="btn" onClick={() => setShown(true)}>
-              Code anzeigen
+      <strong>👤 {account.name}</strong>
+      <AccountStreets />
+      {confirm ? (
+        <div className="confirm">
+          <p>Abmelden? Deine Straßen bleiben gespeichert – zurück kommst du mit Name und Passwort.</p>
+          {state === "offline" && <p className="error">Der Server ist gerade nicht erreichbar. Es wurde nichts gelöscht – versuch es gleich nochmal.</p>}
+          <div className="actions">
+            <button type="button" className="btn btn-primary" disabled={state === "busy"} onClick={() => void onSignOut()}>
+              {state === "busy" ? "Speichere …" : "Abmelden"}
             </button>
-          )}
-          <p className="subtle">
-            Damit spielst du auf einem anderen Handy weiter: Spiel öffnen → „Mit Code anmelden“. Schreib ihn dir auf und gib ihn nicht weiter –
-            wer den Code kennt, kann mit deiner Straße spielen.
-          </p>
-          <button type="button" className="btn btn-link" onClick={() => void onCopy(code)}>
-            {copied ? "✅ Kopiert!" : "📋 Code kopieren"}
-          </button>
-        </>
-      )}
-
-      {code &&
-        (confirm ? (
-          <div className="confirm">
-            <p>
-              Abmelden? Deine Straße bleibt gespeichert – zurück kommst du nur mit dem Code <strong>{code}</strong>.
-            </p>
-            {state === "offline" && <p className="error">Der Server ist gerade nicht erreichbar. Es wurde nichts gelöscht – versuch es gleich nochmal.</p>}
-            <div className="actions">
-              <button type="button" className="btn btn-primary" disabled={state === "busy"} onClick={() => void onSignOut()}>
-                {state === "busy" ? "Speichere …" : "Code notiert – abmelden"}
-              </button>
-              <button type="button" className="btn" onClick={() => setConfirm(false)}>
-                Abbrechen
-              </button>
-            </div>
+            <button type="button" className="btn" onClick={() => setConfirm(false)}>
+              Abbrechen
+            </button>
           </div>
-        ) : (
-          <button type="button" className="btn" onClick={() => setConfirm(true)}>
-            🚪 Abmelden
-          </button>
-        ))}
+        </div>
+      ) : (
+        <button type="button" className="btn" onClick={() => setConfirm(true)}>
+          🚪 Abmelden
+        </button>
+      )}
     </div>
   );
 }

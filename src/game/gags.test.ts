@@ -4,7 +4,7 @@ import { gagsOf } from "./gags";
 import { TEMPLATES } from "./templates";
 
 const facade = (parts: Facade["parts"]): Facade => ({ base: { partId: "base-brick" }, roof: { partId: "roof-flat" }, floors: 1, parts });
-const kinds = (f: Facade) => gagsOf(f).map((g) => g.kind);
+const kinds = (f: Facade, name?: string) => gagsOf(f, name).map((g) => g.kind);
 
 describe("Gags an Läden", () => {
   it("Spezial-Fenster und Schilder bestimmen die Szene – mit Platz", () => {
@@ -17,8 +17,13 @@ describe("Gags an Läden", () => {
     expect(kinds(facade([{ partId: "window-doner", x: 0, y: 0 }, { partId: "deco-neon", x: 0, y: 0, text: "DÖNER" }]))).toEqual(["doner"]);
   });
 
-  it("jede Laden-Vorlage mit Schild hat was zu zeigen, Wohnhäuser nicht", () => {
-    const withGag = (id: string) => kinds(TEMPLATES.find((t) => t.id === id)!.facade);
+  it("der Ladenname zählt mit: „Kalles Dönerbude“ dreht den Spieß, Wohnhäuser zeigen nichts", () => {
+    expect(kinds(facade([{ partId: "window-shop", x: 1, y: 0 }]), "Kalles Kebab-Eck")).toEqual(["doner"]);
+    expect(gagsOf(facade([{ partId: "door-shop", x: 0, y: 0 }, { partId: "window-shop", x: 1, y: 0 }]), "Schwimmbad")).toEqual([{ kind: "pool", x: 1, y: 0 }]);
+    const withGag = (id: string) => {
+      const t = TEMPLATES.find((template) => template.id === id)!;
+      return kinds(t.facade, `Kalles ${t.name}`);
+    };
     expect(withGag("doenerbude")).toContain("doner");
     expect(withGag("optiker")).toEqual(["optician"]);
     expect(withGag("eisdiele")).toEqual(["icecream"]);

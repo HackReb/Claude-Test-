@@ -7,6 +7,7 @@ import { possessive } from "../../game/names";
 import { FacadeLife } from "../FacadeLife";
 import { FacadeSvg } from "../FacadeSvg";
 import { Modernization } from "../Modernization";
+import { ShopSign } from "../ShopSign";
 import { layoutStreet, STREET, type LotBox } from "./layout";
 import { Litter } from "./Litter";
 import { Playground } from "./Playground";
@@ -355,10 +356,11 @@ function Building({ lot, groundY, life }: { lot: LotBox; groundY: number; life: 
       <g transform={`translate(${left} ${groundY - height})`}>
         <FacadeSvg facade={building.facade} size={lot.plot.size} />
         <Modernization building={building} />
+        <ShopSign building={building} size={lot.plot.size} />
         {!!building.soot && <Soot level={building.soot} width={width} height={height} />}
         {building.damaged && <Cracks width={width} height={height} />}
         {building.graffiti && <Graffiti text={building.graffiti} width={width} height={height} />}
-        {life && <FacadeLife facade={building.facade} size={lot.plot.size} use={useOf(building)} seed={building.id} />}
+        {life && <FacadeLife facade={building.facade} size={lot.plot.size} use={useOf(building)} name={building.name} seed={building.id} />}
       </g>
     </g>
   );

@@ -13,10 +13,15 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'babo_player')]
 #[ORM\UniqueConstraint(name: 'babo_player_token', columns: ['token_hash'])]
 #[ORM\UniqueConstraint(name: 'babo_player_recovery', columns: ['recovery_hash'])]
+#[ORM\Index(name: 'babo_player_account', columns: ['account_id'])]
 class Player
 {
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
+
+    /** Konto, zu dem diese Straße gehört (ältere Spielstände: noch keins). */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $accountId = null;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $updatedAt;
@@ -65,6 +70,16 @@ class Player
     public function getStreetId(): string
     {
         return (string) ($this->data['streetId'] ?? '');
+    }
+
+    public function getAccountId(): ?string
+    {
+        return $this->accountId;
+    }
+
+    public function setAccountId(?string $accountId): void
+    {
+        $this->accountId = $accountId;
     }
 
     public function setTokenHash(string $tokenHash): void

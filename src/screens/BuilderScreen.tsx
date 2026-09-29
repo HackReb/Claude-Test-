@@ -49,14 +49,15 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
   const unlock = useGameStore((s) => s.unlockPart);
   const navigate = useNavigate();
 
-  const [name, setName] = useState(plot.building?.name ?? personalName(player.name, "Haus"));
-  const [facade, setFacade] = useState<Facade>(() => structuredClone(plot.building?.facade ?? starterFacade()));
+  const [use, setUse] = useState<BuildingUse>(plot.building ? useOf(plot.building) : "residential");
+  const defaultName = (u: BuildingUse) => personalName(player.name, u === "commercial" ? "Laden" : "Haus");
+  const [name, setName] = useState(plot.building?.name ?? defaultName(use));
+  const [facade, setFacade] = useState<Facade>(() => structuredClone(plot.building?.facade ?? starterFacade(use)));
   const [tab, setTab] = useState<Tab>("door");
   const [toolId, setToolId] = useState<string | null>(null);
   const [active, setActive] = useState<{ x: number; y: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [offer, setOffer] = useState<Part | null>(null);
-  const [use, setUse] = useState<BuildingUse>(plot.building ? useOf(plot.building) : "residential");
 
   const tool = toolId ? (getPart(toolId) ?? null) : null;
   const errors = validateFacade(facade, plot.size);
@@ -125,6 +126,15 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
     }
   }
 
+  /** Wohnen oder Gewerbe zuerst: solange noch nichts gebaut wurde, gibt es die passende Start-Fassade und den passenden Namen. */
+  function changeUse(next: BuildingUse) {
+    if (next === use) return;
+    if (JSON.stringify(facade) === JSON.stringify(starterFacade(use))) setFacade(starterFacade(next));
+    if (name === defaultName(use)) setName(defaultName(next));
+    if (tool?.use && tool.use !== next) setToolId(null);
+    setUse(next);
+  }
+
   const selectTab = (next: Tab) => {
     setTab(next);
     setOffer(null);
@@ -144,7 +154,7 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
           <input
             value={name}
             maxLength={BUILDING_NAME_MAX_LENGTH}
-            placeholder="Name am Haus"
+            placeholder={use === "commercial" ? "Name auf dem Ladenschild" : "Name am Haus"}
             aria-invalid={!cleanName}
             onChange={(e) => setName(e.target.value)}
             aria-label="Name des Gebäudes"
@@ -152,8 +162,10 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
         </label>
       </div>
 
+      <UsePicker value={use} onChange={changeUse} />
+
       <div className="card builder-stage">
-        <EditorCanvas facade={facade} size={plot.size} tool={tool} erasing={tab === "erase"} active={active} onCell={onCell} />
+        <EditorCanvas facade={facade} size={plot.size} tool={tool} erasing={tab === "erase"} active={active} onCell={onCell} building={draft} />
       </div>
 
       <div className="builder-stats">
@@ -176,11 +188,12 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
         )}
       </div>
 
-      <UsePicker value={use} onChange={setUse} />
-
       {editingText && (
         <label className="field">
-          <span>Text auf dem {getPart(editingText.partId)?.name}</span>
+          <span>
+            Spruch auf dem {getPart(editingText.partId)?.name}
+            {use === "commercial" && " (der Name steht schon oben am Ladenschild)"}
+          </span>
           <input
             value={editingText.text ?? ""}
             maxLength={TEXT_MAX_LENGTH}
@@ -206,7 +219,9 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
         ) : (
           <>
             <div className="palette-parts">
-              {partsOf(tab).map((part) => {
+              {partsOf(tab)
+                .filter((part) => !part.use || part.use === use)
+                .map((part) => {
                 const unlocked = isUnlocked(part, player.unlockedParts);
                 const selected =
                   part.id === toolId || part.id === facade.base.partId || part.id === facade.roof.partId;
@@ -253,7 +268,7 @@ function Builder({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
 
       {(errors.length > 0 || !cleanName) && (
         <ul className="builder-errors">
-          {!cleanName && <li>Gib deinem Haus oben einen Namen.</li>}
+          {!cleanName && <li>Gib {use === "commercial" ? "deinem Laden" : "deinem Haus"} oben einen Namen.</li>}
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

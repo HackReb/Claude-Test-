@@ -4,6 +4,7 @@ import { FACADE_GRID, facadeDimensions } from "../parts/grid";
 import { FacadeLife } from "./FacadeLife";
 import { FacadeSvg } from "./FacadeSvg";
 import { Modernization } from "./Modernization";
+import { ShopSign } from "./ShopSign";
 
 const PAD = 10;
 /** Mit Leben: Platz links und rechts, damit die Leute aus dem Bild laufen können, und ein Gehweg. */
@@ -12,7 +13,7 @@ const SIDEWALK = 10;
 
 /**
  * Fassade als eigenständiges Bild, inkl. Platz für Dach-Deko und Dachüberstand.
- * Mit `building` sieht man auch die Modernisierung, mit `life` zusätzlich die Leute und Gags.
+ * Mit `building` sieht man auch Ladenschild und Modernisierung, mit `life` zusätzlich die Leute und Gags.
  */
 export function FacadePreview({
   facade,
@@ -44,7 +45,8 @@ export function FacadePreview({
       {life && <rect x={-pad} y={height} width={width + 2 * pad} height={SIDEWALK} fill="#d6ccc2" />}
       <FacadeSvg facade={facade} size={size} />
       {building && <Modernization building={{ ...building, facade }} />}
-      {life && building && <FacadeLife facade={facade} size={size} use={useOf(building)} seed={building.id} detail />}
+      {building && <ShopSign building={{ ...building, facade }} size={size} />}
+      {life && building && <FacadeLife facade={facade} size={size} use={useOf(building)} name={building.name} seed={building.id} detail />}
     </svg>
   );
 }

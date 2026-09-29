@@ -1,6 +1,7 @@
 import { bearing, largestGapMiddle, spreadBearings } from "../game/bots";
 import { residentsOf } from "../game/life";
 import { possessive } from "../game/names";
+import { sameStreet } from "../game/world";
 import type { Bot, Neighborhood, Street } from "../model/types";
 
 const SIZE = 360;
@@ -24,7 +25,13 @@ export const MAP_SLOTS = 5;
 export function mapNeighbors(neighborhood: Neighborhood, streets: Record<string, Street>, players: PlayerNeighbor[], playerId: string) {
   const shownPlayers = players.slice(0, MAP_SLOTS);
   const ownsThere = (bot: Bot) => streets[bot.streetId]?.plots.some((p) => p.ownerId === playerId) ?? false;
-  const bots = [...neighborhood.bots].sort((a, b) => Number(ownsThere(b)) - Number(ownsThere(a)));
+  // Hat ein echter Mitspieler dieselbe Straße wie ein Bot, gibt es sie nur einmal – die echte.
+  const real = players.map((p) => p.street);
+  const duplicate = (bot: Bot) => {
+    const street = streets[bot.streetId];
+    return !!street && real.some((r) => sameStreet(r, street));
+  };
+  const bots = neighborhood.bots.filter((b) => !duplicate(b)).sort((a, b) => Number(ownsThere(b)) - Number(ownsThere(a)));
   const free = MAP_SLOTS - shownPlayers.length;
   return { shownPlayers, shownBots: bots.slice(0, free), hiddenBots: bots.slice(free) };
 }

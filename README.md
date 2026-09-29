@@ -34,9 +34,11 @@ App-Icons neu erzeugen (nach Änderungen an `public/icon*.svg`):
 Ohne Server speichert das Spiel nur auf dem Gerät. Mit dem Symfony-Server in [`server/`](./server/README.md)
 teilen alle Spieler eine Welt:
 
-- **Anmelden ohne Passwort:** Beim Claimen bekommt das Gerät einen geheimen Schlüssel, dazu einen
-  Anmelde-Code (`BABO-XXXX-XXXX-XXXX`, unter *Teilen → Dein Konto*). Dort kann man sich auch abmelden;
-  auf dem neuen Gerät: *Mit Code anmelden*.
+- **Konto mit Name + Passwort:** bis zu drei Straßen pro Konto (auch in verschiedenen Orten), jede mit
+  eigener Kasse. Wechseln, weitere Straße claimen und abmelden unter *Teilen → Dein Konto*.
+  Ältere Spielstände (von vor den Konten) richten dort ein Konto ein; weitere alte Straßen hängt man
+  mit ihrem BABO-Code an.
+- **Jede Straße nur einmal:** erkannt an der Karten-Kennung und an Name + Ort (auch ohne Kartenprüfung).
 - **Wer zuerst kommt:** Jede echte Straße (OSM-Kennung) gehört nur einem Spieler.
 - **Mitspieler in der Nähe** erscheinen auf der Nachbarschaftskarte; was sie bauen, steht in den
   Neuigkeiten und in der Tageszeitung. Gekauft wird nur in der eigenen Straße.

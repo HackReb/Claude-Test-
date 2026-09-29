@@ -59,9 +59,9 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
           </button>
         </div>
         <div className="card dice-preview">
-          <FacadePreview facade={chosen.facade} size={plot.size} label={chosen.name} maxHeight={200} />
+          <FacadePreview facade={chosen.facade} size={plot.size} label={chosen.name} maxHeight={200} building={{ ...building, name }} />
         </div>
-        <BuildingNameField value={name} onChange={setName} />
+        <BuildingNameField value={name} onChange={setName} use={chosen.use} />
         <p className="subtle">{useLabel(chosen.use)}</p>
         <BuildingEconomy size={plot.size} building={building} />
         <button type="button" className="btn btn-primary btn-wide" disabled={!name.trim()} onClick={() => void place(building, name, chosen.use)}>
@@ -93,7 +93,7 @@ function TemplateList({ plot, streetId, onDone }: { plot: Plot; streetId?: strin
                 setName(personalName(playerName, template.name));
               }}
             >
-              <FacadePreview facade={template.facade} size={plot.size} label={template.name} maxHeight={120} />
+              <FacadePreview facade={template.facade} size={plot.size} label={template.name} maxHeight={120} building={building} />
               <strong>{template.name}</strong>
               <span className="subtle">
                 bis 🪙 {formatRate(buildingIncomePerHour(plot.size, building))}/Std.
@@ -143,9 +143,10 @@ function Dice({ plot, streetId, onDone }: { plot: Plot; streetId?: string; onDon
         }}
       />
       <div className="card dice-preview" key={rolls}>
-        <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={220} />
+        <FacadePreview facade={building.facade} size={plot.size} label={building.name} maxHeight={220} building={{ ...building, name }} />
       </div>
       <BuildingNameField
+        use={use}
         value={name}
         onChange={(value) => {
           setName(value);

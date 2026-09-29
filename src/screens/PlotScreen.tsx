@@ -15,7 +15,7 @@ import { capacityOf, ECONOMY, rentFactorOf, upkeepOf } from "../config/economy";
 import { formatCoins, formatDuration, formatRate } from "../format";
 import { belongsTo, currentPrice, isOwned, nextUpgrade } from "../game/plots";
 import { playerIncomePerHour, plotIncomePerHour, plotUpkeepPerHour } from "../game/rent";
-import type { Building, Plot, Street } from "../model/types";
+import type { Building, BuildingUse, Plot, Street } from "../model/types";
 import { routes } from "../routes";
 import { useGameStore } from "../store/gameStore";
 import { useAllStreets, useStreetContext, type StreetContext } from "../store/useStreetContext";
@@ -37,7 +37,7 @@ export function PlotScreen() {
       <Link className="btn btn-link back" to={ctx.backRoute}>
         {ctx.backLabel}
       </Link>
-      {plot.building && mine ? <BuildingTitle plotId={plot.id} name={plot.building.name} streetId={ctx.streetId} /> : <h1>{titleText}</h1>}
+      {plot.building && mine ? <BuildingTitle plotId={plot.id} name={plot.building.name} use={useOf(plot.building)} streetId={ctx.streetId} /> : <h1>{titleText}</h1>}
       <p className="subtle">
         {!ctx.own && `${ctx.street.name} (${ctx.bot?.name ?? "Nachbar"}) · `}
         {where} · {cfg.tiles} Kachel{cfg.tiles > 1 ? "n" : ""} breit · bis {cfg.maxFloors} Stockwerk
@@ -84,7 +84,7 @@ function ForeignPlot({ plot, ctx }: { plot: Plot; ctx: StreetContext }) {
 }
 
 /** Gebäudename als Überschrift, per Stift umbenennbar. */
-function BuildingTitle({ plotId, name, streetId }: { plotId: string; name: string; streetId?: string }) {
+function BuildingTitle({ plotId, name, use, streetId }: { plotId: string; name: string; use: BuildingUse; streetId?: string }) {
   const rename = useGameStore((s) => s.renameBuilding);
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -106,7 +106,7 @@ function BuildingTitle({ plotId, name, streetId }: { plotId: string; name: strin
         if (await rename(plotId, draft, streetId)) setDraft(null);
       }}
     >
-      <BuildingNameField value={draft} onChange={setDraft} />
+      <BuildingNameField value={draft} onChange={setDraft} use={use} />
       <div className="actions">
         <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
           Speichern
