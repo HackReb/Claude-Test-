@@ -25,7 +25,7 @@ export const SHOWS = {
   /** Erste Show kurz nach dem Öffnen der Straße, danach in diesen Abständen (Sekunden). */
   firstAfterSeconds: 25,
   gapSeconds: [70, 150],
-  /** Die erste ist immer der Zirkus, danach bunt gemischt (nie zweimal dasselbe hintereinander). */
+  /** Beim allerersten Mal kommt der Zirkus, danach jede Show einmal in zufälliger Reihenfolge, dann neu gemischt. */
   order: ["circus", "icecream", "music", "balloon", "firetruck", "wedding", "duel", "marathon"] as ShowKind[],
   /** Tempo der Parade (Pixel pro Sekunde) und wie lang der Zug ist. */
   paradeSpeed: 48,
