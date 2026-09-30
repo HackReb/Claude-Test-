@@ -13,7 +13,7 @@ import { Litter } from "./Litter";
 import { Playground } from "./Playground";
 import { UfoAttack } from "./UfoAttack";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
-import { planShow, StreetShow, type ActiveShow } from "./StreetShows";
+import { blocksRoad, DUEL, duelClashes, planShow, StreetShow, type ActiveShow } from "./StreetShows";
 import { SHOWS, type ShowKind } from "../../config/streetLife";
 import { sound } from "../../audio/sound";
 import { PetWalkers } from "./PetWalkers";
@@ -254,7 +254,7 @@ export function StreetView({
             cars={cars}
             trafficCount={CARS.trafficBase + anchors.shops.length}
             onTap={onCarTap}
-            paused={show?.kind === "circus" || show?.kind === "icecream"}
+            paused={!!show && blocksRoad(show.kind)}
           />
         )}
 
@@ -274,16 +274,33 @@ export function StreetView({
   );
 }
 
-/** Musik und Geräusche zur Show – der Zirkus bekommt am Ende Applaus. */
+/** Musik und Geräusche zur Show – mit Applaus, wo er hingehört. */
 function playShow(kind: ShowKind, seconds: number) {
-  if (kind === "circus") {
-    sound.circus(seconds);
-    setTimeout(() => sound.cheer(), 6000);
-  } else if (kind === "icecream") sound.icecream(seconds);
-  else if (kind === "music") {
-    sound.busker(seconds);
-    setTimeout(() => sound.cheer(), (seconds - 6) * 1000);
-  } else sound.balloon(seconds);
+  const cheerAt = (at: number) => setTimeout(() => sound.cheer(), at * 1000);
+  switch (kind) {
+    case "circus":
+      sound.circus(seconds);
+      return cheerAt(6);
+    case "icecream":
+      return sound.icecream(seconds);
+    case "music":
+      sound.busker(seconds);
+      return cheerAt(seconds - 6);
+    case "balloon":
+      return sound.balloon(seconds);
+    case "firetruck":
+      sound.firetruck(seconds, (seconds - SHOWS.fireStopSeconds) / 2);
+      return cheerAt((seconds - SHOWS.fireStopSeconds) / 2 + 5.5);
+    case "wedding":
+      sound.wedding(seconds);
+      return cheerAt(3);
+    case "duel":
+      sound.duel(DUEL.ignite, DUEL.retract, duelClashes());
+      return cheerAt(DUEL.bow + 0.3);
+    case "marathon":
+      sound.marathon(seconds);
+      return cheerAt(2.5);
+  }
 }
 
 function Lot({

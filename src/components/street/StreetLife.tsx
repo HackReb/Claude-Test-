@@ -12,8 +12,6 @@ const SKINS = ["#f1c7a3", "#d9a066", "#a86b3c", "#7a4a2a", "#ffdbac"];
 const SHIRTS = ["#1982c4", "#ef476f", "#06d6a0", "#ffca3a", "#6a4c93", "#ff7a45", "#8ac926"];
 const HAIR = ["#2b2118", "#6b4226", "#e0b050", "#b5533c", "#555"];
 const CHAT = ["💬", "😄", "👋", "☕", "🤣", "🙂", "🗞️"];
-const CHEER = ["👏", "🤩", "😃", "🎉", "👏"];
-const LOOK_UP = ["☝️", "😮", "🤩"];
 
 type Side = LitterItem["side"];
 
@@ -314,13 +312,15 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null,
         npc.watching = focus.id;
         npc.emote = null;
         if (focus.gather !== null) {
-          // Beim Eiswagen und Musiker sammeln sich die Leute im Halbkreis – Kinder vorne dran.
+          // Bei Eiswagen, Musiker, Feuerwehr und Duell sammeln sich die Leute – Kinder vorne dran.
           const gap = npc.kind === "kid" ? 22 + Math.random() * 30 : 45 + Math.random() * 80;
-          goTo(npc, focus.gather + (Math.random() < 0.5 ? -1 : 1) * gap, "bottom", "watch");
+          goTo(npc, focus.gather + (Math.random() < 0.5 ? -1 : 1) * gap, focus.gatherOwnSide ? npc.side : "bottom", "watch");
         } else {
-          npc.mode = "watch";
-          npc.path = [];
-          npc.arrive = null;
+          // Zuschauen vom nächsten Gehweg aus – niemand bleibt auf der Fahrbahn stehen.
+          const side: Side = npc.y < (walkY.top + walkY.bottom) / 2 ? "top" : "bottom";
+          npc.path = [{ x: npc.x, y: walkY[side], side }];
+          npc.arrive = "watch";
+          npc.mode = "walk";
         }
       }
       if (!focus && npc.watching !== null) {
@@ -364,7 +364,7 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null,
             npc.dir = focus.x > npc.x ? 1 : -1;
             // Am Eiswagen: nach kurzem Anstehen hat jeder sein Eis.
             if (focus.treat && npc.emote?.text !== focus.treat && Math.random() < dt * 0.5) npc.emote = { text: focus.treat, until: t + 120 };
-            if (!npc.emote && Math.random() < dt * 0.25) say(npc, focus.lookUp ? LOOK_UP : CHEER, t, 1.8);
+            if (!npc.emote && Math.random() < dt * 0.25) say(npc, focus.cheers, t, 1.8);
             npc.phase += npc.kind === "kid" ? dt * 3 : 0;
           }
           return;

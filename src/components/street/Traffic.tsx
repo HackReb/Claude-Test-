@@ -18,6 +18,8 @@ interface Vehicle {
   /** Wartet am Rand, bis es (wieder) losfährt. */
   waitUntil: number;
   spin: number;
+  /** Straße wird gesperrt: seit wann das Auto ausgeblendet wird. */
+  fadingSince?: number;
 }
 
 interface Props {
@@ -91,6 +93,14 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap, paused 
       for (const v of state.current) {
         const outside = v.x <= -MARGIN || v.x >= width + MARGIN;
         if (pausedRef.current && outside) v.waitUntil = Math.max(v.waitUntil, t + 1 + Math.random() * 3);
+        // Gesperrt: wer noch auf der Fahrbahn ist, verschwindet kurz (die Show kommt gleich ins Bild).
+        if (pausedRef.current && !outside && v.fadingSince === undefined) v.fadingSince = t;
+        if (v.fadingSince !== undefined && t - v.fadingSince > 0.8) {
+          v.fadingSince = undefined;
+          v.x = dirOf(v.lane) === 1 ? -MARGIN : width + MARGIN;
+          v.waitUntil = t + 2;
+          continue;
+        }
         if (t < v.waitUntil) continue;
         const dir = dirOf(v.lane);
         v.x += dir * v.speed * dt;
@@ -122,6 +132,7 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap, paused 
             key={v.key}
             className={`vehicle${v.car ? " own" : ""}`}
             transform={`translate(${v.x} ${laneY[v.lane]}) scale(${CAR_SCALE})`}
+            opacity={v.fadingSince !== undefined ? Math.max(0, 1 - (performance.now() / 1000 - v.fadingSince) / 0.8) : undefined}
             role={onTap ? "button" : undefined}
             aria-label={onTap ? `${label} – hupen` : undefined}
             onClick={onTap ? () => onTap({ model: v.model, car: v.car }) : undefined}

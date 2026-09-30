@@ -337,6 +337,78 @@ class SoundEngine {
     });
   }
 
+  /** Feuerwehr: Tatütata beim Kommen und Gehen, Leiter surrt, Katze miaut (erst kläglich, dann froh). */
+  firetruck(seconds: number, drive: number) {
+    this.play((t) => {
+      const siren = (from: number, to: number) => {
+        for (let at = from, i = 0; at < to; at += 0.55, i++) this.tone(i % 2 === 0 ? 466 : 622, t + at, 0.52, "square", 0.045, undefined, 2000);
+      };
+      siren(0, drive + 0.6);
+      siren(seconds - drive - 0.4, seconds);
+      this.tone(160, t + drive + 0.3, 2, "sawtooth", 0.035, 240, 700);
+      for (const at of [0.8, 2.4, drive + 1.5, drive + 3.2]) this.meow(t + at, false);
+      this.meow(t + drive + 5.3, true);
+      this.tone(120, t + seconds - drive - 2.2, 2, "sawtooth", 0.035, 80, 700);
+    });
+  }
+
+  private meow(t: number, happy: boolean) {
+    this.tone(happy ? 900 : 640, t, 0.18, "sine", 0.08, happy ? 1300 : 980);
+    this.tone(happy ? 1300 : 980, t + 0.18, 0.35, "sine", 0.07, happy ? 1000 : 560);
+  }
+
+  /** Hochzeitskorso: Fanfare, Hupkonzert und scheppernde Dosen. */
+  wedding(seconds: number) {
+    this.play((t) => {
+      [523, 523, 523, 698, 880, 698, 1047].forEach((f, i) => this.tone(f, t + i * 0.18, i === 6 ? 0.7 : 0.16, "triangle", 0.1));
+      for (let at = 1.6; at < seconds - 0.5; at += rand(1.1, 2)) {
+        const f = rand(330, 470);
+        this.tone(f, t + at, 0.18, "sawtooth", 0.05, undefined, 1800);
+        this.tone(f * 1.26, t + at, 0.18, "sawtooth", 0.035, undefined, 1800);
+        this.tone(f, t + at + 0.26, 0.3, "sawtooth", 0.05, undefined, 1800);
+      }
+      for (let at = 0.5; at < seconds; at += rand(0.08, 0.22)) this.noiseBurst(t + at, 0.04, "bandpass", rand(2500, 4500), 4, 0.07);
+    });
+  }
+
+  /** Lichtschwerter: Einschalten, Summen, Krachen bei jedem Treffer, Ausschalten. */
+  duel(ignite: number, retract: number, clashes: number[]) {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      for (const [f, at] of [[70, ignite], [95, ignite + 0.1]] as const) {
+        this.tone(f, t + at, 0.45, "sawtooth", 0.08, f * 2.2, 900);
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = f + 20;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 420;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, t + at);
+        gain.gain.exponentialRampToValueAtTime(0.05, t + at + 0.3);
+        gain.gain.setValueAtTime(0.05, t + retract);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + retract + 0.4);
+        osc.connect(filter).connect(gain).connect(this.master!);
+        osc.start(t + at);
+        osc.stop(t + retract + 0.45);
+      }
+      for (const at of clashes) {
+        this.noiseBurst(t + at, 0.18, "highpass", 3000, 0.7, 0.25);
+        this.tone(1760, t + at, 0.25, "square", 0.04, 900, 4000);
+        this.tone(220, t + at, 0.3, "sawtooth", 0.06, 110, 1200);
+      }
+      this.tone(190, t + retract, 0.4, "sawtooth", 0.07, 60, 900);
+    });
+  }
+
+  /** Stadtlauf: Trillerpfeife, trappelnde Schritte, Anfeuern. */
+  marathon(seconds: number) {
+    this.play((t) => {
+      for (let i = 0; i < 6; i++) this.tone(2900, t + 0.2 + i * 0.07, 0.06, "sine", 0.06, 2600);
+      for (let at = 0.8; at < seconds - 0.5; at += rand(0.09, 0.16)) this.noiseBurst(t + at, 0.03, "lowpass", 900, 0.8, 0.12);
+    });
+  }
+
   /** Die Leute jubeln und klatschen. */
   cheer() {
     this.play((t) => {

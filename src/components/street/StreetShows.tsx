@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SHOWS, type ShowKind } from "../../config/streetLife";
+import { CarSvg, carLength } from "../cars/CarSvg";
 
 const INK = "#2b2118";
 
@@ -17,24 +18,50 @@ export interface ActiveShow {
 }
 
 const DRIVE_SECONDS = 5;
+const FIRE_DRIVE_SECONDS = 4;
 const WALK_IN_SECONDS = 5;
 const WALK_OUT_SECONDS = 6;
+
+/** Wie sich eine Show bewegt: durchziehen, anhalten und weiterfahren, hinlaufen und spielen, sich treffen. */
+const MOTION: Record<ShowKind, "pass" | "stop" | "walk" | "meet"> = {
+  circus: "pass",
+  balloon: "pass",
+  wedding: "pass",
+  marathon: "pass",
+  icecream: "stop",
+  firetruck: "stop",
+  music: "walk",
+  duel: "meet",
+};
+
+/** Shows auf der Fahrbahn – solange wartet der Verkehr. */
+export const blocksRoad = (kind: ShowKind) => kind !== "balloon" && kind !== "music";
 
 /** Show für den gerade sichtbaren Ausschnitt der Straße planen. */
 export function planShow(id: number, kind: ShowKind, viewStart: number, viewEnd: number, startedAt: number): ActiveShow {
   const mid = (viewStart + viewEnd) / 2;
+  const pass = (length: number, speed: number) => {
+    const from = viewStart - 60;
+    const to = viewEnd + length + 60;
+    return { id, kind, startedAt, from, spot: mid, to, duration: (to - from) / speed };
+  };
   switch (kind) {
-    case "circus": {
-      const from = viewStart - 60;
-      const to = viewEnd + SHOWS.paradeLength + 60;
-      return { id, kind, startedAt, from, spot: mid, to, duration: (to - from) / SHOWS.paradeSpeed };
-    }
+    case "circus":
+      return pass(SHOWS.paradeLength, SHOWS.paradeSpeed);
+    case "wedding":
+      return pass(SHOWS.weddingLength, SHOWS.weddingSpeed);
+    case "marathon":
+      return pass(SHOWS.marathonLength, SHOWS.marathonSpeed);
     case "icecream":
       return { id, kind, startedAt, from: viewStart - 160, spot: mid, to: viewEnd + 180, duration: 2 * DRIVE_SECONDS + SHOWS.icecreamStopSeconds };
+    case "firetruck":
+      return { id, kind, startedAt, from: viewStart - 200, spot: mid + 60, to: viewEnd + 220, duration: 2 * FIRE_DRIVE_SECONDS + SHOWS.fireStopSeconds };
     case "music":
       return { id, kind, startedAt, from: viewStart - 30, spot: mid + 30, to: viewEnd + 40, duration: WALK_IN_SECONDS + SHOWS.musicSeconds + WALK_OUT_SECONDS };
     case "balloon":
       return { id, kind, startedAt, from: viewStart - 120, spot: mid, to: viewEnd + 120, duration: SHOWS.balloonSeconds };
+    case "duel":
+      return { id, kind, startedAt, from: mid - 360, spot: mid, to: mid + 360, duration: SHOWS.duelSeconds };
   }
 }
 
@@ -42,28 +69,42 @@ const easeOut = (p: number) => 1 - (1 - p) * (1 - p);
 const easeIn = (p: number) => p * p;
 const clamp01 = (p: number) => Math.min(1, Math.max(0, p));
 
-/** Wo die Show gerade ist und ob sie steht (Eiswagen hält, Musiker spielt). */
+/** Wo die Show gerade ist und ob sie steht (Eiswagen hält, Musiker spielt, Duell läuft). */
 export function showState(show: ActiveShow, now: number): { x: number; t: number; standing: boolean } {
   const t = (now - show.startedAt) / 1000;
-  if (show.kind === "circus" || show.kind === "balloon") {
-    return { x: show.from + (show.to - show.from) * clamp01(t / show.duration), t, standing: false };
-  }
-  const inSeconds = show.kind === "icecream" ? DRIVE_SECONDS : WALK_IN_SECONDS;
-  const outSeconds = show.kind === "icecream" ? DRIVE_SECONDS : WALK_OUT_SECONDS;
+  const motion = MOTION[show.kind];
+  if (motion === "pass") return { x: show.from + (show.to - show.from) * clamp01(t / show.duration), t, standing: false };
+  if (motion === "meet") return { x: show.spot, t, standing: t > DUEL.arrive && t < DUEL.bow };
+  const inSeconds = motion === "walk" ? WALK_IN_SECONDS : show.kind === "firetruck" ? FIRE_DRIVE_SECONDS : DRIVE_SECONDS;
+  const outSeconds = motion === "walk" ? WALK_OUT_SECONDS : inSeconds;
   const stay = show.duration - inSeconds - outSeconds;
   if (t < inSeconds) return { x: show.from + (show.spot - show.from) * easeOut(clamp01(t / inSeconds)), t, standing: false };
   if (t < inSeconds + stay) return { x: show.spot, t, standing: true };
   return { x: show.spot + (show.to - show.spot) * easeIn(clamp01((t - inSeconds - stay) / outSeconds)), t, standing: false };
 }
 
+const CHEERS: Record<ShowKind, string[]> = {
+  circus: ["👏", "🤩", "😃", "🎉"],
+  icecream: ["😋", "👏"],
+  music: ["👏", "🎶", "😃"],
+  balloon: ["☝️", "😮", "🤩"],
+  firetruck: ["😮", "🐱", "👏", "🚒"],
+  wedding: ["❤️", "🎉", "👋", "💐", "🥂"],
+  duel: ["😲", "⚔️", "🤩", "😱"],
+  marathon: ["📣", "👏", "💪", "🍌"],
+};
+
 /**
- * Worauf die Leute achten: `x` zum Hinschauen, `gather` = dort sammeln sie sich (Eiswagen, Musiker –
- * beide auf der unteren Straßenseite). Beim Ballon schauen alle nach oben, am Eiswagen gibt's Eis.
+ * Worauf die Leute achten: `x` zum Hinschauen, `gather` = dort sammeln sie sich (auf der unteren
+ * Straßenseite bzw. beim Duell auf ihrer eigenen), `cheers` = was sie rufen, `treat` = was es gibt.
  */
-export function showFocus(show: ActiveShow, now: number): { x: number; gather: number | null; lookUp: boolean; treat: string | null } {
+export function showFocus(
+  show: ActiveShow,
+  now: number,
+): { x: number; gather: number | null; gatherOwnSide: boolean; cheers: string[]; treat: string | null } {
   const { x } = showState(show, now);
-  const gather = show.kind === "icecream" || show.kind === "music" ? show.spot : null;
-  return { x, gather, lookUp: show.kind === "balloon", treat: show.kind === "icecream" ? "🍦" : null };
+  const gather = show.kind === "icecream" || show.kind === "music" || show.kind === "firetruck" || show.kind === "duel" ? show.spot : null;
+  return { x, gather, gatherOwnSide: show.kind === "duel", cheers: CHEERS[show.kind], treat: show.kind === "icecream" ? "🍦" : null };
 }
 
 interface Props {
@@ -101,6 +142,14 @@ export function StreetShow({ show, roadMid, laneBottom, walkBottom }: Props) {
       return <Busker x={state.x} t={state.t} y={walkBottom} playing={state.standing} />;
     case "balloon":
       return <Balloon x={state.x} t={state.t} />;
+    case "firetruck":
+      return <FireTruck x={state.x} spot={show.spot} t={state.t} y={laneBottom} stay={state.standing ? state.t - FIRE_DRIVE_SECONDS : null} />;
+    case "wedding":
+      return <Wedding x={state.x} t={state.t} y={laneBottom} />;
+    case "marathon":
+      return <Marathon x={state.x} t={state.t} y={roadMid + 16} />;
+    case "duel":
+      return <Duel spot={show.spot} t={state.t} y={roadMid + 16} />;
   }
 }
 
@@ -357,6 +406,339 @@ function Balloon({ x, t }: { x: number; t: number }) {
       <circle cx={-5} cy={56} r={4.5} fill="#f1c7a3" stroke={INK} strokeWidth={1.2} />
       <circle cx={5} cy={56} r={4.5} fill="#d9a066" stroke={INK} strokeWidth={1.2} />
       <path d={`M9 58 L${16} ${46 - wave * 0.3}`} stroke={INK} strokeWidth={2} strokeLinecap="round" />
+    </g>
+  );
+}
+
+// ---------- Feuerwehr ----------
+
+const LADDER = { base: { x: -22, y: -46 }, length: 118, angle: 55, scale: 1.3 } as const;
+
+/** Wo die Katze sitzt: dort, wo die ausgefahrene Leiter hinreicht. */
+function catSpot(spot: number, y: number) {
+  const a = (LADDER.angle * Math.PI) / 180;
+  return { x: spot + LADDER.scale * (LADDER.base.x - LADDER.length * Math.cos(a)), y: y + LADDER.scale * (LADDER.base.y - LADDER.length * Math.sin(a)) };
+}
+
+function FireTruck({ x, spot, t, y, stay }: { x: number; spot: number; t: number; y: number; stay: number | null }) {
+  const stop = SHOWS.fireStopSeconds;
+  const up = stay === null ? 0 : stay < 2 ? easeOut(stay / 2) : stay < stop - 2 ? 1 : 1 - easeIn((stay - (stop - 2)) / 2);
+  const angle = LADDER.angle * up;
+  const spin = stay !== null ? 0 : (t * 600) % 360;
+  const blink = Math.floor(t * 4) % 2 === 0;
+  // Feuerwehrmann klettert hoch (2–5 s), holt die Katze und fährt mit der Leiter runter.
+  const climb = stay === null ? 0 : clamp01((stay - 2) / 3);
+  const rescued = stay !== null ? stay > 5 : t > FIRE_DRIVE_SECONDS + stop;
+  const onLadder = stay !== null && stay > 2 && stay < stop - 0.2;
+  const L = LADDER.length;
+  const cat = catSpot(spot, y);
+  return (
+    <g className="street-show" aria-hidden pointerEvents="none">
+      <g transform={`translate(${x} ${y}) scale(${LADDER.scale})`}>
+        <ellipse cy={2} rx={72} ry={4} fill="#000" opacity={0.2} />
+        <rect x={-70} y={-44} width={108} height={36} rx={4} fill="#d62828" stroke={INK} strokeWidth={2.2} />
+        <path d="M38 -8 L38 -50 L58 -50 L70 -30 L70 -8 Z" fill="#d62828" stroke={INK} strokeWidth={2.2} />
+        <path d="M44 -46 L56 -46 L64 -32 L44 -32 Z" fill="#bde0fe" stroke={INK} strokeWidth={1.6} />
+        <rect x={-66} y={-26} width={100} height={5} fill="#fff" />
+        <text x={-16} y={-30} textAnchor="middle" fontSize={9} fontWeight={900} fill="#fff">
+          FEUERWEHR 112
+        </text>
+        {[-58, -38, -18, 2, 22].map((sx) => (
+          <rect key={sx} x={sx} y={-20} width={14} height={9} rx={1} fill="#9d0208" stroke={INK} strokeWidth={0.8} />
+        ))}
+        <rect x={44} y={-55} width={6} height={5} rx={1} fill={blink ? "#48cae4" : "#023e8a"} stroke={INK} strokeWidth={1} />
+        <rect x={52} y={-55} width={6} height={5} rx={1} fill={blink ? "#023e8a" : "#48cae4"} stroke={INK} strokeWidth={1} />
+        {blink && <circle cx={47} cy={-53} r={9} fill="#48cae4" opacity={0.35} />}
+        {/* Drehleiter */}
+        <g transform={`translate(${LADDER.base.x} ${LADDER.base.y}) rotate(${angle})`}>
+          <line x1={0} y1={-3} x2={-L} y2={-3} stroke="#adb5bd" strokeWidth={2} />
+          <line x1={0} y1={3} x2={-L} y2={3} stroke="#adb5bd" strokeWidth={2} />
+          {Array.from({ length: 12 }, (_, i) => (
+            <line key={i} x1={-6 - i * 10} y1={-3} x2={-6 - i * 10} y2={3} stroke="#6c757d" strokeWidth={1.4} />
+          ))}
+          {onLadder && (
+            <g transform={`translate(${-L * climb} -6) rotate(${-angle})`}>
+              <rect x={-4} y={-14} width={8} height={11} rx={3} fill="#1d3557" stroke={INK} strokeWidth={1.2} />
+              <circle cy={-18} r={4.5} fill="#f1c7a3" stroke={INK} strokeWidth={1.2} />
+              <path d="M-5 -20 Q0 -27 5 -20 Z" fill="#ffd166" stroke={INK} strokeWidth={1} />
+              {rescued && (
+                <text x={7} y={-12} fontSize={12}>
+                  🐱
+                </text>
+              )}
+            </g>
+          )}
+        </g>
+        <circle cx={LADDER.base.x} cy={LADDER.base.y} r={4} fill="#495057" stroke={INK} strokeWidth={1.2} />
+        {[-50, 22, 54].map((wx) => (
+          <g key={wx} transform={`translate(${wx} -6) rotate(${spin})`}>
+            <circle r={8} fill="#333" stroke={INK} strokeWidth={1.8} />
+            <circle r={3.5} fill="#ddd" />
+            <line x1={0} y1={-3.5} x2={0} y2={3.5} stroke="#777" strokeWidth={1} />
+          </g>
+        ))}
+      </g>
+      {/* Die Katze: sitzt oben fest und miaut, bis sie gerettet ist – dann unten beim Wagen */}
+      {!rescued && (
+        <g>
+          <text x={cat.x} y={cat.y} textAnchor="middle" fontSize={20}>
+            🐱
+          </text>
+          {Math.sin(t * 2.5) > 0.2 && (
+            <text x={cat.x + 22} y={cat.y - 18} textAnchor="middle" fontSize={12} fontWeight={900} fill={INK} stroke="#fff" strokeWidth={3} paintOrder="stroke">
+              Miau!
+            </text>
+          )}
+        </g>
+      )}
+      {rescued && stay !== null && stay > stop - 0.2 && (
+        <text x={x + 90} y={y - 4} fontSize={18}>
+          🐱❤️
+        </text>
+      )}
+    </g>
+  );
+}
+
+// ---------- Hochzeitskorso ----------
+
+function Wedding({ x, t, y }: { x: number; t: number; y: number }) {
+  const spin = (t * 700) % 360;
+  const hop = Math.abs(Math.sin(t * 9)) * 4;
+  const toot = (i: number) => Math.sin(t * 2.4 + i * 2) > 0.8;
+  const followers = [
+    { type: "sedan" as const, color: "#ffffff", at: -170 },
+    { type: "hatch" as const, color: "#ffafcc", at: -280 },
+  ];
+  return (
+    <g className="street-show" aria-hidden pointerEvents="none">
+      {followers.map((f, i) => {
+        const len = carLength(f.type);
+        return (
+          <g key={f.type} transform={`translate(${x + f.at - len * 1.2} ${y}) scale(1.2)`}>
+            <CarSvg type={f.type} color={f.color} dir={1} spin={spin} />
+            {/* Schleife auf dem Dach, Bänder zu den Spiegeln */}
+            <path d={`M${len * 0.25} -30 L${len * 0.5} -38 L${len * 0.75} -30`} stroke="#fff" strokeWidth={2} fill="none" />
+            <circle cx={len * 0.5} cy={-40} r={5} fill="#ff8fab" stroke={INK} strokeWidth={1.2} />
+            {toot(i) && (
+              <text x={len * 0.5} y={-52} textAnchor="middle" fontSize={11} fontWeight={900} fill="#d62828" stroke="#fff" strokeWidth={3} paintOrder="stroke">
+                TÜT TÜT!
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {/* Blechdosen an Schnüren */}
+      {[0, 1, 2].map((i) => {
+        const cx = x - 120 - 16 - i * 13;
+        const cy = y - 4 - Math.abs(Math.sin(t * 11 + i * 1.7)) * 6;
+        return (
+          <g key={i}>
+            <line x1={x - 126} y1={y - 14} x2={cx} y2={cy - 3} stroke={INK} strokeWidth={0.8} />
+            <rect x={cx - 4} y={cy - 6} width={8} height={9} rx={1.5} fill="#adb5bd" stroke={INK} strokeWidth={1} transform={`rotate(${Math.sin(t * 13 + i) * 30} ${cx} ${cy})`} />
+          </g>
+        );
+      })}
+      {/* Cabrio mit Brautpaar */}
+      <g transform={`translate(${x - 120} ${y}) scale(1.2)`}>
+        <ellipse cx={50} cy={2} rx={52} ry={4} fill="#000" opacity={0.2} />
+        <path d="M2 -8 L2 -26 Q2 -32 10 -32 L78 -32 Q92 -32 98 -22 L100 -8 Z" fill="#fff" stroke={INK} strokeWidth={2.2} />
+        <path d="M2 -22 L100 -22" stroke="#ff8fab" strokeWidth={3} />
+        <path d="M64 -32 L72 -46" stroke={INK} strokeWidth={2.2} />
+        <path d="M64 -32 L70 -44 L76 -32 Z" fill="#bde0fe" opacity={0.7} />
+        {/* Bräutigam am Steuer, Braut winkt mit dem Strauß */}
+        <g transform={`translate(52 ${-34 - hop * 0.3})`}>
+          <rect x={-5} y={-8} width={10} height={10} rx={3} fill="#212529" />
+          <circle cy={-13} r={5.5} fill="#d9a066" stroke={INK} strokeWidth={1.3} />
+          <rect x={-5} y={-25} width={10} height={9} fill="#212529" />
+          <rect x={-8} y={-17} width={16} height={2.5} fill="#212529" />
+        </g>
+        <g transform={`translate(30 ${-34 - hop * 0.3})`}>
+          <path d="M-7 2 L-4 -9 L4 -9 L7 2 Z" fill="#fff" stroke={INK} strokeWidth={1.2} />
+          <path d="M-8 -12 Q0 -24 8 -12 L10 4 L-10 4 Z" fill="#f8f9fa" opacity={0.85} stroke="#dee2e6" strokeWidth={1} />
+          <circle cy={-13} r={5.5} fill="#f1c7a3" stroke={INK} strokeWidth={1.3} />
+          <path d={`M-4 -8 L${-12} ${-22 + Math.sin(t * 8) * 4}`} stroke="#f1c7a3" strokeWidth={2.4} strokeLinecap="round" />
+          <circle cx={-12} cy={-24 + Math.sin(t * 8) * 4} r={4} fill="#ff8fab" stroke={INK} strokeWidth={1} />
+        </g>
+        <rect x={-18} y={-26} width={22} height={11} rx={2} fill="#fff" stroke={INK} strokeWidth={1.2} />
+        <text x={-7} y={-18} textAnchor="middle" fontSize={4.6} fontWeight={900} fill="#d62828">
+          JUST
+        </text>
+        <text x={-7} y={-13.5} textAnchor="middle" fontSize={4.6} fontWeight={900} fill="#d62828">
+          MARRIED
+        </text>
+        {[22, 80].map((wx) => (
+          <g key={wx} transform={`translate(${wx} -6) rotate(${spin})`}>
+            <circle r={7.5} fill="#333" stroke={INK} strokeWidth={1.8} />
+            <circle r={3.2} fill="#ddd" />
+            <line x1={0} y1={-3.2} x2={0} y2={3.2} stroke="#777" strokeWidth={1} />
+          </g>
+        ))}
+      </g>
+      {/* Herzen steigen auf */}
+      {Array.from({ length: 6 }, (_, i) => {
+        const p = (t * 0.7 + i / 6) % 1;
+        return (
+          <text key={i} x={x - 70 - i * 18 + Math.sin(t * 3 + i) * 8} y={y - 60 - p * 70} fontSize={12 + (i % 3) * 3} opacity={1 - p} fill="#ef476f">
+            ❤
+          </text>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------- Stadtlauf ----------
+
+const RUNNERS = [
+  { at: 0, shirt: "#1982c4", skin: "#d9a066", bib: 7 },
+  { at: -60, shirt: "#ef476f", skin: "#f1c7a3", bib: 23 },
+  { at: -130, shirt: "#06d6a0", skin: "#7a4a2a", bib: 42 },
+  { at: -190, banana: true },
+  { at: -260, shirt: "#6a4c93", skin: "#ffdbac", bib: 101 },
+  { at: -320, shirt: "#ff7a45", skin: "#a86b3c", bib: 99 },
+] as const;
+
+function Marathon({ x, t, y }: { x: number; t: number; y: number }) {
+  return (
+    <g className="street-show" aria-hidden pointerEvents="none">
+      {RUNNERS.map((r, i) => {
+        const phase = t * 11 + i * 1.3;
+        const swing = Math.sin(phase);
+        const bob = -Math.abs(Math.cos(phase)) * 5;
+        const rx = x + r.at + Math.sin(t * 0.8 + i) * 10;
+        if ("banana" in r) {
+          return (
+            <g key={i} transform={`translate(${rx} ${y + bob}) scale(1.45)`}>
+              <ellipse cy={1 - bob} rx={9} ry={3} fill="#000" opacity={0.2} />
+              <Legs swing={swing} />
+              <path d="M-6 -12 Q-14 -34 -2 -54 Q2 -58 5 -54 Q-4 -34 8 -12 Z" fill="#ffd60a" stroke={INK} strokeWidth={1.8} />
+              <path d="M-2 -54 L0 -60" stroke="#6b4226" strokeWidth={2.4} strokeLinecap="round" />
+              <circle cx={1} cy={-36} r={5} fill="#f1c7a3" stroke={INK} strokeWidth={1.2} />
+              <circle cx={3} cy={-37} r={0.9} fill={INK} />
+              <path d="M0 -33 Q2 -31 4 -33" stroke={INK} strokeWidth={1} fill="none" />
+              <path d={`M-5 -28 L${-11 - swing * 4} -20 M5 -28 L${11 + swing * 4} -20`} stroke={INK} strokeWidth={2.2} strokeLinecap="round" />
+            </g>
+          );
+        }
+        return (
+          <g key={i} transform={`translate(${rx} ${y + bob}) scale(1.45)`}>
+            <ellipse cy={1 - bob} rx={9} ry={3} fill="#000" opacity={0.2} />
+            <Legs swing={swing} />
+            <rect x={-6} y={-29} width={12} height={16} rx={5} fill={r.shirt} stroke={INK} strokeWidth={1.8} />
+            <rect x={-4.5} y={-25} width={9} height={7} fill="#fff" stroke={INK} strokeWidth={0.8} />
+            <text y={-19.5} textAnchor="middle" fontSize={5} fontWeight={900} fill={INK}>
+              {r.bib}
+            </text>
+            <path d={`M-5 -26 L${-9 - swing * 5} -18 M5 -26 L${9 + swing * 5} -20`} stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
+            <circle cy={-35} r={6.5} fill={r.skin} stroke={INK} strokeWidth={1.8} />
+            <rect x={-6.5} y={-40} width={13} height={3} fill="#fff" stroke={INK} strokeWidth={0.8} />
+            <circle cx={3} cy={-35} r={1} fill={INK} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------- Lichtschwertduell ----------
+
+/** Zeitplan in Sekunden: ankommen, kämpfen, verbeugen, gehen. */
+export const DUEL = { ignite: 2.3, arrive: 3, bow: 15, retract: 15.2, leave: 17, swing: 7 } as const;
+
+/** Zeitpunkte, an denen die Klingen zusammenkrachen (für Funken und Sound). */
+export function duelClashes(): number[] {
+  const times: number[] = [];
+  for (let k = 0; ; k++) {
+    const at = (Math.PI / 2 + 2 * Math.PI * k) / DUEL.swing;
+    if (at >= DUEL.bow) return times;
+    if (at > DUEL.arrive) times.push(at);
+  }
+}
+
+function Duel({ spot, t, y }: { spot: number; t: number; y: number }) {
+  const reach = 50;
+  const far = 360;
+  const off =
+    t < DUEL.arrive
+      ? reach + (far - reach) * (1 - easeOut(clamp01(t / DUEL.arrive)))
+      : t < DUEL.leave
+        ? reach
+        : reach + (far - reach) * easeIn(clamp01((t - DUEL.leave) / (SHOWS.duelSeconds - DUEL.leave)));
+  const walking = t < DUEL.arrive || t > DUEL.leave;
+  const fighting = t > DUEL.arrive && t < DUEL.bow;
+  const blade = t < DUEL.ignite ? 0 : t < DUEL.ignite + 0.4 ? (t - DUEL.ignite) / 0.4 : t < DUEL.retract ? 1 : Math.max(0, 1 - (t - DUEL.retract) / 0.4);
+  const swing = Math.sin(t * DUEL.swing);
+  const angle = fighting ? 45 + swing * 42 : 20;
+  const lunge = fighting ? Math.sin(t * 2.3) * 8 : 0;
+  const bowing = t > DUEL.bow && t < DUEL.leave;
+  // Der Helle springt ab und zu über den Schlag hinweg.
+  const cycle = (t - DUEL.arrive) % 4.5;
+  const jump = fighting && cycle > 3.3 ? -Math.sin(((cycle - 3.3) / 1.2) * Math.PI) * 38 : 0;
+  const clash = fighting && swing > 0.9;
+  return (
+    <g className="street-show" aria-hidden pointerEvents="none">
+      <Knight x={spot - off + lunge} y={y} dir={1} robe="#212529" saber="#ff2e2e" angle={angle} blade={blade} walking={walking} t={t} bowing={bowing} jump={0} />
+      <Knight x={spot + off + lunge} y={y} dir={-1} robe="#b08968" saber="#4cc9f0" angle={angle} blade={blade} walking={walking} t={t} bowing={bowing} jump={jump} />
+      {clash && (
+        <g transform={`translate(${spot + lunge} ${y - 42})`}>
+          <path d="M0 -14 L3 -3 L14 0 L3 3 L0 14 L-3 3 L-14 0 L-3 -3 Z" fill="#fff" stroke="#ffd166" strokeWidth={2} />
+          <circle r={18} fill="#fff" opacity={0.35} />
+        </g>
+      )}
+    </g>
+  );
+}
+
+function Knight({
+  x,
+  y,
+  dir,
+  robe,
+  saber,
+  angle,
+  blade,
+  walking,
+  t,
+  bowing,
+  jump,
+}: {
+  x: number;
+  y: number;
+  dir: 1 | -1;
+  robe: string;
+  saber: string;
+  angle: number;
+  blade: number;
+  walking: boolean;
+  t: number;
+  bowing: boolean;
+  jump: number;
+}) {
+  const step = walking ? Math.sin(t * 8) : 0;
+  const len = 34 * blade;
+  return (
+    <g transform={`translate(${x} ${y + jump}) scale(${dir * 1.75} 1.75)`}>
+      <ellipse cy={1 - jump / 1.75} rx={10} ry={3} fill="#000" opacity={0.2} />
+      <g transform={bowing ? "rotate(28 0 -12)" : undefined}>
+        <Legs swing={step} />
+        <path d="M-9 -8 L-6 -32 L6 -32 L9 -8 Z" fill={robe} stroke={INK} strokeWidth={1.8} />
+        <path d="M-7 -30 Q0 -48 7 -30 Z" fill={robe} stroke={INK} strokeWidth={1.8} />
+        <circle cx={1} cy={-35} r={4.5} fill="#f1c7a3" stroke={INK} strokeWidth={1.2} />
+        <circle cx={3} cy={-35.5} r={0.9} fill={INK} />
+        <path d="M-7 -33 Q0 -46 7 -33 Q4 -40 0 -41 Q-4 -40 -7 -33 Z" fill={robe} stroke={INK} strokeWidth={1.2} />
+        {/* Schwert: Griff in der Hand, Klinge leuchtet */}
+        <g transform={`translate(7 -22) rotate(${angle})`}>
+          <path d="M-6 6 L0 0" stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
+          <rect x={-2} y={-2} width={4} height={9} rx={1} fill="#adb5bd" stroke={INK} strokeWidth={1} />
+          {len > 0 && (
+            <g>
+              <line x1={0} y1={-2} x2={0} y2={-2 - len} stroke={saber} strokeWidth={6} strokeLinecap="round" opacity={0.45} />
+              <line x1={0} y1={-2} x2={0} y2={-2 - len} stroke="#fff" strokeWidth={2.2} strokeLinecap="round" />
+            </g>
+          )}
+        </g>
+      </g>
     </g>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planShow, showFocus, showState } from "./StreetShows";
+import { blocksRoad, DUEL, duelClashes, planShow, showFocus, showState } from "./StreetShows";
 import { allocateWalkers } from "./StreetLife";
 
 describe("Straßenleben", () => {
@@ -32,5 +32,25 @@ describe("Straßenleben", () => {
     expect(showState(show, 0).x).toBeLessThan(0);
     expect(showState(show, show.duration * 1000).x).toBeGreaterThan(500 + 300);
     expect(showFocus(show, 1000).gather).toBeNull();
+  });
+
+  it("Feuerwehr hält, Hochzeitskorso und Stadtlauf ziehen durch – der Verkehr wartet solange", () => {
+    const fire = planShow(1, "firetruck", 0, 800, 0);
+    expect(showState(fire, (fire.duration / 2) * 1000)).toMatchObject({ x: fire.spot, standing: true });
+    for (const kind of ["wedding", "marathon"] as const) {
+      const show = planShow(1, kind, 0, 800, 0);
+      expect(showState(show, show.duration * 1000).x).toBeGreaterThan(800);
+    }
+    expect(blocksRoad("firetruck")).toBe(true);
+    expect(blocksRoad("balloon")).toBe(false);
+  });
+
+  it("Lichtschwertduell: Treffer nur während des Kampfs, Zuschauer bleiben auf ihrer Straßenseite", () => {
+    const clashes = duelClashes();
+    expect(clashes.length).toBeGreaterThan(8);
+    expect(clashes.every((at) => at > DUEL.arrive && at < DUEL.bow)).toBe(true);
+    const duel = planShow(1, "duel", 0, 800, 0);
+    expect(showState(duel, 8000)).toMatchObject({ x: 400, standing: true });
+    expect(showFocus(duel, 8000)).toMatchObject({ gather: 400, gatherOwnSide: true });
   });
 });
