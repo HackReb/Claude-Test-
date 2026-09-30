@@ -12,6 +12,7 @@ import { IncidentList } from "../components/IncidentList";
 import { StatusBar, type StreetTab } from "../components/StatusBar";
 import { StreetSearch } from "../components/StreetSearch";
 import { StreetView } from "../components/street/StreetView";
+import { useAlienVisit } from "../hooks/useAlienVisit";
 import { formatCoins } from "../format";
 import { currentPrice } from "../game/plots";
 import { routes } from "../routes";
@@ -45,6 +46,7 @@ export function StreetScreen() {
   const [honk, setHonk] = useState<string | null>(null);
   const [tab, setTab] = useState<StreetTab>("residents");
   const tabsRef = useRef<HTMLDivElement>(null);
+  const ufo = useAlienVisit();
 
   const voices = useMemo(() => residentVoices(street), [street]);
 
@@ -69,16 +71,15 @@ export function StreetScreen() {
   }, [street]);
   useEffect(() => () => sound.stopAmbience(), []);
 
-  async function onLitterTap(item: LitterItem): Promise<number> {
+  async function onLitterTap(item: LitterItem): Promise<boolean> {
     const result = await cleanLitter(item.id);
-    if (!result) return 0;
+    if (!result) return false;
     if (!result.cleaned) sound.scrub();
     else {
       sound.pickup();
       if (result.kind === "poop") sound.sparkle();
-      sound.coin(0.15);
     }
-    return result.reward;
+    return result.cleaned;
   }
 
   function onVoice(voice: Voice) {
@@ -198,7 +199,13 @@ export function StreetScreen() {
               setHonk(car ? `📯 ${car.name} (${car.plate}) hupt!` : `📯 ${model.brand} ${model.model} hupt zurück!`);
               setTimeout(() => setHonk(null), 2200);
             }}
+            ufo={ufo?.flying ? ufo : null}
           />
+          {ufo && (
+            <p className="honk ufo-alert" role="status">
+              {ufo.message}
+            </p>
+          )}
           {honk && (
             <p className="honk" role="status">
               {honk}

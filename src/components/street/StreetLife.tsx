@@ -47,19 +47,26 @@ interface Props {
   anchors: LifeAnchors;
   /** Dreck landet auf dem Gehweg – nur auf der eigenen Straße. */
   onDrop?: (kind: LitterKind, spot: Pick<LitterItem, "pos" | "side">) => void;
+  /** Aliens über der Straße (x des Ziels): alle rennen panisch davon. */
+  panicX?: number | null;
 }
+
+/** So viel schneller rennen alle, wenn das UFO kommt. */
+const PANIC_SPEED = 4.5;
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** Leute, Kinder und ein Hund auf den Gehwegen – je nachdem, was in der Straße steht. */
-export function StreetLife({ seed, width, walkY, anchors, onDrop }: Props) {
+export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null }: Props) {
   const reduced = prefersReducedMotion();
   const npcs = useMemo(() => createNpcs(seed, width, anchors), [seed, width, anchors]);
   const state = useRef<Npc[]>(npcs);
   const lastDrop = useRef(0);
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
+  const panicRef = useRef(panicX);
+  panicRef.current = panicX;
   const [, setFrame] = useState(0);
 
   useEffect(() => {
@@ -87,6 +94,16 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop }: Props) {
     };
 
     function step(npc: Npc, dt: number, t: number) {
+      const panic = panicRef.current;
+      if (panic !== null) {
+        // Weg vom UFO, so schnell es geht – auch über den Straßenrand hinaus.
+        npc.dir = npc.x < panic ? -1 : 1;
+        npc.x += npc.dir * npc.speed * PANIC_SPEED * dt;
+        npc.phase += dt * npc.speed * 0.9;
+        npc.toss = undefined;
+        npc.pausedUntil = 0;
+        return;
+      }
       if (npc.toss && t - npc.toss.at > 0.7) {
         drop("trash", npc.toss.x + npc.dir * 26, npc.side, t);
         npc.toss = undefined;
@@ -102,13 +119,9 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop }: Props) {
       }
       npc.x += npc.dir * npc.speed * dt;
       npc.phase += dt * npc.speed * 0.25;
-      if (npc.x > npc.maxX) {
-        npc.x = npc.maxX;
-        npc.dir = -1;
-      } else if (npc.x < npc.minX) {
-        npc.x = npc.minX;
-        npc.dir = 1;
-      }
+      // Außerhalb (z. B. nach der Flucht vor dem UFO): umdrehen und zurückschlendern.
+      if (npc.x > npc.maxX) npc.dir = -1;
+      else if (npc.x < npc.minX) npc.dir = 1;
       if (npc.nextEventAt > 0 && t > npc.nextEventAt) {
         if (npc.kind === "dogwalker") {
           npc.pausedUntil = t + 2.6; // Hund macht sein Geschäft
@@ -132,8 +145,13 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop }: Props) {
         if (npc.kind === "dogwalker") return <DogWalker key={i} npc={npc} y={y} squatting={t < npc.pausedUntil} />;
         return (
           <g key={i}>
-            <Person npc={npc} y={y} scale={npc.kind === "kid" ? 0.7 : 1} bounce={npc.kind === "kid"} />
+            <Person npc={npc} y={y} scale={npc.kind === "kid" ? 0.7 : 1} bounce={npc.kind === "kid" || panicX !== null} />
             {npc.toss && <Toss npc={npc} y={y} t={t} />}
+            {panicX !== null && (
+              <text x={npc.x} y={y - (npc.kind === "kid" ? 44 : 60)} textAnchor="middle" fontSize={16}>
+                {i % 3 === 0 ? "😱" : i % 3 === 1 ? "AAAH!" : "😨"}
+              </text>
+            )}
           </g>
         );
       })}

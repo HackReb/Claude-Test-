@@ -130,7 +130,7 @@ describe("gameStore – Leben auf der Straße", () => {
     const trash = litter.find((l) => l.kind === "trash")!;
     const result = await later.getState().cleanLitter(trash.id);
     expect(result?.cleaned).toBe(true);
-    expect(later.getState().player!.coins).toBe(coins + result!.reward);
+    expect(later.getState().player!.coins).toBe(coins); // kein Geld fürs Saubermachen
     expect((await repo.loadStreet(later.getState().street!.id))?.litter).toHaveLength(litter.length - 1);
   });
 });

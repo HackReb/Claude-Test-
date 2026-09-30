@@ -177,6 +177,8 @@ export interface Player {
   pets?: Pet[];
   /** Version der Spielregeln, nach denen der Stand gerechnet wird (2 = Bewohner & laufende Kosten). */
   economy?: number;
+  /** UFO-Besuche: wann zuletzt und wann das nächste Mal. Fehlt = noch nie gesehen (kommt bald). */
+  aliens?: { lastAt: number; nextAt: number };
 }
 
 export interface Car {

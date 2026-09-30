@@ -186,6 +186,83 @@ class SoundEngine {
     this.play((t) => this.tone(1200, t, 0.03, "square", 0.04));
   }
 
+  // ---------- Aliens ----------
+
+  /** UFO: eiriges Theremin-Wabern, so lange es über der Straße ist. */
+  ufo(seconds: number) {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(0.09, t + 0.8);
+      out.gain.setValueAtTime(0.09, t + seconds - 1.2);
+      out.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+      out.connect(this.master!);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(5, t);
+      lfo.frequency.linearRampToValueAtTime(11, t + seconds);
+      const depth = ctx.createGain();
+      depth.gain.value = 70;
+      lfo.connect(depth);
+      for (const [type, ratio] of [["sine", 1], ["triangle", 1.5]] as const) {
+        const osc = ctx.createOscillator();
+        osc.type = type;
+        osc.frequency.setValueAtTime(760 * ratio, t);
+        osc.frequency.exponentialRampToValueAtTime(430 * ratio, t + 1.4);
+        osc.frequency.exponentialRampToValueAtTime(560 * ratio, t + seconds * 0.6);
+        osc.frequency.exponentialRampToValueAtTime(900 * ratio, t + seconds);
+        depth.connect(osc.frequency);
+        const g = ctx.createGain();
+        g.gain.value = type === "sine" ? 1 : 0.35;
+        osc.connect(g).connect(out);
+        osc.start(t);
+        osc.stop(t + seconds + 0.05);
+      }
+      lfo.start(t);
+      lfo.stop(t + seconds + 0.05);
+    });
+  }
+
+  /** Laser: Piu-piu-piu mit Brummen. */
+  laser() {
+    this.play((t) => {
+      for (let i = 0; i < 4; i++) this.tone(2400, t + i * 0.13, 0.17, "sawtooth", 0.07, 160, 3200);
+      this.tone(95, t, 1.1, "square", 0.05, 45, 700);
+      this.noiseBurst(t, 1.1, "bandpass", 4200, 3, 0.07, 700);
+    });
+  }
+
+  /** Einschlag: dumpfer Knall und klirrende Scheiben. */
+  boom() {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      const src = ctx.createBufferSource();
+      src.buffer = this.brown;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(1100, t);
+      filter.frequency.exponentialRampToValueAtTime(90, t + 1.3);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.9, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      src.connect(filter).connect(gain).connect(this.master!);
+      src.start(t);
+      src.stop(t + 1.35);
+      this.tone(75, t, 0.9, "sine", 0.35, 32);
+      for (let i = 0; i < 7; i++) this.tone(rand(2800, 6200), t + 0.05 + i * rand(0.03, 0.07), 0.12, "sine", 0.05);
+    });
+  }
+
+  /** Leute rennen schreiend weg. */
+  screams() {
+    this.play((t) => {
+      for (let i = 0; i < 5; i++) {
+        const f = rand(520, 880);
+        this.tone(f, t + i * 0.16 + rand(0, 0.08), rand(0.35, 0.6), "sawtooth", 0.03, f * 0.7, 1500);
+      }
+    });
+  }
+
   // ---------- Straßengeräusche ----------
 
   /** Lautstärke der Geräusch-Ebenen (0–1), abhängig davon, was gerade zu sehen ist. */

@@ -140,13 +140,14 @@ describe("Müll", () => {
     let street = addLitter(addLitter(start().street, "trash", { pos: 0.1, side: "top" }), "poop", { pos: 0.3, side: "top" });
     const [trash, poop] = street.litter!;
     const t = tapLitter(street, trash.id)!;
-    expect(t).toMatchObject({ cleaned: true, reward: LIFE.cleanReward.trash });
+    expect(t).toMatchObject({ cleaned: true });
+    expect(t).not.toHaveProperty("reward"); // Saubermachen bringt kein Geld
     street = t.street;
-    expect(tapLitter(street, poop.id)).toMatchObject({ cleaned: false, reward: 0 });
+    expect(tapLitter(street, poop.id)).toMatchObject({ cleaned: false });
     street = tapLitter(street, poop.id)!.street;
     street = tapLitter(street, poop.id)!.street;
     const last = tapLitter(street, poop.id)!;
-    expect(last).toMatchObject({ cleaned: true, reward: LIFE.cleanReward.poop });
+    expect(last).toMatchObject({ cleaned: true });
     expect(last.street.litter).toEqual([]);
     expect(tapLitter(last.street, "weg")).toBeNull();
   });

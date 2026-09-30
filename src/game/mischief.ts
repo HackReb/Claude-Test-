@@ -39,6 +39,7 @@ export function actorOf(mischief: Pick<Mischief, "badBoyId" | "label">): Actor {
     const model = carModel(id.slice(5));
     if (model) return { id, name: mischief.label ?? `Ein ${model.brand} ${model.model}`, emoji: "🚗", kind: "soot", amount: model.soot, visitor: true };
   }
+  if (id === "aliens") return { id, name: "Aliens", emoji: "👽", kind: "smash", amount: 1, visitor: false };
   const bb = badBoy(id) ?? BAD_BOYS[0];
   return { ...bb, visitor: false };
 }

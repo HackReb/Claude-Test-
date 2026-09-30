@@ -38,8 +38,8 @@ export const LIFE = {
 
   playgroundCost: 600,
 
+  /** Saubermachen bringt kein Geld – nur zufriedenere Bewohner. */
   tapsToClean: { trash: 1, poop: 3 },
-  cleanReward: { trash: 8, poop: 20 },
   /** Live auf dem Bildschirm: frühestens alle so viele Sekunden neuer Dreck. */
   liveLitterEverySeconds: 25,
 } as const;

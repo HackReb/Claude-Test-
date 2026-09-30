@@ -165,7 +165,7 @@ export function spawnLitter(street: Street, now: number): Street {
   return result;
 }
 
-export type CleanResult = { street: Street; cleaned: boolean; reward: number; kind: LitterKind } | null;
+export type CleanResult = { street: Street; cleaned: boolean; kind: LitterKind } | null;
 
 /** Einmal auf Dreck tippen. Müll ist sofort weg, Hundehaufen brauchen mehrere Tipper. */
 export function tapLitter(street: Street, litterId: string): CleanResult {
@@ -176,7 +176,7 @@ export function tapLitter(street: Street, litterId: string): CleanResult {
   const litter = cleaned
     ? street.litter!.filter((l) => l.id !== litterId)
     : street.litter!.map((l) => (l.id === litterId ? { ...l, taps } : l));
-  return { street: { ...street, litter }, cleaned, reward: cleaned ? LIFE.cleanReward[item.kind] : 0, kind: item.kind };
+  return { street: { ...street, litter }, cleaned, kind: item.kind };
 }
 
 // ---------- Spielplatz ----------

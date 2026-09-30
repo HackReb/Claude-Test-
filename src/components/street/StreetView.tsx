@@ -11,6 +11,7 @@ import { ShopSign } from "../ShopSign";
 import { layoutStreet, STREET, type LotBox } from "./layout";
 import { Litter } from "./Litter";
 import { Playground } from "./Playground";
+import { UfoAttack } from "./UfoAttack";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
 import { PetWalkers } from "./PetWalkers";
 import { Traffic } from "./Traffic";
@@ -29,8 +30,8 @@ interface Props {
   onSelect?: (plot: Plot) => void;
   /** Leute, Kinder und Hund auf den Gehwegen zeigen. */
   life?: boolean;
-  /** Dreck antippen; liefert die Belohnung (0 = noch nicht weg). */
-  onLitterTap?: (item: LitterItem) => Promise<number>;
+  /** Einmal auf Dreck tippen; `true` = jetzt ganz weg. */
+  onLitterTap?: (item: LitterItem) => Promise<boolean>;
   /** Hund/Passant lässt live Dreck fallen. */
   onDrop?: (kind: LitterKind, spot: Pick<LitterItem, "pos" | "side">) => void;
   /** Sprechblasen über Grundstücken. */
@@ -46,6 +47,8 @@ interface Props {
   pets?: Pet[];
   /** Auto antippen (hupen). */
   onCarTap?: (vehicle: { model: CarModel; car?: Car }) => void;
+  /** Aliens greifen an: welches Grundstück und seit wann (performance.now()). */
+  ufo?: { plotId: string; startedAt: number } | null;
 }
 
 interface Popup {
@@ -72,6 +75,7 @@ export function StreetView({
   cars = [],
   pets = [],
   onCarTap,
+  ufo,
 }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
   const scroller = useRef<HTMLDivElement>(null);
@@ -95,6 +99,23 @@ export function StreetView({
     };
   }, [anchorKey]);
 
+  // UFO-Ziel: Mitte des Hauses und Dachkante; die Straße scrollt dorthin, damit man es sieht.
+  const ufoLot = ufo ? lots.find((l) => l.plot.id === ufo.plotId && l.plot.building) : undefined;
+  const ufoTarget = ufoLot
+    ? {
+        x: ufoLot.x + ufoLot.width / 2,
+        roofY: ufoLot.y + STREET.lotHeight - 16 - facadeDimensions(ufoLot.plot.size, ufoLot.plot.building!.facade.floors).height,
+      }
+    : null;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !ufoTarget) return;
+    const px = (ufoTarget.x / width) * el.scrollWidth;
+    el.scrollTo({ left: Math.max(0, px - el.clientWidth / 2), behavior: "smooth" });
+    // Nur beim Start des Angriffs scrollen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ufo?.startedAt]);
+
   useEffect(() => {
     const el = scroller.current;
     if (!el || !onViewport) return;
@@ -113,9 +134,8 @@ export function StreetView({
 
   async function tapLitter(item: LitterItem) {
     if (!onLitterTap) return;
-    const reward = await onLitterTap(item);
-    if (reward > 0) {
-      const popup = { id: Date.now() + Math.random(), x: item.pos * width, y: litterY[item.side] - 20, text: `+${reward} 🪙` };
+    if (await onLitterTap(item)) {
+      const popup = { id: Date.now() + Math.random(), x: item.pos * width, y: litterY[item.side] - 20, text: "✨ Sauber!" };
       setPopups((list) => [...list, popup]);
       setTimeout(() => setPopups((list) => list.filter((p) => p.id !== popup.id)), 1000);
     }
@@ -169,7 +189,7 @@ export function StreetView({
             voice={voiceByPlot.get(lot.plot.id)}
             onVoice={onVoice}
             mine={!!mineId && lot.plot.ownerId === mineId}
-            life={life}
+            life={life && !ufoTarget}
           />
         ))}
 
@@ -188,8 +208,9 @@ export function StreetView({
           />
         )}
 
-        {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} />}
+        {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} panicX={ufoTarget?.x ?? null} />}
         {pets.length > 0 && <PetWalkers pets={pets} width={width} walkY={walkY} />}
+        {ufo && ufoTarget && <UfoAttack targetX={ufoTarget.x} roofY={ufoTarget.roofY} width={width} startedAt={ufo.startedAt} />}
 
         {popups.map((p) => (
           <text key={p.id} x={p.x} y={p.y} textAnchor="middle" fontSize={16} fontWeight={900} fill="#2b2118" className="reward-popup">
