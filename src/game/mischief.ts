@@ -80,7 +80,7 @@ function describe(bb: Actor, mischief: Mischief, street: Street, detail: { count
  * Reproduzierbar über die ID; zweimal derselbe Streich ändert nichts.
  */
 export function applyMischief(street: Street, mischief: Mischief): { street: Street; incident: Incident | null } {
-  if (street.incidents?.some((i) => i.id === mischief.id)) return { street, incident: null };
+  if (alreadyHandled(street, mischief.id)) return { street, incident: null };
   const bb = actorOf(mischief);
   // Tiere und Autos lässt jeder Wachschutz durch.
   if (bb.visitor) mischief = { ...mischief, blocked: false };
@@ -113,7 +113,7 @@ export function applyMischief(street: Street, mischief: Mischief): { street: Str
         result = withBuilding(result, target.id, { soot: Math.min(CAR_OUTINGS.maxSoot, (target.building.soot ?? 0) + bb.amount) });
       }
     } else {
-      const whole = buildings.filter((p) => !p.building.damaged);
+      const whole = buildings.filter((p) => !p.building.damaged && !repairShielded(p.building, mischief.at));
       const target = pick(whole);
       if (target) {
         detail.building = target.building.name;
@@ -131,7 +131,24 @@ export function applyMischief(street: Street, mischief: Mischief): { street: Str
     // Wer ihn geschickt hat, kommt nur raus, wenn er erwischt wurde – bei Tieren und Autos sieht man's sowieso.
     ...((mischief.blocked || bb.visitor) && mischief.senderName && { senderName: mischief.senderName }),
   };
-  return { street: { ...result, incidents: [incident, ...(result.incidents ?? [])].slice(0, MISCHIEF.incidentLimit) }, incident };
+  return {
+    street: {
+      ...result,
+      incidents: [incident, ...(result.incidents ?? [])].slice(0, MISCHIEF.incidentLimit),
+      handled: [mischief.id, ...(result.handled ?? [])].slice(0, MISCHIEF.handledLimit),
+    },
+    incident,
+  };
+}
+
+/** Schon mal angekommen? (Die Vorfall-Liste allein reicht nicht – sie ist kurz.) */
+function alreadyHandled(street: Street, id: string): boolean {
+  return !!street.handled?.includes(id) || !!street.incidents?.some((i) => i.id === id);
+}
+
+/** Frisch repariert: Knallfrösche (und Aliens) lassen das Haus eine Weile in Ruhe. */
+export function repairShielded(building: { repairedAt?: number }, at: number): boolean {
+  return building.repairedAt !== undefined && at - building.repairedAt < MISCHIEF.repairShieldHours * 3_600_000;
 }
 
 // ---------- Aufräumen, Reparieren, Wachschutz ----------
@@ -152,12 +169,13 @@ export function scrubGraffiti(player: Player, street: Street, plotId: string): F
   };
 }
 
-export function repairBuilding(player: Player, street: Street, plotId: string): FixResult {
+export function repairBuilding(player: Player, street: Street, plotId: string, now: number = Date.now()): FixResult {
   const plot = street.plots.find((p) => p.id === plotId);
   if (!plot?.building?.damaged) return { ok: false, reason: "not-needed" };
   const cost = MISCHIEF.repairCost[plot.size];
   if (player.coins < cost) return { ok: false, reason: "too-expensive" };
-  const { damaged: _removed, ...building } = plot.building;
+  const { damaged: _removed, ...rest } = plot.building;
+  const building = { ...rest, repairedAt: now };
   return {
     ok: true,
     cost,

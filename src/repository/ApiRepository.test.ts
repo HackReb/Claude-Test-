@@ -58,6 +58,8 @@ function setup(handle?: (call: Call) => Reply | undefined) {
   return { storage, server, repo: make(), make };
 }
 
+const fakeBuilding = () => ({ id: "b1", name: "Kalles Haus", level: 1 as const, createdBy: "template" as const, facade: { base: { partId: "base" }, roof: { partId: "roof" }, floors: 1 as const, parts: [] } });
+
 const start = (name = "Kalle") => claimStreet({ playerName: name, street: { name: "Weg", city: "Ulm" } }, 0);
 
 describe("ApiRepository", () => {
@@ -194,6 +196,48 @@ describe("ApiRepository", () => {
     expect(await repo.loadStreet(street.id)).toEqual(serverStreet);
     // Namen für Neuigkeiten („Max hat in deiner Straße gekauft“)
     expect(repo.online.playerNames()).toMatchObject({ zoe: "Zoe", max: "Max", [street.ownerId]: "Zoe" });
+  });
+
+  it("Reparatur während einer Server-Antwort geht nicht verloren (Fenster bleibt heil)", async () => {
+    const { player, street } = start();
+    const home = street.plots[0].id;
+    const broken: Street = { ...street, plots: street.plots.map((p, i) => (i === 0 ? { ...p, building: { ...fakeBuilding(), damaged: true } } : p)) };
+    const repaired: Street = { ...street, plots: street.plots.map((p, i) => (i === 0 ? { ...p, building: fakeBuilding() } : p)) };
+    let serverStreet: Street = broken;
+    let repairDuringRequest = false;
+    const { repo } = setup((c) => {
+      if (c.method === "PUT" && c.path.startsWith("/streets/")) return { status: 200, body: { street: (serverStreet = c.body.street), ownerName: null } };
+      if (c.method === "GET" && c.path.startsWith("/streets/")) {
+        const old = serverStreet;
+        // Genau jetzt wird repariert – die Antwort ist schon unterwegs (alter Stand).
+        if (repairDuringRequest) void repo.saveStreet(repaired);
+        return { status: 200, body: { street: old, ownerName: null } };
+      }
+      if (c.method === "GET" && c.path === "/me") {
+        const old = serverStreet;
+        if (repairDuringRequest) void repo.saveStreet(repaired);
+        return { status: 200, body: { player, street: old, neighborhood: null, streets: [] } };
+      }
+      return undefined;
+    });
+    await repo.online.register(player, broken);
+    await repo.saveStreet(broken);
+
+    repairDuringRequest = true;
+    const entry = await repo.online.fetchStreet(street.id);
+    repairDuringRequest = false;
+    expect(entry?.street.plots[0].building?.damaged).toBeUndefined();
+    await repo.flush();
+    expect(serverStreet.plots.find((p) => p.id === home)?.building?.damaged).toBeUndefined();
+
+    // Dasselbe beim Abgleich mit dem ganzen Spielstand (Start, Straße wechseln).
+    serverStreet = broken;
+    repairDuringRequest = true;
+    await repo.loadPlayer();
+    repairDuringRequest = false;
+    await repo.flush();
+    expect((await repo.loadStreet(street.id))?.plots[0].building?.damaged).toBeUndefined();
+    expect(serverStreet.plots[0].building?.damaged).toBeUndefined();
   });
 
   it("alter lokaler Spielstand wird beim ersten Start mit Server angemeldet", async () => {

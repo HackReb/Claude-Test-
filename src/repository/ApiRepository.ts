@@ -83,6 +83,12 @@ export class ApiRepository implements Repository {
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** Zuletzt vom Server zusammengeführte Straßen, mit der Version, zu der sie gehören. */
   private readonly merged = new Map<string, { version: number; street: Street }>();
+  /**
+   * Zuletzt lokal gespeicherte Straßen mit Zähler. Wird eine Straße gespeichert, während eine Antwort
+   * vom Server unterwegs ist, ist diese Antwort veraltet und darf die Änderung nicht überschreiben
+   * (sonst kommt z. B. ein gerade repariertes Fenster wieder kaputt zurück).
+   */
+  private readonly localEdits = new Map<string, { count: number; street: Street }>();
   readonly online: OnlineFeatures;
 
   constructor(
@@ -150,6 +156,7 @@ export class ApiRepository implements Repository {
   }
 
   async saveStreet(street: Street): Promise<Street | void> {
+    this.localEdits.set(street.id, { count: (this.localEdits.get(street.id)?.count ?? 0) + 1, street });
     await this.cache.saveStreet(street);
     const version = this.nextVersion();
     this.outbox.streets[street.id] = version;
@@ -230,6 +237,7 @@ export class ApiRepository implements Repository {
     this.timer = null;
     this.outbox = { streets: {} };
     this.merged.clear();
+    this.localEdits.clear();
     this.storage.removeItem(OUTBOX_KEY);
     this.storage.removeItem(FOREIGN_KEY);
     this.storage.removeItem(NAMES_KEY);
@@ -379,9 +387,13 @@ export class ApiRepository implements Repository {
   private async fetchStreet(id: string) {
     if (!this.canSync()) return null;
     await this.flush();
+    const edits = this.editCounts();
     try {
       const entry = await this.request<StreetEntry>("GET", `/streets/${encodeURIComponent(id)}`);
       this.learnNames([entry]);
+      // Inzwischen lokal gespeichert? Dann gilt der lokale Stand – der Server bekommt ihn gleich.
+      const local = this.editedSince(edits, id);
+      if (local) return { ...entry, street: local };
       // Nur übernehmen, wenn lokal nichts Neueres wartet.
       if (this.outbox.streets[id] === undefined && (await this.cache.loadStreet(id))) await this.cache.saveStreet(entry.street);
       return entry;
@@ -491,19 +503,22 @@ export class ApiRepository implements Repository {
   /** Ausstehendes hochladen, dann den Stand vom Server übernehmen (er kann von einem anderen Gerät kommen). */
   private async sync(): Promise<void> {
     await this.queue.then(() => this.flushNow());
-    await this.writeSnapshot(await this.request<Snapshot>("GET", "/me"));
+    const edits = this.editCounts();
+    await this.writeSnapshot(await this.request<Snapshot>("GET", "/me"), edits);
   }
 
-  private async writeSnapshot(snapshot: Snapshot): Promise<void> {
+  /** Stand vom Server in den lokalen Speicher – außer Straßen, die inzwischen lokal geändert wurden. */
+  private async writeSnapshot(snapshot: Snapshot, edits?: Map<string, number>): Promise<void> {
     if (!snapshot?.player?.id || !Array.isArray(snapshot.streets)) throw new Error("Ungültige Antwort vom Server");
+    const keepLocal = (id: string) => edits !== undefined && (this.outbox.streets[id] !== undefined || this.editedSince(edits, id) !== null);
     await this.cache.savePlayer(snapshot.player);
-    if (snapshot.street) await this.cache.saveStreet(snapshot.street);
+    if (snapshot.street && !keepLocal(snapshot.street.id)) await this.cache.saveStreet(snapshot.street);
     if (snapshot.neighborhood) await this.cache.saveNeighborhood(snapshot.neighborhood);
     this.learnNames(snapshot.streets);
     this.receiveMischief(snapshot.mischief);
     const owners: Record<string, string> = {};
     for (const entry of snapshot.streets) {
-      await this.cache.saveStreet(entry.street);
+      if (!keepLocal(entry.street.id)) await this.cache.saveStreet(entry.street);
       if (entry.ownerName !== null) owners[entry.street.id] = entry.ownerName;
     }
     this.write(FOREIGN_KEY, owners);
@@ -590,6 +605,16 @@ export class ApiRepository implements Repository {
   private rememberForeign(id: string, ownerName: string) {
     const owners = this.read<Record<string, string>>(FOREIGN_KEY) ?? {};
     if (owners[id] !== ownerName) this.write(FOREIGN_KEY, { ...owners, [id]: ownerName });
+  }
+
+  private editCounts(): Map<string, number> {
+    return new Map([...this.localEdits].map(([id, e]) => [id, e.count]));
+  }
+
+  /** Die lokal gespeicherte Straße, wenn sie seit `edits` geändert wurde – sonst null. */
+  private editedSince(edits: Map<string, number>, id: string): Street | null {
+    const now = this.localEdits.get(id);
+    return now && now.count !== (edits.get(id) ?? 0) ? now.street : null;
   }
 
   private scheduleFlush() {

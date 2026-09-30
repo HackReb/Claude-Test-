@@ -57,6 +57,36 @@ describe("Bad Boys", () => {
     expect(repairBuilding({ ...player, coins: 5 }, twins.street, homeId)).toEqual({ ok: false, reason: "too-expensive" });
   });
 
+  it("derselbe Bad Boy schlägt nie zweimal zu – auch wenn die Vorfall-Liste längst weitergerückt ist", () => {
+    const { player, street: s, homeId } = street();
+    const twins = send("knallfrosch-zwillinge", "m-twins", { at: 5 });
+    const hit = applyMischief(s, twins).street;
+    const repaired = repairBuilding({ ...player, coins: 5000 }, hit, homeId, 10);
+    if (!repaired.ok) throw new Error(repaired.reason);
+    // Viele andere Vorfälle später …
+    let later = repaired.street;
+    for (let i = 0; i < MISCHIEF.incidentLimit + 5; i++) later = applyMischief(later, send("kaugummi-klaus", `m-klaus-${i}`, { at: 20 + i })).street;
+    expect(later.incidents!.some((i) => i.id === "m-twins")).toBe(false);
+    // … kommt er (z. B. beim Anmelden auf einem anderen Gerät) nochmal an: nichts passiert.
+    const again = applyMischief(later, twins);
+    expect(again.incident).toBeNull();
+    expect(again.street.plots.find((p) => p.id === homeId)!.building!.damaged).toBeUndefined();
+  });
+
+  it("frisch repariert: Knallfrösche lassen das Haus ein paar Tage in Ruhe", () => {
+    const { player, street: base, homeId } = street();
+    // Nur ein Haus zum Treffen – die anderen sind schon kaputt.
+    const s = { ...base, plots: base.plots.map((p) => (p.id !== homeId && p.building ? { ...p, building: { ...p.building, damaged: true } } : p)) };
+    const hit = applyMischief(s, send("knallfrosch-zwillinge", "m-1")).street;
+    const repaired = repairBuilding({ ...player, coins: 5000 }, hit, homeId, 100 * HOUR);
+    if (!repaired.ok) throw new Error(repaired.reason);
+    const soon = applyMischief(repaired.street, send("knallfrosch-zwillinge", "m-2", { at: 101 * HOUR }));
+    expect(soon.street.plots.find((p) => p.id === homeId)!.building!.damaged).toBeUndefined();
+    expect(soon.incident!.text).toContain("nichts kaputt");
+    const later = applyMischief(repaired.street, send("knallfrosch-zwillinge", "m-3", { at: (100 + MISCHIEF.repairShieldHours + 1) * HOUR }));
+    expect(later.street.plots.find((p) => p.id === homeId)!.building!.damaged).toBe(true);
+  });
+
   it("Graffiti wegschrubben kostet Reinigungsmittel", () => {
     const { player, street: s } = street();
     const kevin = applyMischief(s, send("spruehdosen-kevin"));

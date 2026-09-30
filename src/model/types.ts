@@ -18,6 +18,8 @@ export interface Street {
   security?: 1 | 2;
   /** Was Bad Boys hier zuletzt angestellt haben (neueste zuerst). */
   incidents?: Incident[];
+  /** IDs der zuletzt angekommenen Bad Boys – kommt einer (z. B. nach dem Anmelden) nochmal an, zählt er nicht. */
+  handled?: string[];
 }
 
 /** Ein Bad Boy ist unterwegs in eine Straße (vom Server oder von einem Bot). */
@@ -119,6 +121,8 @@ export interface Building {
   graffiti?: string;
   /** Kaputt gemacht (Fenster eingeworfen) – muss repariert werden. */
   damaged?: boolean;
+  /** Zuletzt repariert – danach eine Weile vor neuen Knallfröschen geschützt. */
+  repairedAt?: number;
   /** Ruß von Abgasen fremder Autos (Stufen). */
   soot?: number;
 }

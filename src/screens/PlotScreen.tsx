@@ -301,7 +301,8 @@ function DamageSection({ plot }: { plot: Plot }) {
       {building.damaged && (
         <>
           <p>
-            💥 Fenster kaputt! Solange nicht repariert ist, füllt sich das Haus höchstens zu {Math.round(MISCHIEF.damagedFactor * 100)} %.
+            💥 Fenster kaputt! Solange nicht repariert ist, füllt sich das Haus höchstens zu {Math.round(MISCHIEF.damagedFactor * 100)} %. Nach der
+            Reparatur ist das Haus {Math.round(MISCHIEF.repairShieldHours / 24)} Tage vor neuen Knallfröschen sicher.
           </p>
           <button
             type="button"

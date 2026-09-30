@@ -1,5 +1,6 @@
 import { ALIENS } from "../config/aliens";
 import { MISCHIEF } from "../config/badboys";
+import { repairShielded } from "./mischief";
 import type { Incident, Player, Plot, Street } from "../model/types";
 import { createId } from "./ids";
 
@@ -15,11 +16,12 @@ export function alienDueAt(player: Player, openedAt: number): number {
   return Math.max(player.aliens.nextAt, openedAt + ALIENS.arriveAfterSeconds * 1000);
 }
 
-/** Welche Häuser getroffen werden können: eigene Gebäude, unbeschädigte zuerst. */
-export function alienTargets(street: Street, playerId: string): Plot[] {
+/** Welche Häuser getroffen werden können: eigene Gebäude, unbeschädigte (und nicht frisch reparierte) zuerst. */
+export function alienTargets(street: Street, playerId: string, now: number = Date.now()): Plot[] {
   const own = street.plots.filter((p) => p.purchasedAt !== undefined && p.building && (p.ownerId ?? street.ownerId) === playerId);
   const intact = own.filter((p) => !p.building!.damaged);
-  return intact.length > 0 ? intact : own;
+  const unshielded = intact.filter((p) => !repairShielded(p.building!, now));
+  return unshielded.length > 0 ? unshielded : intact.length > 0 ? intact : own;
 }
 
 /** Der Laser trifft: Fenster kaputt, Meldung in der Straße, nächster Besuch in ein paar Tagen. */

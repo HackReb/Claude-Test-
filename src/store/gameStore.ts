@@ -821,7 +821,7 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       async repair(plotId) {
         const result = accrued();
         if (!result) return { ok: false, reason: "not-needed" };
-        const done = repairBuilding(result.player, result.street, plotId);
+        const done = repairBuilding(result.player, result.street, plotId, clock());
         if (done.ok) {
           set({ player: done.player, street: done.street });
           await save(done.player, done.street);

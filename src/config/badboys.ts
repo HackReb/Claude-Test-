@@ -48,6 +48,10 @@ export const MISCHIEF = {
   repairCost: { S: 240, M: 480, L: 1000 },
   /** So viele Vorfälle merkt sich eine Straße (für Neuigkeiten und die Zeitung). */
   incidentLimit: 20,
+  /** So viele angekommene Bad Boys merkt sich eine Straße, damit keiner zweimal zuschlägt. */
+  handledLimit: 120,
+  /** Frisch reparierte Fenster: so lange (Stunden) bleibt das Haus von Knallfröschen verschont. */
+  repairShieldHours: 72,
 } as const;
 
 /** Wachschutz für die eigene Straße: fängt einen Teil der Bad Boys ab. */
