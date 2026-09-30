@@ -186,6 +186,240 @@ class SoundEngine {
     this.play((t) => this.tone(1200, t, 0.03, "square", 0.04));
   }
 
+  // ---------- Aliens ----------
+
+  /** UFO: eiriges Theremin-Wabern, so lange es über der Straße ist. */
+  ufo(seconds: number) {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(0.09, t + 0.8);
+      out.gain.setValueAtTime(0.09, t + seconds - 1.2);
+      out.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+      out.connect(this.master!);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(5, t);
+      lfo.frequency.linearRampToValueAtTime(11, t + seconds);
+      const depth = ctx.createGain();
+      depth.gain.value = 70;
+      lfo.connect(depth);
+      for (const [type, ratio] of [["sine", 1], ["triangle", 1.5]] as const) {
+        const osc = ctx.createOscillator();
+        osc.type = type;
+        osc.frequency.setValueAtTime(760 * ratio, t);
+        osc.frequency.exponentialRampToValueAtTime(430 * ratio, t + 1.4);
+        osc.frequency.exponentialRampToValueAtTime(560 * ratio, t + seconds * 0.6);
+        osc.frequency.exponentialRampToValueAtTime(900 * ratio, t + seconds);
+        depth.connect(osc.frequency);
+        const g = ctx.createGain();
+        g.gain.value = type === "sine" ? 1 : 0.35;
+        osc.connect(g).connect(out);
+        osc.start(t);
+        osc.stop(t + seconds + 0.05);
+      }
+      lfo.start(t);
+      lfo.stop(t + seconds + 0.05);
+    });
+  }
+
+  /** Laser: Piu-piu-piu mit Brummen. */
+  laser() {
+    this.play((t) => {
+      for (let i = 0; i < 4; i++) this.tone(2400, t + i * 0.13, 0.17, "sawtooth", 0.07, 160, 3200);
+      this.tone(95, t, 1.1, "square", 0.05, 45, 700);
+      this.noiseBurst(t, 1.1, "bandpass", 4200, 3, 0.07, 700);
+    });
+  }
+
+  /** Einschlag: dumpfer Knall und klirrende Scheiben. */
+  boom() {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      const src = ctx.createBufferSource();
+      src.buffer = this.brown;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(1100, t);
+      filter.frequency.exponentialRampToValueAtTime(90, t + 1.3);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.9, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      src.connect(filter).connect(gain).connect(this.master!);
+      src.start(t);
+      src.stop(t + 1.35);
+      this.tone(75, t, 0.9, "sine", 0.35, 32);
+      for (let i = 0; i < 7; i++) this.tone(rand(2800, 6200), t + 0.05 + i * rand(0.03, 0.07), 0.12, "sine", 0.05);
+    });
+  }
+
+  /** Leute rennen schreiend weg. */
+  screams() {
+    this.play((t) => {
+      for (let i = 0; i < 5; i++) {
+        const f = rand(520, 880);
+        this.tone(f, t + i * 0.16 + rand(0, 0.08), rand(0.35, 0.6), "sawtooth", 0.03, f * 0.7, 1500);
+      }
+    });
+  }
+
+  // ---------- Straßen-Shows ----------
+
+  /** Zirkusparade: Umtata-Marsch mit Tuba, Drehorgel-Melodie, Trommel – und ab und zu trötet der Elefant. */
+  circus(seconds: number) {
+    this.play((t) => {
+      const beat = 0.24;
+      // C-Dur-Marsch, 2 Takte à 8 Achtel, immer wieder
+      const melody = [659, 622, 659, 784, 659, 523, 587, 659, 698, 659, 587, 523, 494, 523, 587, 392];
+      const bass = [131, 196, 131, 196, 147, 196, 131, 196];
+      const bars = Math.floor(seconds / (beat * melody.length));
+      for (let bar = 0; bar < bars; bar++) {
+        const start = t + bar * beat * melody.length;
+        melody.forEach((f, i) => this.tone(f, start + i * beat, beat * 0.85, "square", 0.035, undefined, 2600));
+        bass.forEach((f, i) => this.tone(f, start + i * beat * 2, beat * 0.9, "triangle", 0.16));
+        for (let i = 0; i < melody.length; i += 2) this.noiseBurst(start + i * beat, 0.06, "bandpass", 180, 1, 0.25);
+        if (bar % 3 === 1) this.noiseBurst(start + beat * 7, 0.25, "highpass", 6000, 0.5, 0.06);
+      }
+      for (let at = 2.5; at < seconds - 2; at += 9) this.trumpet(t + at);
+    });
+  }
+
+  /** Törööö! */
+  private trumpet(t: number) {
+    this.tone(330, t, 0.9, "sawtooth", 0.08, 660, 1800);
+    this.tone(495, t + 0.05, 0.85, "sawtooth", 0.04, 990, 2200);
+  }
+
+  /** Eiswagen: Spieluhr-Melodie und Glocke. */
+  icecream(seconds: number) {
+    this.play((t) => {
+      const tune = [784, 659, 784, 880, 784, 659, 523, 587, 659, 587, 523, 494, 523];
+      const len = tune.length * 0.22 + 0.9;
+      for (let start = 0; start < seconds - len; start += len + 1.2) {
+        tune.forEach((f, i) => {
+          this.tone(f * 2, t + start + i * 0.22, 0.5, "sine", 0.07);
+          this.tone(f * 4, t + start + i * 0.22, 0.25, "sine", 0.015);
+        });
+      }
+      for (const at of [4.8, 5.3, 5.8]) this.tone(2093, t + at, 0.8, "triangle", 0.08);
+    });
+  }
+
+  /** Straßenmusiker mit Gitarre: gezupfte Akkorde. */
+  busker(seconds: number) {
+    this.play((t) => {
+      const chords = [
+        [196, 247, 294, 392],
+        [165, 196, 247, 330],
+        [131, 165, 196, 262],
+        [147, 185, 220, 294],
+      ];
+      const pattern = [0, 2, 1, 3, 2, 1];
+      let at = 4;
+      for (let bar = 0; at < seconds - 3; bar++) {
+        const chord = chords[bar % chords.length];
+        pattern.forEach((n, i) => this.pluck(chord[n], t + at + i * 0.26));
+        this.pluck(chord[0] / 2, t + at);
+        at += pattern.length * 0.26;
+      }
+    });
+  }
+
+  private pluck(freq: number, t: number) {
+    this.tone(freq, t, 0.9, "triangle", 0.12, undefined, 2400);
+    this.tone(freq * 2, t, 0.25, "sawtooth", 0.015, undefined, 1800);
+  }
+
+  /** Heißluftballon: der Brenner faucht ab und zu. */
+  balloon(seconds: number) {
+    this.play((t) => {
+      for (let at = 1; at < seconds - 1; at += rand(4, 7)) this.noiseBurst(t + at, rand(0.9, 1.6), "bandpass", 700, 0.8, 0.22, 400);
+    });
+  }
+
+  /** Feuerwehr: Tatütata beim Kommen und Gehen, Leiter surrt, Katze miaut (erst kläglich, dann froh). */
+  firetruck(seconds: number, drive: number) {
+    this.play((t) => {
+      const siren = (from: number, to: number) => {
+        for (let at = from, i = 0; at < to; at += 0.55, i++) this.tone(i % 2 === 0 ? 466 : 622, t + at, 0.52, "square", 0.045, undefined, 2000);
+      };
+      siren(0, drive + 0.6);
+      siren(seconds - drive - 0.4, seconds);
+      this.tone(160, t + drive + 0.3, 2, "sawtooth", 0.035, 240, 700);
+      for (const at of [0.8, 2.4, drive + 1.5, drive + 3.2]) this.meow(t + at, false);
+      this.meow(t + drive + 5.3, true);
+      this.tone(120, t + seconds - drive - 2.2, 2, "sawtooth", 0.035, 80, 700);
+    });
+  }
+
+  private meow(t: number, happy: boolean) {
+    this.tone(happy ? 900 : 640, t, 0.18, "sine", 0.08, happy ? 1300 : 980);
+    this.tone(happy ? 1300 : 980, t + 0.18, 0.35, "sine", 0.07, happy ? 1000 : 560);
+  }
+
+  /** Hochzeitskorso: Fanfare, Hupkonzert und scheppernde Dosen. */
+  wedding(seconds: number) {
+    this.play((t) => {
+      [523, 523, 523, 698, 880, 698, 1047].forEach((f, i) => this.tone(f, t + i * 0.18, i === 6 ? 0.7 : 0.16, "triangle", 0.1));
+      for (let at = 1.6; at < seconds - 0.5; at += rand(1.1, 2)) {
+        const f = rand(330, 470);
+        this.tone(f, t + at, 0.18, "sawtooth", 0.05, undefined, 1800);
+        this.tone(f * 1.26, t + at, 0.18, "sawtooth", 0.035, undefined, 1800);
+        this.tone(f, t + at + 0.26, 0.3, "sawtooth", 0.05, undefined, 1800);
+      }
+      for (let at = 0.5; at < seconds; at += rand(0.08, 0.22)) this.noiseBurst(t + at, 0.04, "bandpass", rand(2500, 4500), 4, 0.07);
+    });
+  }
+
+  /** Lichtschwerter: Einschalten, Summen, Krachen bei jedem Treffer, Ausschalten. */
+  duel(ignite: number, retract: number, clashes: number[]) {
+    this.play((t) => {
+      const ctx = this.ctx!;
+      for (const [f, at] of [[70, ignite], [95, ignite + 0.1]] as const) {
+        this.tone(f, t + at, 0.45, "sawtooth", 0.08, f * 2.2, 900);
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = f + 20;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 420;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, t + at);
+        gain.gain.exponentialRampToValueAtTime(0.05, t + at + 0.3);
+        gain.gain.setValueAtTime(0.05, t + retract);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + retract + 0.4);
+        osc.connect(filter).connect(gain).connect(this.master!);
+        osc.start(t + at);
+        osc.stop(t + retract + 0.45);
+      }
+      for (const at of clashes) {
+        this.noiseBurst(t + at, 0.18, "highpass", 3000, 0.7, 0.25);
+        this.tone(1760, t + at, 0.25, "square", 0.04, 900, 4000);
+        this.tone(220, t + at, 0.3, "sawtooth", 0.06, 110, 1200);
+      }
+      this.tone(190, t + retract, 0.4, "sawtooth", 0.07, 60, 900);
+    });
+  }
+
+  /** Stadtlauf: Trillerpfeife, trappelnde Schritte, Anfeuern. */
+  marathon(seconds: number) {
+    this.play((t) => {
+      for (let i = 0; i < 6; i++) this.tone(2900, t + 0.2 + i * 0.07, 0.06, "sine", 0.06, 2600);
+      for (let at = 0.8; at < seconds - 0.5; at += rand(0.09, 0.16)) this.noiseBurst(t + at, 0.03, "lowpass", 900, 0.8, 0.12);
+    });
+  }
+
+  /** Die Leute jubeln und klatschen. */
+  cheer() {
+    this.play((t) => {
+      for (let i = 0; i < 6; i++) {
+        const f = rand(380, 620);
+        this.tone(f, t + rand(0, 0.3), rand(0.4, 0.7), "sawtooth", 0.025, f * 1.4, 1400);
+      }
+      for (let i = 0; i < 14; i++) this.noiseBurst(t + 0.2 + i * rand(0.08, 0.14), 0.04, "bandpass", rand(1500, 2600), 1.2, 0.18);
+    });
+  }
+
   // ---------- Straßengeräusche ----------
 
   /** Lautstärke der Geräusch-Ebenen (0–1), abhängig davon, was gerade zu sehen ist. */

@@ -1172,6 +1172,12 @@ h2 {
   cursor: pointer;
 }
 
+.honk.ufo-alert {
+  background: #1b1f3a;
+  color: #b7ff5a;
+  border-color: #b7ff5a;
+}
+
 .honk {
   margin: 0;
   padding: 8px 12px;
@@ -2037,4 +2043,9 @@ h2 {
   .street-svg {
     height: clamp(200px, calc(100dvh - 140px), 520px);
   }
+}
+
+.honk.show-note {
+  background: #fff4d6;
+  border-color: #ff7a45;
 }

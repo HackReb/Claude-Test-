@@ -15,7 +15,7 @@ namespace App\Service;
 final class StreetMerger
 {
     private const IMMUTABLE_PLOT_FIELDS = ['id', 'size', 'side', 'index', 'price'];
-    private const OWNER_STREET_FIELDS = ['name', 'city', 'osm', 'litter', 'litterCheckedAt', 'security', 'incidents'];
+    private const OWNER_STREET_FIELDS = ['name', 'city', 'osm', 'litter', 'litterCheckedAt', 'security', 'incidents', 'handled'];
 
     public function merge(array $current, array $incoming, string $writerId, bool $writerManagesStreet): array
     {

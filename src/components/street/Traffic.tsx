@@ -18,6 +18,8 @@ interface Vehicle {
   /** Wartet am Rand, bis es (wieder) losfährt. */
   waitUntil: number;
   spin: number;
+  /** Straße wird gesperrt: seit wann das Auto ausgeblendet wird. */
+  fadingSince?: number;
 }
 
 interface Props {
@@ -29,6 +31,8 @@ interface Props {
   /** Anzahl fremder Autos. */
   trafficCount: number;
   onTap?: (vehicle: { model: CarModel; car?: Car }) => void;
+  /** Straße gesperrt (Zirkusparade, Eiswagen): wer draußen ist, wartet; wer schon fährt, fährt raus. */
+  paused?: boolean;
 }
 
 const MARGIN = 110;
@@ -37,7 +41,7 @@ const CAR_SCALE = 1.2;
 const dirOf = (lane: Lane): 1 | -1 => (lane === "bottom" ? 1 : -1);
 
 /** Autos auf der Fahrbahn: eigene (mit Schild) und normaler Verkehr. */
-export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props) {
+export function Traffic({ seed, width, laneY, cars, trafficCount, onTap, paused = false }: Props) {
   const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const carsKey = cars.map((c) => `${c.id}:${c.modelId}:${c.color}:${c.plate}:${c.name}`).join("|");
   const vehicles = useMemo(() => {
@@ -69,6 +73,8 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props
   }, [seed, width, carsKey, trafficCount]);
 
   const state = useRef(vehicles);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   const [, setFrame] = useState(0);
 
   useEffect(() => {
@@ -85,6 +91,16 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props
       last = now;
       const t = now / 1000;
       for (const v of state.current) {
+        const outside = v.x <= -MARGIN || v.x >= width + MARGIN;
+        if (pausedRef.current && outside) v.waitUntil = Math.max(v.waitUntil, t + 1 + Math.random() * 3);
+        // Gesperrt: wer noch auf der Fahrbahn ist, verschwindet kurz (die Show kommt gleich ins Bild).
+        if (pausedRef.current && !outside && v.fadingSince === undefined) v.fadingSince = t;
+        if (v.fadingSince !== undefined && t - v.fadingSince > 0.8) {
+          v.fadingSince = undefined;
+          v.x = dirOf(v.lane) === 1 ? -MARGIN : width + MARGIN;
+          v.waitUntil = t + 2;
+          continue;
+        }
         if (t < v.waitUntil) continue;
         const dir = dirOf(v.lane);
         v.x += dir * v.speed * dt;
@@ -116,6 +132,7 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props
             key={v.key}
             className={`vehicle${v.car ? " own" : ""}`}
             transform={`translate(${v.x} ${laneY[v.lane]}) scale(${CAR_SCALE})`}
+            opacity={v.fadingSince !== undefined ? Math.max(0, 1 - (performance.now() / 1000 - v.fadingSince) / 0.8) : undefined}
             role={onTap ? "button" : undefined}
             aria-label={onTap ? `${label} – hupen` : undefined}
             onClick={onTap ? () => onTap({ model: v.model, car: v.car }) : undefined}

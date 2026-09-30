@@ -49,6 +49,7 @@ import type {
   Street,
   StreetLocation,
 } from "../model/types";
+import { alienAttack } from "../game/aliens";
 import { LocalRepository } from "../repository/LocalRepository";
 import { ApiRepository } from "../repository/ApiRepository";
 import type { Account, AccountResult, Repository } from "../repository/Repository";
@@ -96,6 +97,8 @@ interface GameState {
   renameBuilding(plotId: string, name: string, streetId?: string): Promise<boolean>;
   /** Einmal auf Müll/Hundehaufen tippen; beim Wegräumen gibt es ein paar Münzen. */
   cleanLitter(litterId: string): Promise<CleanResult>;
+  /** Das UFO trifft ein eigenes Haus (Fenster kaputt) – der nächste Besuch ist dann erst in ein paar Tagen. */
+  alienAttack(plotId: string): Promise<void>;
   /** Live-Dreck von Hund oder Passant auf dem Bildschirm. */
   dropLitter(kind: LitterKind, spot: Pick<LitterItem, "pos" | "side">): Promise<void>;
   buildPlayground(plotId: string): Promise<AmenityResult>;
@@ -557,10 +560,17 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
         if (!result) return null;
         const cleaned = tapLitter(result.street, litterId);
         if (!cleaned) return null;
-        const player = { ...result.player, coins: result.player.coins + cleaned.reward };
-        set({ player, street: cleaned.street });
-        await save(player, cleaned.street);
+        set({ player: result.player, street: cleaned.street });
+        await save(result.player, cleaned.street);
         return cleaned;
+      },
+
+      async alienAttack(plotId) {
+        const result = accrued();
+        if (!result) return;
+        const hit = alienAttack(result.player, result.street, plotId, clock());
+        set({ player: hit.player, street: hit.street });
+        await save(hit.player, hit.street);
       },
 
       async dropLitter(kind, spot) {
@@ -811,7 +821,7 @@ export function createGameStore(repo: Repository, clock: () => number = Date.now
       async repair(plotId) {
         const result = accrued();
         if (!result) return { ok: false, reason: "not-needed" };
-        const done = repairBuilding(result.player, result.street, plotId);
+        const done = repairBuilding(result.player, result.street, plotId, clock());
         if (done.ok) {
           set({ player: done.player, street: done.street });
           await save(done.player, done.street);
