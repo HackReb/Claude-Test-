@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { residentsOf, useOf, type Voice } from "../../game/life";
+import { residentsByPlot, residentsOf, useOf, type Voice } from "../../game/life";
 import type { Pet, LitterItem, LitterKind, Plot, Street } from "../../model/types";
 import { facadeDimensions } from "../../parts/grid";
 import { formatCoins } from "../../format";
@@ -13,6 +13,9 @@ import { Litter } from "./Litter";
 import { Playground } from "./Playground";
 import { UfoAttack } from "./UfoAttack";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
+import { planShow, StreetShow, type ActiveShow } from "./StreetShows";
+import { SHOWS, type ShowKind } from "../../config/streetLife";
+import { sound } from "../../audio/sound";
 import { PetWalkers } from "./PetWalkers";
 import { Traffic } from "./Traffic";
 import { CARS, type CarModel } from "../../config/cars";
@@ -49,6 +52,8 @@ interface Props {
   onCarTap?: (vehicle: { model: CarModel; car?: Car }) => void;
   /** Aliens greifen an: welches Grundstück und seit wann (performance.now()). */
   ufo?: { plotId: string; startedAt: number } | null;
+  /** Eine Show beginnt (Zirkus, Eiswagen …) bzw. ist vorbei (null) – für eine Meldung unter der Straße. */
+  onShow?: (show: ActiveShow | null) => void;
 }
 
 interface Popup {
@@ -76,6 +81,7 @@ export function StreetView({
   pets = [],
   onCarTap,
   ufo,
+  onShow,
 }: Props) {
   const { lots, roadTop, roadBottom, width, height } = layoutStreet(street.plots);
   const scroller = useRef<HTMLDivElement>(null);
@@ -85,19 +91,62 @@ export function StreetView({
   // Rechtsverkehr: obere Spur fährt nach links, untere nach rechts
   const laneY = useMemo(() => ({ top: (roadTop + roadBottom) / 2 - 3, bottom: roadBottom - 3 }), [roadTop, roadBottom]);
 
-  // Wo wohnen Leute, wo wird eingekauft, wo gespielt? (stabil, solange sich daran nichts ändert)
+  // Wo wohnen Leute (und wie viele), wo wird eingekauft, wo gespielt? (stabil, solange sich daran nichts ändert)
+  const residents = residentsByPlot(street);
   const anchorKey = lots
-    .map((l) => `${l.x}:${l.plot.amenity ?? (l.plot.purchasedAt !== undefined && l.plot.building ? useOf(l.plot.building) : "")}`)
+    .map((l) => `${l.x}:${l.plot.amenity ?? (l.plot.purchasedAt !== undefined && l.plot.building ? useOf(l.plot.building) : "")}:${residents[l.plot.id] ?? ""}`)
     .join(",");
   const anchors = useMemo<LifeAnchors>(() => {
-    const center = (l: LotBox) => l.x + l.width / 2;
+    const spot = (l: LotBox) => ({ id: l.plot.id, x: l.x + l.width / 2, half: l.width / 2, side: l.plot.side === "left" ? ("top" as const) : ("bottom" as const) });
     const owned = lots.filter((l) => l.plot.purchasedAt !== undefined);
     return {
-      homes: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "residential").map(center),
-      shops: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "commercial").map(center),
-      playgrounds: owned.filter((l) => l.plot.amenity === "playground").map(center),
+      homes: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "residential").map((l) => ({ ...spot(l), residents: residents[l.plot.id] ?? 0 })),
+      shops: owned.filter((l) => l.plot.building && useOf(l.plot.building) === "commercial").map(spot),
+      playgrounds: owned.filter((l) => l.plot.amenity === "playground").map(spot),
     };
+    // anchorKey fasst Lage, Nutzung und Bewohner zusammen
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorKey]);
+
+  // Ab und zu eine Show: Zirkusparade, Eiswagen, Straßenmusiker, Heißluftballon – im sichtbaren Ausschnitt.
+  const [show, setShow] = useState<ActiveShow | null>(null);
+  const ufoActive = useRef(false);
+  ufoActive.current = !!ufo;
+  const onShowRef = useRef(onShow);
+  onShowRef.current = onShow;
+  useEffect(() => {
+    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!life || reduced) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let count = 0;
+    let lastKind: ShowKind | null = null;
+    const schedule = (seconds: number) => (timer = setTimeout(start, seconds * 1000));
+    const start = () => {
+      const el = scroller.current;
+      if (!el || document.visibilityState !== "visible" || ufoActive.current) return schedule(10);
+      const svgWidth = el.scrollWidth || 1;
+      const viewStart = (el.scrollLeft / svgWidth) * width;
+      const viewEnd = ((el.scrollLeft + el.clientWidth) / svgWidth) * width;
+      const choices = SHOWS.order.filter((k) => k !== lastKind);
+      const kind = count === 0 ? SHOWS.order[0] : choices[Math.floor(Math.random() * choices.length)];
+      count++;
+      lastKind = kind;
+      const next = planShow(count, kind, viewStart, viewEnd, performance.now());
+      setShow(next);
+      onShowRef.current?.(next);
+      playShow(kind, next.duration);
+      timer = setTimeout(() => {
+        setShow(null);
+        onShowRef.current?.(null);
+        schedule(SHOWS.gapSeconds[0] + Math.random() * (SHOWS.gapSeconds[1] - SHOWS.gapSeconds[0]));
+      }, next.duration * 1000);
+    };
+    schedule(SHOWS.firstAfterSeconds);
+    return () => {
+      clearTimeout(timer);
+      setShow(null);
+    };
+  }, [life, width]);
 
   // UFO-Ziel: Mitte des Hauses und Dachkante; die Straße scrollt dorthin, damit man es sieht.
   const ufoLot = ufo ? lots.find((l) => l.plot.id === ufo.plotId && l.plot.building) : undefined;
@@ -205,11 +254,14 @@ export function StreetView({
             cars={cars}
             trafficCount={CARS.trafficBase + anchors.shops.length}
             onTap={onCarTap}
+            paused={show?.kind === "circus" || show?.kind === "icecream"}
           />
         )}
 
-        {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} panicX={ufoTarget?.x ?? null} />}
+        {show && show.kind !== "balloon" && <StreetShow show={show} roadMid={roadMid} laneBottom={laneY.bottom} walkBottom={walkY.bottom} />}
+        {life && <StreetLife seed={street.id} width={width} walkY={walkY} anchors={anchors} onDrop={onDrop} panicX={ufoTarget?.x ?? null} show={show} />}
         {pets.length > 0 && <PetWalkers pets={pets} width={width} walkY={walkY} />}
+        {show?.kind === "balloon" && <StreetShow show={show} roadMid={roadMid} laneBottom={laneY.bottom} walkBottom={walkY.bottom} />}
         {ufo && ufoTarget && <UfoAttack targetX={ufoTarget.x} roofY={ufoTarget.roofY} width={width} startedAt={ufo.startedAt} />}
 
         {popups.map((p) => (
@@ -220,6 +272,18 @@ export function StreetView({
       </svg>
     </div>
   );
+}
+
+/** Musik und Geräusche zur Show – der Zirkus bekommt am Ende Applaus. */
+function playShow(kind: ShowKind, seconds: number) {
+  if (kind === "circus") {
+    sound.circus(seconds);
+    setTimeout(() => sound.cheer(), 6000);
+  } else if (kind === "icecream") sound.icecream(seconds);
+  else if (kind === "music") {
+    sound.busker(seconds);
+    setTimeout(() => sound.cheer(), (seconds - 6) * 1000);
+  } else sound.balloon(seconds);
 }
 
 function Lot({

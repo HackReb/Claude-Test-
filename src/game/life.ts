@@ -102,6 +102,16 @@ export function residentsOf(street: Street): number {
     .reduce((sum, p) => sum + placesOf(p) * (p.building.occupancy ?? homeComfort(street)), 0);
 }
 
+/** Bewohner je Wohnhaus (Grundstücks-ID → Anzahl, auf eine Stelle gerundet) – so viele Leute gehören auf die Straße. */
+export function residentsByPlot(street: Street): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const p of ownedBuildings(street)) {
+    if (useOf(p.building) !== "residential") continue;
+    result[p.id] = Math.round(placesOf(p) * (p.building.occupancy ?? homeComfort(street)) * 10) / 10;
+  }
+  return result;
+}
+
 /** Wie viele Plätze die Läden der Straße zusammen haben. */
 function shopPlacesOf(street: Street): number {
   return ownedBuildings(street)

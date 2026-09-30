@@ -29,6 +29,8 @@ interface Props {
   /** Anzahl fremder Autos. */
   trafficCount: number;
   onTap?: (vehicle: { model: CarModel; car?: Car }) => void;
+  /** Straße gesperrt (Zirkusparade, Eiswagen): wer draußen ist, wartet; wer schon fährt, fährt raus. */
+  paused?: boolean;
 }
 
 const MARGIN = 110;
@@ -37,7 +39,7 @@ const CAR_SCALE = 1.2;
 const dirOf = (lane: Lane): 1 | -1 => (lane === "bottom" ? 1 : -1);
 
 /** Autos auf der Fahrbahn: eigene (mit Schild) und normaler Verkehr. */
-export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props) {
+export function Traffic({ seed, width, laneY, cars, trafficCount, onTap, paused = false }: Props) {
   const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const carsKey = cars.map((c) => `${c.id}:${c.modelId}:${c.color}:${c.plate}:${c.name}`).join("|");
   const vehicles = useMemo(() => {
@@ -69,6 +71,8 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props
   }, [seed, width, carsKey, trafficCount]);
 
   const state = useRef(vehicles);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   const [, setFrame] = useState(0);
 
   useEffect(() => {
@@ -85,6 +89,8 @@ export function Traffic({ seed, width, laneY, cars, trafficCount, onTap }: Props
       last = now;
       const t = now / 1000;
       for (const v of state.current) {
+        const outside = v.x <= -MARGIN || v.x >= width + MARGIN;
+        if (pausedRef.current && outside) v.waitUntil = Math.max(v.waitUntil, t + 1 + Math.random() * 3);
         if (t < v.waitUntil) continue;
         const dir = dirOf(v.lane);
         v.x += dir * v.speed * dt;

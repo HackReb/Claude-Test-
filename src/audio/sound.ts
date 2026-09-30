@@ -263,6 +263,91 @@ class SoundEngine {
     });
   }
 
+  // ---------- Straßen-Shows ----------
+
+  /** Zirkusparade: Umtata-Marsch mit Tuba, Drehorgel-Melodie, Trommel – und ab und zu trötet der Elefant. */
+  circus(seconds: number) {
+    this.play((t) => {
+      const beat = 0.24;
+      // C-Dur-Marsch, 2 Takte à 8 Achtel, immer wieder
+      const melody = [659, 622, 659, 784, 659, 523, 587, 659, 698, 659, 587, 523, 494, 523, 587, 392];
+      const bass = [131, 196, 131, 196, 147, 196, 131, 196];
+      const bars = Math.floor(seconds / (beat * melody.length));
+      for (let bar = 0; bar < bars; bar++) {
+        const start = t + bar * beat * melody.length;
+        melody.forEach((f, i) => this.tone(f, start + i * beat, beat * 0.85, "square", 0.035, undefined, 2600));
+        bass.forEach((f, i) => this.tone(f, start + i * beat * 2, beat * 0.9, "triangle", 0.16));
+        for (let i = 0; i < melody.length; i += 2) this.noiseBurst(start + i * beat, 0.06, "bandpass", 180, 1, 0.25);
+        if (bar % 3 === 1) this.noiseBurst(start + beat * 7, 0.25, "highpass", 6000, 0.5, 0.06);
+      }
+      for (let at = 2.5; at < seconds - 2; at += 9) this.trumpet(t + at);
+    });
+  }
+
+  /** Törööö! */
+  private trumpet(t: number) {
+    this.tone(330, t, 0.9, "sawtooth", 0.08, 660, 1800);
+    this.tone(495, t + 0.05, 0.85, "sawtooth", 0.04, 990, 2200);
+  }
+
+  /** Eiswagen: Spieluhr-Melodie und Glocke. */
+  icecream(seconds: number) {
+    this.play((t) => {
+      const tune = [784, 659, 784, 880, 784, 659, 523, 587, 659, 587, 523, 494, 523];
+      const len = tune.length * 0.22 + 0.9;
+      for (let start = 0; start < seconds - len; start += len + 1.2) {
+        tune.forEach((f, i) => {
+          this.tone(f * 2, t + start + i * 0.22, 0.5, "sine", 0.07);
+          this.tone(f * 4, t + start + i * 0.22, 0.25, "sine", 0.015);
+        });
+      }
+      for (const at of [4.8, 5.3, 5.8]) this.tone(2093, t + at, 0.8, "triangle", 0.08);
+    });
+  }
+
+  /** Straßenmusiker mit Gitarre: gezupfte Akkorde. */
+  busker(seconds: number) {
+    this.play((t) => {
+      const chords = [
+        [196, 247, 294, 392],
+        [165, 196, 247, 330],
+        [131, 165, 196, 262],
+        [147, 185, 220, 294],
+      ];
+      const pattern = [0, 2, 1, 3, 2, 1];
+      let at = 4;
+      for (let bar = 0; at < seconds - 3; bar++) {
+        const chord = chords[bar % chords.length];
+        pattern.forEach((n, i) => this.pluck(chord[n], t + at + i * 0.26));
+        this.pluck(chord[0] / 2, t + at);
+        at += pattern.length * 0.26;
+      }
+    });
+  }
+
+  private pluck(freq: number, t: number) {
+    this.tone(freq, t, 0.9, "triangle", 0.12, undefined, 2400);
+    this.tone(freq * 2, t, 0.25, "sawtooth", 0.015, undefined, 1800);
+  }
+
+  /** Heißluftballon: der Brenner faucht ab und zu. */
+  balloon(seconds: number) {
+    this.play((t) => {
+      for (let at = 1; at < seconds - 1; at += rand(4, 7)) this.noiseBurst(t + at, rand(0.9, 1.6), "bandpass", 700, 0.8, 0.22, 400);
+    });
+  }
+
+  /** Die Leute jubeln und klatschen. */
+  cheer() {
+    this.play((t) => {
+      for (let i = 0; i < 6; i++) {
+        const f = rand(380, 620);
+        this.tone(f, t + rand(0, 0.3), rand(0.4, 0.7), "sawtooth", 0.025, f * 1.4, 1400);
+      }
+      for (let i = 0; i < 14; i++) this.noiseBurst(t + 0.2 + i * rand(0.08, 0.14), 0.04, "bandpass", rand(1500, 2600), 1.2, 0.18);
+    });
+  }
+
   // ---------- Straßengeräusche ----------
 
   /** Lautstärke der Geräusch-Ebenen (0–1), abhängig davon, was gerade zu sehen ist. */

@@ -13,6 +13,7 @@ import { StatusBar, type StreetTab } from "../components/StatusBar";
 import { StreetSearch } from "../components/StreetSearch";
 import { StreetView } from "../components/street/StreetView";
 import { useAlienVisit } from "../hooks/useAlienVisit";
+import { SHOWS } from "../config/streetLife";
 import { formatCoins } from "../format";
 import { currentPrice } from "../game/plots";
 import { routes } from "../routes";
@@ -47,6 +48,7 @@ export function StreetScreen() {
   const [tab, setTab] = useState<StreetTab>("residents");
   const tabsRef = useRef<HTMLDivElement>(null);
   const ufo = useAlienVisit();
+  const [showNote, setShowNote] = useState<string | null>(null);
 
   const voices = useMemo(() => residentVoices(street), [street]);
 
@@ -200,10 +202,16 @@ export function StreetScreen() {
               setTimeout(() => setHonk(null), 2200);
             }}
             ufo={ufo?.flying ? ufo : null}
+            onShow={(show) => setShowNote(show ? SHOWS.names[show.kind] : null)}
           />
           {ufo && (
             <p className="honk ufo-alert" role="status">
               {ufo.message}
+            </p>
+          )}
+          {showNote && !ufo && (
+            <p className="honk show-note" role="status">
+              {showNote}
             </p>
           )}
           {honk && (
