@@ -15,6 +15,7 @@ import { UfoAttack } from "./UfoAttack";
 import { StreetLife, type LifeAnchors } from "./StreetLife";
 import { blocksRoad, DUEL, duelClashes, planShow, StreetShow, type ActiveShow } from "./StreetShows";
 import { SHOWS, type ShowKind } from "../../config/streetLife";
+import { loadShowMemory, nextShowKind, saveShowMemory, secondsUntilNextShow, showPlayed } from "../../game/showPicker";
 import { sound } from "../../audio/sound";
 import { PetWalkers } from "./PetWalkers";
 import { Traffic } from "./Traffic";
@@ -118,8 +119,6 @@ export function StreetView({
     const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (!life || reduced) return;
     let timer: ReturnType<typeof setTimeout>;
-    let count = 0;
-    let lastKind: ShowKind | null = null;
     const schedule = (seconds: number) => (timer = setTimeout(start, seconds * 1000));
     const start = () => {
       const el = scroller.current;
@@ -127,21 +126,22 @@ export function StreetView({
       const svgWidth = el.scrollWidth || 1;
       const viewStart = (el.scrollLeft / svgWidth) * width;
       const viewEnd = ((el.scrollLeft + el.clientWidth) / svgWidth) * width;
-      const choices = SHOWS.order.filter((k) => k !== lastKind);
-      const kind = count === 0 ? SHOWS.order[0] : choices[Math.floor(Math.random() * choices.length)];
-      count++;
-      lastKind = kind;
-      const next = planShow(count, kind, viewStart, viewEnd, performance.now());
+      // Reihenfolge und Pausen merkt sich das Spiel – auch wenn man zwischendurch andere Seiten öffnet.
+      const picked = nextShowKind(loadShowMemory());
+      saveShowMemory(picked.memory);
+      const next = planShow(Date.now(), picked.kind, viewStart, viewEnd, performance.now());
+      const gap = SHOWS.gapSeconds[0] + Math.random() * (SHOWS.gapSeconds[1] - SHOWS.gapSeconds[0]);
+      showPlayed(next.duration, gap);
       setShow(next);
       onShowRef.current?.(next);
-      playShow(kind, next.duration);
+      playShow(picked.kind, next.duration);
       timer = setTimeout(() => {
         setShow(null);
         onShowRef.current?.(null);
-        schedule(SHOWS.gapSeconds[0] + Math.random() * (SHOWS.gapSeconds[1] - SHOWS.gapSeconds[0]));
+        schedule(gap);
       }, next.duration * 1000);
     };
-    schedule(SHOWS.firstAfterSeconds);
+    schedule(secondsUntilNextShow());
     return () => {
       clearTimeout(timer);
       setShow(null);
