@@ -1,5 +1,5 @@
 import type { OsmStreetRef } from "../model/types";
-import type { Shop, V2State } from "./model/types";
+import type { OwnedItem, Shop, V2State } from "./model/types";
 
 const AUTH_KEY = "babo2:auth";
 const TIMEOUT_MS = 8000;
@@ -76,6 +76,11 @@ export class V2Api {
 
   updateShop(id: string, patch: { name?: string; look?: number; data?: Record<string, unknown> }): Promise<{ shop: Shop }> {
     return this.request<{ shop: Shop }>("PUT", `/v2/shops/${encodeURIComponent(id)}`, patch);
+  }
+
+  /** Eine Ware aus dem Schaufenster kaufen – der Server bucht Münzen um und legt sie in meinen Schrank. */
+  buy(shopId: string, itemId: string): Promise<V2State & { bought: OwnedItem; shop: Shop }> {
+    return this.request<V2State & { bought: OwnedItem; shop: Shop }>("POST", `/v2/shops/${encodeURIComponent(shopId)}/buy`, { itemId });
   }
 
   closeShop(id: string): Promise<V2State> {

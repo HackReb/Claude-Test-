@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hashString, seededRandom } from "../../game/random";
+import { figureOf, wornDesigns } from "../game/figure";
 import type { MemberSummary } from "../model/types";
+import { FigureSvg } from "./FigureSvg";
 
 const INK = "#2b2118";
 const SCALE = 1.4;
-const SKINS = ["#f1c7a3", "#d9a066", "#a86b3c", "#7a4a2a", "#ffdbac"];
-const SHIRTS = ["#1982c4", "#ef476f", "#06d6a0", "#ffca3a", "#6a4c93", "#ff7a45", "#8ac926"];
-const HAIR = ["#2b2118", "#6b4226", "#e0b050", "#b5533c", "#555"];
 const TAGS = ["#ff7a45", "#1982c4", "#06d6a0", "#6a4c93", "#ef476f", "#118ab2"];
 
 interface Walker {
@@ -17,9 +16,6 @@ interface Walker {
   phase: number;
   side: "top" | "bottom";
   pauseUntil: number;
-  skin: string;
-  shirt: string;
-  hair: string;
   tag: string;
 }
 
@@ -72,7 +68,7 @@ export function MemberWalkers({ members, width, walkY, meId, onTap }: Props) {
     <g className="member-walkers">
       {state.current.map((w) => {
         const y = walkY[w.side];
-        const swing = Math.sin(w.phase * 3) * 5;
+        const figure = figureOf(w.member);
         const me = w.member.id === meId;
         const label = w.member.name.length > 14 ? `${w.member.name.slice(0, 13)}…` : w.member.name;
         const tagWidth = label.length * 6.4 + 14;
@@ -86,13 +82,7 @@ export function MemberWalkers({ members, width, walkY, meId, onTap }: Props) {
             onClick={onTap ? () => onTap(w.member) : undefined}
           >
             <g transform={`translate(${w.x} ${y}) scale(${w.dir * SCALE} ${SCALE})`}>
-              <ellipse cy={1} rx={8} ry={2.5} fill="#000" opacity={0.18} />
-              <path d={`M-2 -12 L${-2 + swing} 0 M2 -12 L${2 - swing} 0`} stroke={INK} strokeWidth={3} strokeLinecap="round" />
-              <rect x={-6} y={-27} width={12} height={16} rx={5} fill={w.shirt} stroke={INK} strokeWidth={1.8} />
-              <path d={`M0 -23 L${6 - swing * 0.6} -14`} stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
-              <circle cy={-33} r={6.5} fill={w.skin} stroke={INK} strokeWidth={1.8} />
-              <path d="M-6.5 -34 Q-6 -41 0 -40.5 Q6 -41 6.5 -34 Q3 -37 -6.5 -34 Z" fill={w.hair} />
-              <circle cx={3} cy={-33} r={1} fill={INK} />
+              <FigureSvg figure={figure} worn={wornDesigns(figure)} id={`m-${w.member.id}`} phase={w.phase} wave={Math.sin(w.phase * 2)} />
             </g>
             {/* Namensschild */}
             <g transform={`translate(${w.x} ${y - 66})`}>
@@ -112,6 +102,7 @@ export function MemberWalkers({ members, width, walkY, meId, onTap }: Props) {
 function createWalker(member: MemberSummary, width: number): Walker {
   const random = seededRandom(hashString(`member:${member.id}`));
   const pick = <T,>(items: T[]) => items[Math.floor(random() * items.length)];
+  const tag = pick(TAGS);
   return {
     member,
     x: 40 + random() * Math.max(1, width - 80),
@@ -120,9 +111,6 @@ function createWalker(member: MemberSummary, width: number): Walker {
     phase: random() * 10,
     side: random() < 0.5 ? "top" : "bottom",
     pauseUntil: 0,
-    skin: pick(SKINS),
-    shirt: pick(SHIRTS),
-    hair: pick(HAIR),
-    tag: pick(TAGS),
+    tag,
   };
 }

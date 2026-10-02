@@ -55,7 +55,15 @@ export function MallBuilding({ mall, streetName, shops, memberId, canOpen, onSho
             onKeyDown={clickable ? (e) => (e.key === "Enter" || e.key === " " ? (shop ? onShop?.(shop) : onOpen?.()) : undefined) : undefined}
           >
             {shop ? (
-              <ShopFront type={shop.type} name={shop.name} look={shop.look} width={inner.w} height={inner.h} mine={shop.memberId === memberId} />
+              <ShopFront
+                type={shop.type}
+                name={shop.name}
+                look={shop.look}
+                width={inner.w}
+                height={inner.h}
+                mine={shop.memberId === memberId}
+                item={shop.data.items?.find((i) => i.showcase) ?? null}
+              />
             ) : (
               <EmptySlot width={inner.w} height={inner.h} available={available} />
             )}

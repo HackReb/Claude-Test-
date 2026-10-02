@@ -5,9 +5,11 @@ import { blocksRoad, DUEL, duelClashes, planShow, StreetShow, type ActiveShow } 
 import { Traffic } from "../../components/street/Traffic";
 import { SHOWS, type ShowKind } from "../../config/streetLife";
 import { loadShowMemory, nextShowKind, saveShowMemory, secondsUntilNextShow, showPlayed } from "../../game/showPicker";
+import { residentPick, showcaseOf } from "../game/figure";
 import { lotsOf, residentsOf } from "../game/street";
 import type { MemberSummary, Shop, StreetV2 } from "../model/types";
 import { HouseLot } from "./HouseLot";
+import { ItemSvg } from "./ItemSvg";
 import { layoutStage, mallSlot, STAGE } from "./layout";
 import { MallBuilding } from "./MallBuilding";
 import { MemberWalkers } from "./MemberWalkers";
@@ -103,6 +105,16 @@ export function StreetStage({ street, memberId, canOpenShop, onShop, onOpenShop,
     };
   }, [layout.width]);
 
+  // Bewohner tragen, was in der Mall im Schaufenster liegt – so sieht man seine eigenen Waren herumlaufen.
+  const showcase = useMemo(() => showcaseOf(street), [street]);
+  const decorate = useMemo(
+    () => (id: string) => {
+      const pick = residentPick(id, showcase);
+      return pick ? <ItemSvg design={pick.item.design} id={`npc-${id}`} /> : null;
+    },
+    [showcase],
+  );
+
   const roadMid = (layout.roadTop + layout.roadBottom) / 2;
   const laneY = { top: roadMid - 3, bottom: layout.roadBottom - 3 };
   const label = `${street.name} · 👥 ${Math.round(residents)}`;
@@ -141,7 +153,7 @@ export function StreetStage({ street, memberId, canOpenShop, onShop, onOpenShop,
 
         <Traffic seed={street.id} width={layout.width} laneY={laneY} cars={[]} trafficCount={2 + Math.min(4, street.shops.length)} paused={!!show && blocksRoad(show.kind)} />
         {show && show.kind !== "balloon" && <StreetShow show={show} roadMid={roadMid} laneBottom={laneY.bottom} walkBottom={layout.walkY.bottom} />}
-        <StreetLife seed={street.id} width={layout.width} walkY={layout.walkY} anchors={anchors} show={show} />
+        <StreetLife seed={street.id} width={layout.width} walkY={layout.walkY} anchors={anchors} show={show} decorate={decorate} />
         <MemberWalkers members={street.members} width={layout.width} walkY={layout.walkY} meId={memberId} onTap={onMember} />
         {show?.kind === "balloon" && <StreetShow show={show} roadMid={roadMid} laneBottom={laneY.bottom} walkBottom={layout.walkY.bottom} />}
       </svg>

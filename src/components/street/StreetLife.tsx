@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { LIFE } from "../../config/life";
 import { STREET_LIFE } from "../../config/streetLife";
 import { hashString, seededRandom } from "../../game/random";
@@ -83,6 +83,8 @@ interface Props {
   panicX?: number | null;
   /** Show auf der Straße (Zirkus, Eiswagen …): die Leute schauen zu. */
   show?: ActiveShow | null;
+  /** Extras an einer Figur (Hut, Brille …), gezeichnet im Figuren-Koordinatensystem – z. B. gekaufte Waren in Babo 2. */
+  decorate?: (id: string, kind: "adult" | "kid") => ReactNode;
 }
 
 /** So viel schneller rennen alle, wenn das UFO kommt. */
@@ -115,7 +117,7 @@ export function allocateWalkers(homes: { id: string; residents: number }[], max:
 }
 
 /** Die Bewohner der Straße: stehen vor ihren Häusern, gehen einkaufen, besuchen Nachbarn, schauen Shows. */
-export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null, show = null }: Props) {
+export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null, show = null, decorate }: Props) {
   const reduced = prefersReducedMotion();
   const npcs = useMemo(() => createNpcs(seed, width, anchors, walkY), [seed, width, anchors, walkY]);
   const state = useRef<Npc[]>(npcs);
@@ -432,7 +434,7 @@ export function StreetLife({ seed, width, walkY, anchors, onDrop, panicX = null,
             {npc.dog ? (
               <DogWalker npc={npc} y={y} squatting={t < npc.pausedUntil} />
             ) : (
-              <Person npc={npc} y={y} scale={scale} bounce={npc.kind === "kid" || panicX !== null || (npc.mode === "watch" && !!npc.emote)} />
+              <Person npc={npc} y={y} scale={scale} bounce={npc.kind === "kid" || panicX !== null || (npc.mode === "watch" && !!npc.emote)} extra={decorate?.(npc.id, npc.kind)} />
             )}
             {npc.toss && t > npc.toss.at && <Toss npc={npc} y={y} t={t} />}
             {bubble && (
@@ -498,7 +500,7 @@ function createNpcs(seed: string, width: number, anchors: LifeAnchors, walkY: Re
   return npcs;
 }
 
-function Person({ npc, y, scale, bounce }: { npc: Npc; y: number; scale: number; bounce: boolean }) {
+function Person({ npc, y, scale, bounce, extra }: { npc: Npc; y: number; scale: number; bounce: boolean; extra?: ReactNode }) {
   const swing = Math.sin(npc.phase * 3) * 5;
   const hop = bounce ? -Math.abs(Math.sin(npc.phase * 3)) * 6 : 0;
   return (
@@ -516,6 +518,7 @@ function Person({ npc, y, scale, bounce }: { npc: Npc; y: number; scale: number;
       <circle cy={-33} r={6.5} fill={npc.skin} stroke={INK} strokeWidth={1.8} />
       <path d="M-6.5 -34 Q-6 -41 0 -40.5 Q6 -41 6.5 -34 Q3 -37 -6.5 -34 Z" fill={npc.hair} />
       <circle cx={3} cy={-33} r={1} fill={INK} />
+      {extra}
     </g>
   );
 }

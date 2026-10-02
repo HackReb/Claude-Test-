@@ -106,9 +106,11 @@ final class V2Test extends WebTestCase
 
         // Umbenennen, Sortiment speichern, schließen – nur eigene Läden.
         $shopId = $opened['shop']['id'];
-        $renamed = $this->call('PUT', "/api/v2/shops/$shopId", ['name' => 'Brotzeit', 'data' => ['items' => [['id' => 'i1']]]], $kalle);
+        $renamed = $this->call('PUT', "/api/v2/shops/$shopId", ['name' => 'Brotzeit', 'data' => ['items' => [['id' => 'i1', 'name' => 'Brezel', 'price' => 20]]]], $kalle);
         self::assertSame('Brotzeit', $renamed['shop']['name']);
-        self::assertSame([['id' => 'i1']], $renamed['shop']['data']['items']);
+        self::assertSame('Brezel', $renamed['shop']['data']['items'][0]['name']);
+        $this->call('PUT', "/api/v2/shops/$shopId", ['data' => ['items' => [['id' => 'i2']]]], $kalle);
+        self::assertSame(400, $this->httpStatus(), 'Ware ohne Namen');
 
         $zoe = $this->account('Zoe');
         $this->call('POST', '/api/v2/join', $this->bahnhofstrasse(), $zoe);
@@ -141,6 +143,47 @@ final class V2Test extends WebTestCase
         self::assertNull($this->call('POST', '/api/v2/leave', null, $first)['member']);
         $this->call('POST', '/api/v2/join', ['name' => 'Ring', 'city' => 'Ulm'], $late);
         self::assertSame(201, $this->httpStatus());
+    }
+
+    public function testInventWareAndBuyIt(): void
+    {
+        $kalle = $this->account('Kalle');
+        $this->call('POST', '/api/v2/join', $this->bahnhofstrasse() + ['data' => ['coins' => 2000]], $kalle);
+        $shop = $this->call('POST', '/api/v2/shops', ['type' => 'dinoladen', 'name' => 'Dino & Co'], $kalle)['shop'];
+        $dino = ['id' => 'w1', 'name' => 'Punkte-Dino', 'design' => ['slot' => 'pet', 'shape' => 'dino', 'colors' => ['#0f0', '#00f', '#fff'], 'pattern' => 'dots'], 'price' => 300, 'showcase' => true];
+        $hidden = ['id' => 'w2', 'name' => 'Geheim-Dino', 'design' => ['slot' => 'pet', 'shape' => 'dino'], 'price' => 99999, 'showcase' => false];
+        $saved = $this->call('PUT', "/api/v2/shops/{$shop['id']}", ['data' => ['items' => [$dino, $hidden]]], $kalle);
+        self::assertSame(200, $this->httpStatus(), json_encode($saved));
+        self::assertSame(5000, $saved['shop']['data']['items'][1]['price'], 'Preis wird auf den Rahmen gestutzt');
+
+        // Zu viele im Schaufenster
+        $many = array_map(fn ($i) => ['id' => "x$i", 'name' => "Ware $i", 'price' => 50, 'showcase' => true], range(1, 7));
+        $this->call('PUT', "/api/v2/shops/{$shop['id']}", ['data' => ['items' => $many]], $kalle);
+        self::assertSame(400, $this->httpStatus());
+
+        $zoe = $this->account('Zoe');
+        $this->call('POST', '/api/v2/join', $this->bahnhofstrasse() + ['data' => ['coins' => 500, 'figure' => ['base' => ['skin' => '#fff']]]], $zoe);
+        $bought = $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w1'], $zoe);
+        self::assertSame(200, $this->httpStatus(), json_encode($bought));
+        self::assertSame(200, $bought['member']['data']['coins']);
+        self::assertSame('Punkte-Dino', $bought['bought']['name']);
+        self::assertSame('Dino & Co', $bought['bought']['shopName']);
+        self::assertSame('dots', $bought['member']['data']['inventory'][0]['design']['pattern']);
+        self::assertSame(1, $bought['shop']['data']['items'][0]['sold']);
+        self::assertSame(2300, $this->call('GET', '/api/v2/me', null, $kalle)['member']['data']['coins'], 'Verkäufer bekommt die Münzen');
+
+        // Nicht im Schaufenster, zu teuer, eigener Laden
+        $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w2'], $zoe);
+        self::assertSame(404, $this->httpStatus());
+        $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w1'], $zoe);
+        self::assertSame(409, $this->httpStatus(), 'nur noch 200 Münzen');
+        $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w1'], $kalle);
+        self::assertSame(400, $this->httpStatus(), 'eigener Laden');
+
+        // Die Figur steht in der Mitgliederliste
+        $members = $this->call('GET', '/api/v2/me', null, $kalle)['street']['members'];
+        self::assertSame(['skin' => '#fff'], $members[1]['figure']['base']);
+        self::assertNull($members[0]['figure']);
     }
 
     public function testNeedsAccount(): void

@@ -1,3 +1,4 @@
+import { itemIncomePerHour } from "./figure";
 import { hashString, seededRandom } from "../../game/random";
 import { randomFacade } from "../../game/randomBuilding";
 import type { Facade, PlotSize } from "../../model/types";
@@ -89,7 +90,7 @@ export function mallFloors(shops: Shop[]): number {
 /** Umsatz eines Ladens pro Stunde: Laufkundschaft plus Bewohner – geteilt mit Läden desselben Typs. */
 export function shopIncomePerHour(shop: Shop, street: StreetV2, residents: number): number {
   const sameType = street.shops.filter((s) => s.type === shop.type).length || 1;
-  return ECONOMY2.walkInPerHour + (residents * ECONOMY2.perResidentPerHour) / sameType;
+  return ECONOMY2.walkInPerHour + (residents * ECONOMY2.perResidentPerHour) / sameType + itemIncomePerHour(shop, residents);
 }
 
 /** Was in den Kassen meiner Läden liegt (seit dem letzten Einsammeln, höchstens maxOfflineHours). */
