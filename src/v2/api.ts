@@ -1,5 +1,5 @@
 import type { OsmStreetRef } from "../model/types";
-import type { OwnedItem, Shop, V2State } from "./model/types";
+import type { NewsEvent, OwnedItem, Shop, StreetListing, StreetV2, V2State } from "./model/types";
 
 const AUTH_KEY = "babo2:auth";
 const TIMEOUT_MS = 8000;
@@ -85,6 +85,20 @@ export class V2Api {
 
   closeShop(id: string): Promise<V2State> {
     return this.request<V2State>("DELETE", `/v2/shops/${encodeURIComponent(id)}`);
+  }
+
+  /** Alle Straßen zum Bummeln (zuletzt aktive zuerst), auf Wunsch gefiltert. */
+  streets(q = ""): Promise<StreetListing[]> {
+    return this.request<{ streets: StreetListing[] }>("GET", `/v2/streets${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.streets);
+  }
+
+  street(id: string): Promise<StreetV2> {
+    return this.request<{ street: StreetV2 }>("GET", `/v2/streets/${encodeURIComponent(id)}`).then((r) => r.street);
+  }
+
+  /** Die Zeitung einer Straße, Neuestes zuerst. */
+  news(streetId: string): Promise<NewsEvent[]> {
+    return this.request<{ news: NewsEvent[] }>("GET", `/v2/streets/${encodeURIComponent(streetId)}/news`).then((r) => r.news);
   }
 
   /** 401 = Sitzung weg (anderswo abgemeldet, Passwort geändert): Schlüssel vergessen. */

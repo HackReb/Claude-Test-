@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BummelnSheet } from "./screens/BummelnSheet";
 import { ChooseStreetScreen } from "./screens/ChooseStreetScreen";
 import { FigureSheet } from "./screens/FigureSheet";
 import { PlayerSheet } from "./screens/PlayerSheet";
 import { MallSheet } from "./screens/MallSheet";
+import { NewsSheet } from "./screens/NewsSheet";
 import { ShopSheet } from "./screens/ShopSheet";
 import { StageScreen } from "./screens/StageScreen";
 import { WelcomeScreen } from "./screens/WelcomeScreen";
@@ -43,6 +45,8 @@ export function App() {
         <Route path="/laden/:shopId" element={<ShopSheet mode="edit" />} />
         <Route path="/figur" element={<FigureSheet />} />
         <Route path="/spieler/:memberId" element={<PlayerSheet />} />
+        <Route path="/bummeln" element={<BummelnSheet />} />
+        <Route path="/zeitung" element={<NewsSheet />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>

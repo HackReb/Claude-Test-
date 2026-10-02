@@ -6,14 +6,17 @@ import { SHOWS } from "../../config/streetLife";
 import { StreetStage } from "../components/StreetStage";
 import { MAX_SHOPS_PER_MEMBER } from "../config/shops";
 import { attractionOf, lotsOf, residentsOf, shopIncomePerHour } from "../game/street";
-import { useV2 } from "../store";
+import { currentStreetOf, useV2 } from "../store";
 
 const REFRESH_MS = 60_000;
 
 /** Die Straße füllt den Bildschirm; darüber schweben Name, Münzen und Kennzahlen, unten die Leiste. */
 export function StageScreen() {
-  const street = useV2((s) => s.street)!;
+  const home = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
+  const visiting = street.id !== home.id;
   const member = useV2((s) => s.member)!;
+  const goHome = useV2((s) => s.goHome);
   const refresh = useV2((s) => s.refresh);
   const collect = useV2((s) => s.collect);
   const coins = useV2((s) => s.coins());
@@ -42,10 +45,10 @@ export function StageScreen() {
   const stats = useMemo(() => {
     const lots = lotsOf(street, Date.now());
     const residents = residentsOf(lots);
-    const own = street.shops.filter((s) => s.memberId === member.id);
-    const income = own.reduce((sum, s) => sum + shopIncomePerHour(s, street, residents), 0);
+    const own = home.shops.filter((s) => s.memberId === member.id);
+    const income = own.reduce((sum, s) => sum + shopIncomePerHour(s, home, residentsOf(lotsOf(home, Date.now()))), 0);
     return { residents, income, own: own.length, attraction: attractionOf(street) };
-  }, [street, member.id]);
+  }, [street, home, member.id]);
 
   const say = (text: string) => {
     setNote(text);
@@ -61,9 +64,10 @@ export function StageScreen() {
     setPending(useV2.getState().pending());
   }
 
-  const soon = (what: string) => {
+  const leaveVisit = () => {
     sound.tap();
-    say(`${what} kommt in der nächsten Etappe.`);
+    goHome();
+    say(`Wieder daheim: ${home.name}, ${home.city}.`);
   };
 
   return (
@@ -71,7 +75,7 @@ export function StageScreen() {
       <StreetStage
         street={street}
         memberId={member.id}
-        canOpenShop={stats.own < MAX_SHOPS_PER_MEMBER}
+        canOpenShop={!visiting && stats.own < MAX_SHOPS_PER_MEMBER}
         onShop={(shop) => {
           sound.tap();
           navigate(`/laden/${shop.id}`);
@@ -91,6 +95,7 @@ export function StageScreen() {
         <div className="chip chip-title">
           <b>{street.name}</b>
           <small>
+            {visiting ? "🧳 Zu Besuch · " : ""}
             {street.city} · {street.members.length}/{street.maxMembers} Spieler
           </small>
         </div>
@@ -101,9 +106,13 @@ export function StageScreen() {
         <span className="chip">
           📈 <b className="up">+{formatCoins(Math.round(stats.income))}/h</b>
         </span>
-        <span className="chip">
-          🏬 {stats.own}/{MAX_SHOPS_PER_MEMBER}
-        </span>
+        {visiting ? (
+          <span className="chip">🏬 {street.shops.length}</span>
+        ) : (
+          <span className="chip">
+            🏬 {stats.own}/{MAX_SHOPS_PER_MEMBER}
+          </span>
+        )}
         <span className="chip" title="Anziehungskraft der Straße">
           ⭐ {Math.round(stats.attraction * 100)} %
         </span>
@@ -123,13 +132,19 @@ export function StageScreen() {
         <button type="button" onClick={() => navigate("/figur")}>
           <span className="ico">🧍</span>Figur
         </button>
-        <button type="button" onClick={() => soon("Bummeln in anderen Straßen")}>
-          <span className="ico">🗺️</span>Bummeln
-        </button>
+        {visiting ? (
+          <button type="button" className="home" onClick={leaveVisit}>
+            <span className="ico">🏠</span>Zuhause
+          </button>
+        ) : (
+          <button type="button" onClick={() => navigate("/bummeln")}>
+            <span className="ico">🗺️</span>Bummeln
+          </button>
+        )}
         <button type="button" className="main" onClick={() => navigate("/mall")}>
           <span className="ico">🏬</span>Mall
         </button>
-        <button type="button" onClick={() => soon("Das Live-Tagebuch")}>
+        <button type="button" onClick={() => navigate("/zeitung")}>
           <span className="ico">📰</span>Zeitung
         </button>
         <button type="button" onClick={() => navigate("/mall#konto")}>

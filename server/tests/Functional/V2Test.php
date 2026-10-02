@@ -191,4 +191,38 @@ final class V2Test extends WebTestCase
         $this->call('GET', '/api/v2/me');
         self::assertSame(401, $this->httpStatus());
     }
+
+    public function testStreetListAndNews(): void
+    {
+        $kalle = $this->account('Kalle');
+        $zoe = $this->account('Zoe');
+        $this->call('POST', '/api/v2/join', $this->bahnhofstrasse() + ['data' => ['coins' => 2000]], $kalle);
+        $this->call('POST', '/api/v2/join', ['name' => 'Marktplatz', 'city' => 'Ulm', 'data' => ['coins' => 2000]], $zoe);
+        $shopId = $this->call('POST', '/api/v2/shops', ['type' => 'hutmacher', 'name' => 'Kronen-Kalle', 'look' => 0], $kalle)['shop']['id'];
+        $this->call('PUT', "/api/v2/shops/$shopId", ['data' => ['items' => [['id' => 'w1', 'name' => 'Krone', 'price' => 300, 'showcase' => true, 'design' => ['slot' => 'hat']]]]], $kalle);
+        // Zoe bummelt: sieht beide Straßen, die Bahnhofstraße mit Laden, und kauft von auswärts.
+        $streets = $this->call('GET', '/api/v2/streets', null, $zoe)['streets'];
+        self::assertSame(['Bahnhofstraße', 'Marktplatz'], array_column($streets, 'name'), 'zuletzt aktive zuerst');
+        self::assertSame(['members' => 1, 'shops' => 1], ['members' => $streets[0]['members'], 'shops' => $streets[0]['shops']]);
+        self::assertSame(['Marktplatz'], array_column($this->call('GET', '/api/v2/streets?q=ulm', null, $zoe)['streets'], 'name'));
+        $bought = $this->call('POST', "/api/v2/shops/$shopId/buy", ['itemId' => 'w1'], $zoe);
+        self::assertSame(200, $this->httpStatus(), json_encode($bought));
+        self::assertSame(1700, $bought['member']['data']['coins']);
+
+        $streetId = $streets[0]['id'];
+        $news = $this->call('GET', "/api/v2/streets/$streetId/news", null, $zoe)['news'];
+        self::assertSame(['buy', 'item', 'shop', 'join'], array_column($news, 'kind'));
+        self::assertSame('Zoe', $news[0]['data']['who']);
+        self::assertTrue($news[0]['data']['visitor']);
+        self::assertSame('Krone', $news[0]['data']['item']['name']);
+        self::assertSame('Kronen-Kalle', $news[1]['data']['shopName']);
+        self::assertSame('Kalle', $news[3]['data']['who']);
+        // Ändern ohne neue Ware erzeugt keinen Eintrag; Laden schließen schon.
+        $this->call('PUT', "/api/v2/shops/$shopId", ['data' => ['items' => [['id' => 'w1', 'name' => 'Krone', 'price' => 350, 'showcase' => false]]]], $kalle);
+        $this->call('DELETE', "/api/v2/shops/$shopId", null, $kalle);
+        $news = $this->call('GET', "/api/v2/streets/$streetId/news", null, $kalle)['news'];
+        self::assertSame(['close', 'buy', 'item', 'shop', 'join'], array_column($news, 'kind'));
+        $this->call('GET', '/api/v2/streets', null, null);
+        self::assertSame(401, $this->httpStatus());
+    }
 }
