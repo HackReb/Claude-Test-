@@ -1,4 +1,5 @@
 import type { OsmStreetRef } from "../../model/types";
+import type { HairStyle, ItemDesign, Slot } from "../config/items";
 
 /** Was der Server über mich weiß (api/v2/me). */
 export interface V2Account {
@@ -10,6 +11,60 @@ export interface MemberData {
   coins: number;
   /** Bis wann die Ladenkassen eingesammelt wurden. */
   collectedAt: number;
+  /** Die eigene Figur (fehlt, bis man sie das erste Mal angezogen hat). */
+  figure?: Figure;
+  /** Gekaufte Waren. */
+  inventory?: OwnedItem[];
+  /** Wie oft man heute schon erfunden hat (Tag als YYYY-MM-DD). */
+  invented?: { day: string; count: number };
+  /** Vom Server gezählt: an Spieler verkaufte Waren. */
+  sales?: number;
+}
+
+export interface FigureBase {
+  skin: string;
+  hair: string;
+  hairStyle: HairStyle;
+}
+
+/** Ein getragenes Stück – trägt Design und Herkunft mit, damit jeder die Figur ohne fremden Schrank zeichnen kann. */
+export interface WornItem {
+  id: string;
+  name: string;
+  design: ItemDesign;
+  shopId?: string;
+  shopName?: string;
+}
+
+/** Was die Figur gerade trägt, je Platz (Grund-Teile heißen „starter:…“). */
+export interface Figure {
+  base: FigureBase;
+  worn: Partial<Record<Slot, WornItem>>;
+}
+
+/** Eine Ware im Sortiment eines Ladens. */
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  design: ItemDesign;
+  price: number;
+  showcase: boolean;
+  createdAt: number;
+  /** An Spieler verkauft. */
+  sold: number;
+}
+
+/** Eine gekaufte Ware im eigenen Schrank – trägt ihren Laden mit sich („wo hat der das her?“). */
+export interface OwnedItem {
+  id: string;
+  itemId: string;
+  shopId: string;
+  shopName: string;
+  name: string;
+  design: ItemDesign;
+  price: number;
+  boughtAt: number;
 }
 
 export interface Member {
@@ -23,6 +78,7 @@ export interface MemberSummary {
   id: string;
   name: string;
   joinedAt: number;
+  figure?: Figure | null;
 }
 
 export interface Shop {
@@ -32,7 +88,7 @@ export interface Shop {
   name: string;
   look: number;
   openedAt: number;
-  data: Record<string, unknown>;
+  data: { items?: ShopItem[] } & Record<string, unknown>;
 }
 
 export interface StreetV2 {

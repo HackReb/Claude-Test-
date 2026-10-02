@@ -1,4 +1,6 @@
 import { FALLBACK_SHOP, shopType, type ShopLook } from "../config/shops";
+import type { ItemDesign } from "../config/items";
+import { ITEM_VIEWS, ItemSvg } from "./ItemSvg";
 
 const INK = "#2b2118";
 
@@ -10,10 +12,12 @@ interface Props {
   height: number;
   /** Eigener Laden: dezent markieren. */
   mine?: boolean;
+  /** Eine Ware aus dem Schaufenster (statt des Symbols). */
+  item?: { id: string; design: ItemDesign } | null;
 }
 
 /** Ladenfront in der Mall: Wand, Schaufenster mit Symbol, Tür, Markise – und oben das Schild mit dem Namen. */
-export function ShopFront({ type, name, look, width, height, mine = false }: Props) {
+export function ShopFront({ type, name, look, width, height, mine = false, item = null }: Props) {
   const def = shopType(type) ?? FALLBACK_SHOP;
   const colors: ShopLook = def.looks[Math.min(Math.max(0, look), def.looks.length - 1)] ?? def.looks[0];
   const signH = 20;
@@ -31,9 +35,15 @@ export function ShopFront({ type, name, look, width, height, mine = false }: Pro
       <rect x={0} y={signH} width={width} height={front} fill={colors.wall} stroke={INK} strokeWidth={1.5} />
       {/* Schaufenster mit Symbol */}
       <rect x={8} y={signH + 12} width={width * 0.52} height={front - 24} rx={look === 2 ? 14 : 3} fill="#d7f3ff" stroke={INK} strokeWidth={1.5} />
-      <text x={8 + width * 0.26} y={signH + 12 + (front - 24) / 2 + 8} textAnchor="middle" fontSize={22}>
-        {def.emoji}
-      </text>
+      {item ? (
+        <svg x={8} y={signH + 12} width={width * 0.52} height={front - 24} viewBox={ITEM_VIEWS[item.design.slot]} preserveAspectRatio="xMidYMid meet">
+          <ItemSvg design={item.design} id={`win-${item.id}`} />
+        </svg>
+      ) : (
+        <text x={8 + width * 0.26} y={signH + 12 + (front - 24) / 2 + 8} textAnchor="middle" fontSize={22}>
+          {def.emoji}
+        </text>
+      )}
       {/* Tür */}
       <rect x={width * 0.66} y={signH + 16} width={width * 0.24} height={front - 16} rx={3} fill={colors.trim} stroke={INK} strokeWidth={1.5} />
       <circle cx={width * 0.66 + width * 0.24 - 6} cy={signH + 16 + (front - 16) / 2} r={1.6} fill="#ffd166" />

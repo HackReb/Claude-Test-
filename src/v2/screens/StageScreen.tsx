@@ -80,7 +80,10 @@ export function StageScreen() {
           sound.tap();
           navigate("/laden/neu");
         }}
-        onMember={(m) => say(m.id === member.id ? "Das bist du! Deine Figur baust du in der nächsten Etappe." : `${m.name} wohnt auch hier.`)}
+        onMember={(m) => {
+          sound.tap();
+          navigate(m.id === member.id ? "/figur" : `/spieler/${m.id}`);
+        }}
         onShow={(show) => setNote(show ? SHOWS.names[show.kind] : null)}
       />
 
@@ -117,7 +120,7 @@ export function StageScreen() {
       </button>
 
       <nav className="dock" aria-label="Hauptmenü">
-        <button type="button" onClick={() => soon("Deine Figur")}>
+        <button type="button" onClick={() => navigate("/figur")}>
           <span className="ico">🧍</span>Figur
         </button>
         <button type="button" onClick={() => soon("Bummeln in anderen Straßen")}>

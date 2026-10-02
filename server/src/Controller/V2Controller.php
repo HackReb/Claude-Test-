@@ -29,6 +29,12 @@ final class V2Controller
 {
     private const SHOP_NAME_MAX = 24;
     private const STREET_NAME_MAX = 80;
+    /** Sortiment je Laden, davon im Schaufenster; Waren im Schrank eines Spielers. */
+    private const ITEMS_MAX = 12;
+    private const SHOWCASE_MAX = 6;
+    private const INVENTORY_MAX = 200;
+    private const PRICE_MIN = 10;
+    private const PRICE_MAX = 5000;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -154,11 +160,80 @@ final class V2Controller
             $shop->setLook(self::look($body['look']));
         }
         if (is_array($body['data'] ?? null)) {
-            $shop->setData($body['data']);
+            $shop->setData(self::checkedShopData($body['data']));
         }
         $this->em->flush();
 
         return new JsonResponse(['shop' => $shop->toArray()]);
+    }
+
+    /**
+     * Eine Ware aus dem Schaufenster eines anderen Spielers kaufen: Münzen wandern zum Verkäufer,
+     * die Ware ins eigene Inventar. Der Server bucht, damit niemand sich etwas dazuschummelt.
+     */
+    #[Route('/shops/{id}/buy', methods: ['POST'])]
+    public function buy(string $id, Request $request): JsonResponse
+    {
+        $account = $this->auth->account($request);
+        $buyer = $this->requireMember($account);
+        $shop = $this->em->find(Shop::class, $id);
+        if (!$shop instanceof Shop) {
+            throw new NotFoundHttpException('Laden nicht gefunden.');
+        }
+        if ($shop->getMemberId() === $buyer->getId()) {
+            throw new BadRequestHttpException('Im eigenen Laden kaufst du nicht ein.');
+        }
+        $itemId = (string) (Documents::json($request->getContent())['itemId'] ?? '');
+        $data = $shop->getData();
+        $items = is_array($data['items'] ?? null) ? $data['items'] : [];
+        $index = null;
+        foreach ($items as $i => $item) {
+            if (is_array($item) && ($item['id'] ?? null) === $itemId && ($item['showcase'] ?? false)) {
+                $index = $i;
+            }
+        }
+        if (null === $index) {
+            throw new NotFoundHttpException('Diese Ware liegt nicht im Schaufenster.');
+        }
+        $item = $items[$index];
+        $price = max(0, (int) ($item['price'] ?? 0));
+        $buyerData = $buyer->getData();
+        $coins = (int) ($buyerData['coins'] ?? 0);
+        if ($coins < $price) {
+            throw new ConflictHttpException(\sprintf('Dafür fehlen dir 🪙 %d.', $price - $coins));
+        }
+        $inventory = is_array($buyerData['inventory'] ?? null) ? $buyerData['inventory'] : [];
+        if (\count($inventory) >= self::INVENTORY_MAX) {
+            throw new ConflictHttpException('Dein Schrank ist voll.');
+        }
+        $owned = [
+            'id' => Credentials::newToken(),
+            'itemId' => $itemId,
+            'shopId' => $shop->getId(),
+            'shopName' => $shop->getName(),
+            'name' => (string) ($item['name'] ?? 'Ware'),
+            'design' => $item['design'] ?? null,
+            'price' => $price,
+            'boughtAt' => (int) floor(microtime(true) * 1000),
+        ];
+        $inventory[] = $owned;
+        $buyerData['coins'] = $coins - $price;
+        $buyerData['inventory'] = $inventory;
+        $buyer->setData($buyerData);
+
+        $seller = $this->em->find(Member::class, $shop->getMemberId());
+        if ($seller instanceof Member) {
+            $sellerData = $seller->getData();
+            $sellerData['coins'] = (int) ($sellerData['coins'] ?? 0) + $price;
+            $sellerData['sales'] = (int) ($sellerData['sales'] ?? 0) + 1;
+            $seller->setData($sellerData);
+        }
+        $items[$index]['sold'] = (int) ($item['sold'] ?? 0) + 1;
+        $data['items'] = $items;
+        $shop->setData($data);
+        $this->em->flush();
+
+        return new JsonResponse(['bought' => $owned, 'shop' => $shop->toArray()] + $this->state($account, $buyer));
     }
 
     #[Route('/shops/{id}', methods: ['DELETE'])]
@@ -217,7 +292,13 @@ final class V2Controller
             'foundedAt' => (int) $street->getCreatedAt()->format('Uv'),
             'maxMembers' => Street::MAX_MEMBERS,
             'members' => array_map(
-                fn (Member $m) => ['id' => $m->getId(), 'name' => $m->getName(), 'joinedAt' => (int) $m->getJoinedAt()->format('Uv')],
+                fn (Member $m) => [
+                    'id' => $m->getId(),
+                    'name' => $m->getName(),
+                    'joinedAt' => (int) $m->getJoinedAt()->format('Uv'),
+                    // Die Figur sehen alle – so erkennt man, wer was trägt.
+                    'figure' => is_array($m->getData()['figure'] ?? null) ? $m->getData()['figure'] : null,
+                ],
                 $this->membersOf($street),
             ),
             'shops' => array_map(fn (Shop $s) => $s->toArray(), $shops),
@@ -256,6 +337,38 @@ final class V2Controller
         }
 
         return $shop;
+    }
+
+    /** Sortiment prüfen: Anzahl, Schaufenster, Preise, Namen – das Design selbst bleibt Sache des Spiels. */
+    private static function checkedShopData(array $data): array
+    {
+        if (strlen((string) json_encode($data)) > 40000) {
+            throw new BadRequestHttpException('Das Sortiment ist zu groß.');
+        }
+        $items = is_array($data['items'] ?? null) ? array_values($data['items']) : [];
+        if (\count($items) > self::ITEMS_MAX) {
+            throw new BadRequestHttpException(\sprintf('Höchstens %d Waren je Laden.', self::ITEMS_MAX));
+        }
+        $showcase = 0;
+        foreach ($items as &$item) {
+            if (!is_array($item) || !is_string($item['id'] ?? null)) {
+                throw new BadRequestHttpException('Ungültige Ware.');
+            }
+            $item['name'] = self::clean((string) ($item['name'] ?? ''), self::SHOP_NAME_MAX);
+            if (mb_strlen($item['name']) < 2) {
+                throw new BadRequestHttpException('Jede Ware braucht einen Namen.');
+            }
+            $item['price'] = min(self::PRICE_MAX, max(self::PRICE_MIN, (int) ($item['price'] ?? self::PRICE_MIN)));
+            $item['showcase'] = (bool) ($item['showcase'] ?? false);
+            $showcase += $item['showcase'] ? 1 : 0;
+        }
+        unset($item);
+        if ($showcase > self::SHOWCASE_MAX) {
+            throw new BadRequestHttpException(\sprintf('Höchstens %d Waren im Schaufenster.', self::SHOWCASE_MAX));
+        }
+        $data['items'] = $items;
+
+        return $data;
     }
 
     private static function shopName(string $name): string

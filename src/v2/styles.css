@@ -786,3 +786,295 @@ p {
     max-width: 640px;
   }
 }
+
+/* ---------- Figur, Spieler-Karte, Waren ---------- */
+.sub-head {
+  margin: 14px 0 6px;
+  font-size: 1rem;
+  font-weight: 900;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sub-head small {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.btn-small small {
+  font-size: 0.65rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.figure-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.figure-preview {
+  flex: none;
+  width: 150px;
+  height: 150px;
+  border: 3px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(#d9f0ff, #fff7e8);
+  display: grid;
+  place-items: center;
+}
+
+.figure-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.figure-info b {
+  font-size: 1.1rem;
+}
+
+.figure-info small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.player-shops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slot-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.slot-chip {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 3px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 900;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.slot-chip.worn {
+  border-color: var(--primary);
+}
+
+.slot-chip.on {
+  background: var(--primary);
+  color: #fff;
+}
+
+.slot-chip small {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.item-card {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.8rem;
+  min-height: 96px;
+}
+
+.item-card.on {
+  background: #fff1dc;
+  border-color: var(--primary);
+  box-shadow: 0 3px 0 var(--primary);
+}
+
+.item-card small {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.68rem;
+}
+
+.item-none {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  all: unset;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.swatch.on {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.ware-list,
+.outfit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ware-row,
+.outfit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.ware-row.off {
+  opacity: 0.6;
+  background: #f4f0e8;
+}
+
+.ware-row > svg,
+.outfit-row > svg {
+  flex: none;
+  background: #d7f3ff;
+  border-radius: 10px;
+}
+
+.ware-text,
+.outfit-row > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ware-text small,
+.outfit-row small {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.74rem;
+}
+
+.ware-text em {
+  font-style: italic;
+  font-size: 0.78rem;
+  color: #5b4b3a;
+}
+
+.ware-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.price-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 900;
+  font-size: 0.85rem;
+}
+
+.price-field input {
+  width: 72px;
+  padding: 3px 6px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 800;
+}
+
+.invent {
+  margin-top: 14px;
+  padding: 10px;
+  border: 3px dashed var(--border);
+  border-radius: 16px;
+  background: #fffaf2;
+}
+
+.invent-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.invent-preview {
+  flex: none;
+  width: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  background: #d7f3ff;
+  text-align: center;
+}
+
+.invent-preview small {
+  font-weight: 800;
+  font-size: 0.7rem;
+}
+
+.invent-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+.invent-fields .field {
+  margin-top: 0;
+}

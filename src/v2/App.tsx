@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ChooseStreetScreen } from "./screens/ChooseStreetScreen";
+import { FigureSheet } from "./screens/FigureSheet";
+import { PlayerSheet } from "./screens/PlayerSheet";
 import { MallSheet } from "./screens/MallSheet";
 import { ShopSheet } from "./screens/ShopSheet";
 import { StageScreen } from "./screens/StageScreen";
@@ -39,6 +41,8 @@ export function App() {
         <Route path="/mall" element={<MallSheet />} />
         <Route path="/laden/neu" element={<ShopSheet mode="new" />} />
         <Route path="/laden/:shopId" element={<ShopSheet mode="edit" />} />
+        <Route path="/figur" element={<FigureSheet />} />
+        <Route path="/spieler/:memberId" element={<PlayerSheet />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
