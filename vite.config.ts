@@ -37,10 +37,16 @@ export default defineConfig(({ mode }) => ({
         // App-Hülle komplett offline verfügbar; die Straßensuche braucht natürlich Netz.
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
         navigateFallback: "index.html",
+        // Babo v2 ist eine eigene Seite unter /v2/ – ihre Navigation bekommt nicht die v1-Hülle.
+        navigateFallbackDenylist: [/\/v2\//],
       },
     }),
   ],
-  build: mode === "artifact" ? { outDir: "dist-artifact", cssCodeSplit: false, modulePreload: false } : {},
+  build:
+    mode === "artifact"
+      ? { outDir: "dist-artifact", cssCodeSplit: false, modulePreload: false }
+      : // Zwei Seiten in einem Build: die bisherige App (index.html) und Babo v2 (v2/index.html).
+        { rollupOptions: { input: { main: "index.html", v2: "v2/index.html" } } },
   test: {
     environment: "node",
   },

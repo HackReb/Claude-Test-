@@ -3,6 +3,16 @@
 Claim deine echte Straße, kauf Grundstücke, bau verrückte Fassaden und kassier Miete.
 Konzept & Meilensteine: [KONZEPT-Strassen-Game.md](./KONZEPT-Strassen-Game.md).
 
+## Babo 2 (im Aufbau)
+
+Das neue Spiel aus dem Gesamtkonzept wächst neben der bisherigen App: eine eigene Seite unter `/v2/`
+(Quellcode in `src/v2/`, Einstieg `v2/index.html`), eigene Endpunkte unter `/api/v2` und eigene
+Tabellen (`v2_street`, `v2_member`, `v2_shop`). Konten sind dieselben wie in Babo 1. Die alte App
+bleibt unverändert spielbar. Etappe 1–2 ist drin: eine Straße pro Konto (bis zu 50 Spieler), die
+Mall mit bis zu drei Läden pro Spieler (36 Ladentypen, eigener Name, drei Fassaden), Häuser und
+Bewohner wachsen von allein mit dem Angebot, Spieler-Figuren mit Namen. Lokal: `npm run dev` und
+dann http://localhost:5173/v2/ (mit `VITE_API_URL` auf einen laufenden Server).
+
 ## Loslegen
 
 ```bash
