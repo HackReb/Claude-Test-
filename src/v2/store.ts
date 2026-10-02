@@ -274,7 +274,8 @@ export function createV2Store(api: V2Api | null) {
         const shop = street.shops.find((s) => s.id === shopId);
         const item = shop?.data.items?.find((i) => i.id === itemId);
         if (!shop || !item) return { ok: false, message: "Diese Ware gibt es nicht mehr." };
-        if (get().coins() < item.price) return { ok: false, message: `Dafür fehlen dir 🪙 ${item.price - get().coins()}.` };
+        const own = shop.memberId === member.id;
+        if (!own && get().coins() < item.price) return { ok: false, message: `Dafür fehlen dir 🪙 ${item.price - get().coins()}.` };
         try {
           // Der Server rechnet mit seinem Stand – also erst meine Münzen hinschicken.
           await api.save(member.data);

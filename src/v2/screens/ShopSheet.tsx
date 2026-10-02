@@ -247,7 +247,7 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
       return;
     }
     sound.cash();
-    setNote({ text: `${item.name} gehört jetzt dir – zieh es gleich an!`, ok: true });
+    setNote({ text: mine ? `${item.name} liegt jetzt in deinem Schrank – zieh es gleich an!` : `${item.name} gehört jetzt dir – zieh es gleich an!`, ok: true });
   }
 
   async function patch(id: string, change: Partial<ShopItem> | null) {
@@ -343,6 +343,9 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
               >
                 {item.showcase ? "im Fenster" : "ins Fenster"}
               </button>
+              <button type="button" className="btn btn-small" disabled={busy !== null} aria-label={`${item.name} für mich mitnehmen`} onClick={() => void onBuy(item)}>
+                {owned.has(item.id) ? "nochmal für mich" : "für mich"}
+              </button>
               <button type="button" className="btn btn-link" disabled={busy !== null} aria-label={`${item.name} löschen`} onClick={() => void patch(item.id, null)}>
                 löschen
               </button>
@@ -353,6 +356,11 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
       {note && (
         <p className={note.ok ? "notice" : "error"} role="status">
           {note.text}
+          {note.ok && (
+            <button type="button" className="btn btn-link" onClick={() => navigate("/figur")}>
+              Anziehen
+            </button>
+          )}
         </p>
       )}
       <Invent shop={shop} />

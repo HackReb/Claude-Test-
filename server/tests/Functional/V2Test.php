@@ -177,8 +177,13 @@ final class V2Test extends WebTestCase
         self::assertSame(404, $this->httpStatus());
         $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w1'], $zoe);
         self::assertSame(409, $this->httpStatus(), 'nur noch 200 Münzen');
-        $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w1'], $kalle);
-        self::assertSame(400, $this->httpStatus(), 'eigener Laden');
+        // Aus dem eigenen Laden nimmt man Waren gratis mit – auch die, die nicht im Fenster liegen; zählt nicht als Verkauf.
+        $own = $this->call('POST', "/api/v2/shops/{$shop['id']}/buy", ['itemId' => 'w2'], $kalle);
+        self::assertSame(200, $this->httpStatus(), 'eigener Laden');
+        self::assertSame(2300, $own['member']['data']['coins']);
+        self::assertSame('Geheim-Dino', $own['bought']['name']);
+        self::assertCount(1, $own['member']['data']['inventory']);
+        self::assertSame(0, $own['shop']['data']['items'][1]['sold'] ?? 0);
 
         // Die Figur steht in der Mitgliederliste
         $members = $this->call('GET', '/api/v2/me', null, $kalle)['street']['members'];

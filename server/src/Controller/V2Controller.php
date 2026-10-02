@@ -187,6 +187,7 @@ final class V2Controller
     /**
      * Eine Ware aus dem Schaufenster eines anderen Spielers kaufen: Münzen wandern zum Verkäufer,
      * die Ware ins eigene Inventar. Der Server bucht, damit niemand sich etwas dazuschummelt.
+     * Aus dem eigenen Laden nimmt man Waren einfach mit (man würde sich ja selbst bezahlen).
      */
     #[Route('/shops/{id}/buy', methods: ['POST'])]
     public function buy(string $id, Request $request): JsonResponse
@@ -197,15 +198,13 @@ final class V2Controller
         if (!$shop instanceof Shop) {
             throw new NotFoundHttpException('Laden nicht gefunden.');
         }
-        if ($shop->getMemberId() === $buyer->getId()) {
-            throw new BadRequestHttpException('Im eigenen Laden kaufst du nicht ein.');
-        }
+        $own = $shop->getMemberId() === $buyer->getId();
         $itemId = (string) (Documents::json($request->getContent())['itemId'] ?? '');
         $data = $shop->getData();
         $items = is_array($data['items'] ?? null) ? $data['items'] : [];
         $index = null;
         foreach ($items as $i => $item) {
-            if (is_array($item) && ($item['id'] ?? null) === $itemId && ($item['showcase'] ?? false)) {
+            if (is_array($item) && ($item['id'] ?? null) === $itemId && ($own || ($item['showcase'] ?? false))) {
                 $index = $i;
             }
         }
@@ -213,7 +212,7 @@ final class V2Controller
             throw new NotFoundHttpException('Diese Ware liegt nicht im Schaufenster.');
         }
         $item = $items[$index];
-        $price = max(0, (int) ($item['price'] ?? 0));
+        $price = $own ? 0 : max(0, (int) ($item['price'] ?? 0));
         $buyerData = $buyer->getData();
         $coins = (int) ($buyerData['coins'] ?? 0);
         if ($coins < $price) {
@@ -237,6 +236,11 @@ final class V2Controller
         $buyerData['coins'] = $coins - $price;
         $buyerData['inventory'] = $inventory;
         $buyer->setData($buyerData);
+        if ($own) {
+            $this->em->flush();
+
+            return new JsonResponse(['bought' => $owned, 'shop' => $shop->toArray()] + $this->state($account, $buyer));
+        }
 
         $seller = $this->em->find(Member::class, $shop->getMemberId());
         if ($seller instanceof Member) {
