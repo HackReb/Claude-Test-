@@ -4,11 +4,11 @@ import { formatCoins } from "../../format";
 import { Sheet } from "../components/Sheet";
 import { MAX_SHOPS_PER_MEMBER, shopType, FALLBACK_SHOP, SHOP_GROUPS } from "../config/shops";
 import { groupsOf, lotsOf, mallFloors, openCostFor, residentsOf, shopIncomePerHour } from "../game/street";
-import { useV2 } from "../store";
+import { currentStreetOf, useV2 } from "../store";
 
 /** Die Mall im Überblick: Stockwerke, Läden mit Besitzern, freie Plätze – und unten das Konto. */
 export function MallSheet() {
-  const street = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
   const member = useV2((s) => s.member)!;
   const account = useV2((s) => s.account)!;
   const logout = useV2((s) => s.logout);
@@ -16,6 +16,8 @@ export function MallSheet() {
   const navigate = useNavigate();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
+  const home = useV2((s) => s.street)!;
+  const visiting = street.id !== home.id;
   const residents = residentsOf(lotsOf(street, Date.now()));
   const own = street.shops.filter((s) => s.memberId === member.id);
   const nameOf = (memberId: string) => street.members.find((m) => m.id === memberId)?.name ?? "?";
@@ -30,15 +32,17 @@ export function MallSheet() {
         {street.shops.length} {street.shops.length === 1 ? "Laden" : "Läden"} auf {floors} {floors === 1 ? "Stockwerk" : "Stockwerken"} · {groups.size} von{" "}
         {Object.keys(SHOP_GROUPS).length} Branchen · {street.members.length} Spieler
       </p>
-      {groups.size < 3 && (
+      {!visiting && groups.size < 3 && (
         <p className="notice">
           Tipp: Je mehr verschiedene Branchen die Mall hat, desto mehr Leute ziehen in die Straße – und desto mehr Kundschaft haben alle Läden.
         </p>
       )}
 
-      <button type="button" className="btn btn-primary btn-wide" disabled={!canOpen} onClick={() => navigate("/laden/neu")}>
-        {canOpen ? `Laden eröffnen${cost > 0 ? ` für 🪙 ${formatCoins(cost)}` : " – der erste ist gratis"}` : `Du hast schon ${MAX_SHOPS_PER_MEMBER} Läden`}
-      </button>
+      {!visiting && (
+        <button type="button" className="btn btn-primary btn-wide" disabled={!canOpen} onClick={() => navigate("/laden/neu")}>
+          {canOpen ? `Laden eröffnen${cost > 0 ? ` für 🪙 ${formatCoins(cost)}` : " – der erste ist gratis"}` : `Du hast schon ${MAX_SHOPS_PER_MEMBER} Läden`}
+        </button>
+      )}
 
       <ul className="shop-list">
         {street.shops.map((shop) => {
@@ -59,13 +63,13 @@ export function MallSheet() {
             </li>
           );
         })}
-        {street.shops.length === 0 && <li className="subtle">Noch kein Laden – eröffne den ersten!</li>}
+        {street.shops.length === 0 && <li className="subtle">{visiting ? "Hier gibt es noch keinen Laden." : "Noch kein Laden – eröffne den ersten!"}</li>}
       </ul>
 
       <section className="account-box" id="konto">
         <h3>Konto</h3>
         <p className="subtle">
-          Angemeldet als <b>{account.name}</b> · in der {street.name}, {street.city}
+          Angemeldet als <b>{account.name}</b> · in der {home.name}, {home.city}
         </p>
         <div className="row-buttons">
           <button type="button" className="btn" onClick={() => void logout()}>

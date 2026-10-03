@@ -6,13 +6,13 @@ import { Sheet } from "../components/Sheet";
 import { SLOTS } from "../config/items";
 import { FALLBACK_SHOP, shopType } from "../config/shops";
 import { figureOf, outfitOf, wornDesigns } from "../game/figure";
-import { useV2 } from "../store";
+import { currentStreetOf, useV2 } from "../store";
 
 /** Die Karte eines Mitspielers: Figur, was er trägt (und woher), seine Läden. */
 export function PlayerSheet() {
   const navigate = useNavigate();
   const { memberId } = useParams();
-  const street = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
   const me = useV2((s) => s.member)!;
   const member = street.members.find((m) => m.id === memberId);
 

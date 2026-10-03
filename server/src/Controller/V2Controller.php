@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Account;
 use App\Entity\Street as StreetV1;
+use App\Entity\V2\Event;
 use App\Entity\V2\Member;
 use App\Entity\V2\Shop;
 use App\Entity\V2\Street;
@@ -35,6 +36,9 @@ final class V2Controller
     private const INVENTORY_MAX = 200;
     private const PRICE_MIN = 10;
     private const PRICE_MAX = 5000;
+    /** So viele Ereignisse behält die Zeitung je Straße. */
+    private const NEWS_MAX = 60;
+    private const STREETS_MAX = 60;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -85,6 +89,7 @@ final class V2Controller
         $member = new Member(Credentials::newToken(), $street->getId(), $account->getId(), $account->getName(), is_array($body['data'] ?? null) ? $body['data'] : []);
         $this->em->persist($member);
         $street->touch();
+        $this->log($member, 'join', []);
         $this->em->flush();
 
         return new JsonResponse($this->state($account, $member), 201);
@@ -97,9 +102,11 @@ final class V2Controller
         $account = $this->auth->account($request);
         $member = $this->memberOf($account);
         if ($member instanceof Member) {
-            foreach ($this->em->getRepository(Shop::class)->findBy(['memberId' => $member->getId()]) as $shop) {
+            $shops = $this->em->getRepository(Shop::class)->findBy(['memberId' => $member->getId()]);
+            foreach ($shops as $shop) {
                 $this->em->remove($shop);
             }
+            $this->log($member, 'leave', ['shops' => \count($shops)]);
             $this->em->remove($member);
             $this->em->flush();
         }
@@ -140,6 +147,8 @@ final class V2Controller
         }
         $shop = new Shop(Credentials::newToken(), $member->getStreetId(), $member->getId(), $type, $name, self::look($body['look'] ?? 0), []);
         $this->em->persist($shop);
+        $this->log($member, 'shop', ['shopId' => $shop->getId(), 'shopName' => $name, 'type' => $type]);
+        $this->touchStreet($member);
         $this->em->flush();
 
         return new JsonResponse(['shop' => $shop->toArray()] + $this->state($account, $member), 201);
@@ -160,7 +169,15 @@ final class V2Controller
             $shop->setLook(self::look($body['look']));
         }
         if (is_array($body['data'] ?? null)) {
-            $shop->setData(self::checkedShopData($body['data']));
+            $before = array_filter(array_map(fn ($i) => is_array($i) ? ($i['id'] ?? null) : null, $shop->getData()['items'] ?? []));
+            $data = self::checkedShopData($body['data']);
+            foreach ($data['items'] ?? [] as $item) {
+                if (!\in_array($item['id'], $before, true)) {
+                    $this->log($member, 'item', ['shopId' => $shop->getId(), 'shopName' => $shop->getName(), 'item' => self::itemSummary($item)]);
+                    $this->touchStreet($member);
+                }
+            }
+            $shop->setData($data);
         }
         $this->em->flush();
 
@@ -170,6 +187,7 @@ final class V2Controller
     /**
      * Eine Ware aus dem Schaufenster eines anderen Spielers kaufen: Münzen wandern zum Verkäufer,
      * die Ware ins eigene Inventar. Der Server bucht, damit niemand sich etwas dazuschummelt.
+     * Aus dem eigenen Laden nimmt man Waren einfach mit (man würde sich ja selbst bezahlen).
      */
     #[Route('/shops/{id}/buy', methods: ['POST'])]
     public function buy(string $id, Request $request): JsonResponse
@@ -180,15 +198,13 @@ final class V2Controller
         if (!$shop instanceof Shop) {
             throw new NotFoundHttpException('Laden nicht gefunden.');
         }
-        if ($shop->getMemberId() === $buyer->getId()) {
-            throw new BadRequestHttpException('Im eigenen Laden kaufst du nicht ein.');
-        }
+        $own = $shop->getMemberId() === $buyer->getId();
         $itemId = (string) (Documents::json($request->getContent())['itemId'] ?? '');
         $data = $shop->getData();
         $items = is_array($data['items'] ?? null) ? $data['items'] : [];
         $index = null;
         foreach ($items as $i => $item) {
-            if (is_array($item) && ($item['id'] ?? null) === $itemId && ($item['showcase'] ?? false)) {
+            if (is_array($item) && ($item['id'] ?? null) === $itemId && ($own || ($item['showcase'] ?? false))) {
                 $index = $i;
             }
         }
@@ -196,7 +212,7 @@ final class V2Controller
             throw new NotFoundHttpException('Diese Ware liegt nicht im Schaufenster.');
         }
         $item = $items[$index];
-        $price = max(0, (int) ($item['price'] ?? 0));
+        $price = $own ? 0 : max(0, (int) ($item['price'] ?? 0));
         $buyerData = $buyer->getData();
         $coins = (int) ($buyerData['coins'] ?? 0);
         if ($coins < $price) {
@@ -220,6 +236,11 @@ final class V2Controller
         $buyerData['coins'] = $coins - $price;
         $buyerData['inventory'] = $inventory;
         $buyer->setData($buyerData);
+        if ($own) {
+            $this->em->flush();
+
+            return new JsonResponse(['bought' => $owned, 'shop' => $shop->toArray()] + $this->state($account, $buyer));
+        }
 
         $seller = $this->em->find(Member::class, $shop->getMemberId());
         if ($seller instanceof Member) {
@@ -231,6 +252,15 @@ final class V2Controller
         $items[$index]['sold'] = (int) ($item['sold'] ?? 0) + 1;
         $data['items'] = $items;
         $shop->setData($data);
+        // In der Zeitung der Straße des Ladens – auch wenn der Käufer von auswärts kommt.
+        $this->em->persist(new Event(Credentials::newToken(), $shop->getStreetId(), 'buy', $buyer->getId(), [
+            'who' => $buyer->getName(),
+            'visitor' => $shop->getStreetId() !== $buyer->getStreetId(),
+            'shopId' => $shop->getId(),
+            'shopName' => $shop->getName(),
+            'item' => self::itemSummary($item),
+        ]));
+        $this->trimNews($shop->getStreetId());
         $this->em->flush();
 
         return new JsonResponse(['bought' => $owned, 'shop' => $shop->toArray()] + $this->state($account, $buyer));
@@ -241,10 +271,56 @@ final class V2Controller
     {
         $account = $this->auth->account($request);
         $member = $this->requireMember($account);
-        $this->em->remove($this->ownShop($member, $id));
+        $shop = $this->ownShop($member, $id);
+        $this->log($member, 'close', ['shopName' => $shop->getName(), 'type' => $shop->getType()]);
+        $this->em->remove($shop);
         $this->em->flush();
 
         return new JsonResponse($this->state($account, $member));
+    }
+
+    /** Alle Straßen zum Bummeln – die zuletzt aktiven zuerst, auf Wunsch nach Name oder Ort gefiltert. */
+    #[Route('/streets', methods: ['GET'])]
+    public function streets(Request $request): JsonResponse
+    {
+        $this->auth->account($request);
+        $q = mb_strtolower(trim((string) $request->query->get('q', '')));
+        $counts = [];
+        foreach ($this->em->getRepository(Member::class)->findAll() as $m) {
+            $counts[$m->getStreetId()]['members'] = ($counts[$m->getStreetId()]['members'] ?? 0) + 1;
+        }
+        foreach ($this->em->getRepository(Shop::class)->findAll() as $s) {
+            $counts[$s->getStreetId()]['shops'] = ($counts[$s->getStreetId()]['shops'] ?? 0) + 1;
+        }
+        $list = [];
+        foreach ($this->em->getRepository(Street::class)->findBy([], ['updatedAt' => 'DESC']) as $street) {
+            if ('' !== $q && !str_contains(mb_strtolower($street->getName().' '.$street->getCity()), $q)) {
+                continue;
+            }
+            $list[] = [
+                'id' => $street->getId(),
+                'name' => $street->getName(),
+                'city' => $street->getCity(),
+                'members' => $counts[$street->getId()]['members'] ?? 0,
+                'shops' => $counts[$street->getId()]['shops'] ?? 0,
+                'foundedAt' => (int) $street->getCreatedAt()->format('Uv'),
+            ];
+            if (\count($list) >= self::STREETS_MAX) {
+                break;
+            }
+        }
+
+        return new JsonResponse(['streets' => $list]);
+    }
+
+    /** Die Zeitung: was in einer Straße zuletzt passiert ist, Neuestes zuerst. */
+    #[Route('/streets/{id}/news', methods: ['GET'])]
+    public function news(string $id, Request $request): JsonResponse
+    {
+        $this->auth->account($request);
+        $events = $this->em->getRepository(Event::class)->findBy(['streetId' => $id], ['atUs' => 'DESC'], self::NEWS_MAX);
+
+        return new JsonResponse(['news' => array_map(fn (Event $e) => $e->toArray(), $events)]);
     }
 
     /** Eine andere Straße ansehen (zum Bummeln). */
@@ -261,6 +337,41 @@ final class V2Controller
     }
 
     // ---------- Hilfen ----------
+
+    /** Ein Ereignis für die Zeitung der eigenen Straße (der Name steht mit drin). */
+    private function log(Member $member, string $kind, array $data): void
+    {
+        $this->em->persist(new Event(Credentials::newToken(), $member->getStreetId(), $kind, $member->getId(), ['who' => $member->getName()] + $data));
+        $this->trimNews($member->getStreetId());
+    }
+
+    /** Alte Ereignisse wegwerfen, damit die Tabelle nicht endlos wächst. */
+    private function trimNews(string $streetId): void
+    {
+        $old = $this->em->getRepository(Event::class)->findBy(['streetId' => $streetId], ['atUs' => 'DESC'], 50, self::NEWS_MAX * 2);
+        foreach ($old as $event) {
+            $this->em->remove($event);
+        }
+    }
+
+    private function touchStreet(Member $member): void
+    {
+        $street = $this->em->find(Street::class, $member->getStreetId());
+        if ($street instanceof Street) {
+            $street->touch();
+        }
+    }
+
+    /** Das Wenige, was die Zeitung über eine Ware wissen muss. */
+    private static function itemSummary(array $item): array
+    {
+        return [
+            'id' => (string) ($item['id'] ?? ''),
+            'name' => (string) ($item['name'] ?? 'Ware'),
+            'price' => (int) ($item['price'] ?? 0),
+            'design' => $item['design'] ?? null,
+        ];
+    }
 
     private function state(Account $account, ?Member $member): array
     {

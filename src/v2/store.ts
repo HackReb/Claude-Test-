@@ -6,7 +6,7 @@ import { INVENT, type Slot } from "./config/items";
 import { designFromText } from "./game/designer";
 import { dayKey, inventionsLeft } from "./game/figure";
 import { openCostFor, pendingOf } from "./game/street";
-import type { Figure, Member, OwnedItem, Shop, ShopItem, StreetV2, V2Account } from "./model/types";
+import type { Figure, Member, NewsEvent, OwnedItem, Shop, ShopItem, StreetListing, StreetV2, V2Account } from "./model/types";
 
 type Status = "loading" | "logged-out" | "no-street" | "ready" | "error" | "offline";
 type Result = { ok: true } | { ok: false; message: string };
@@ -16,6 +16,8 @@ export interface V2Store {
   account: V2Account | null;
   member: Member | null;
   street: StreetV2 | null;
+  /** Beim Bummeln: die fremde Straße, in der ich gerade stehe. */
+  visiting: StreetV2 | null;
   /** Letzte Fehlermeldung vom Server (z. B. Straße voll). */
   notice: string | null;
 
@@ -41,7 +43,16 @@ export interface V2Store {
   buy(shopId: string, itemId: string): Promise<Result & { bought?: OwnedItem }>;
   coins(): number;
   pending(now?: number): number;
+  /** Bummeln: Straßen suchen, eine besuchen, wieder heim. */
+  loadStreets(q?: string): Promise<StreetListing[]>;
+  visit(streetId: string): Promise<Result>;
+  goHome(): void;
+  /** Die Zeitung der Straße, in der ich gerade stehe. */
+  loadNews(): Promise<NewsEvent[]>;
 }
+
+/** Die Straße, die gerade auf der Bühne steht: zu Besuch die fremde, sonst die eigene. */
+export const currentStreetOf = (s: Pick<V2Store, "visiting" | "street">) => s.visiting ?? s.street;
 
 export function createV2Store(api: V2Api | null) {
   return create<V2Store>()((set, get) => {
@@ -56,6 +67,11 @@ export function createV2Store(api: V2Api | null) {
         status: state.member && state.street ? "ready" : "no-street",
         notice: null,
       });
+    };
+    /** Einen Laden in der eigenen oder der besuchten Straße ersetzen. */
+    const putShop = (shop: Shop) => {
+      const swap = (street: StreetV2 | null) => (street && street.shops.some((s) => s.id === shop.id) ? { ...street, shops: street.shops.map((s) => (s.id === shop.id ? shop : s)) } : street);
+      set({ street: swap(get().street), visiting: swap(get().visiting) });
     };
 
     async function load() {
@@ -82,6 +98,7 @@ export function createV2Store(api: V2Api | null) {
       account: null,
       member: null,
       street: null,
+      visiting: null,
       notice: null,
 
       init: load,
@@ -110,7 +127,7 @@ export function createV2Store(api: V2Api | null) {
 
       async logout() {
         await api?.logout();
-        set({ status: "logged-out", account: null, member: null, street: null });
+        set({ status: "logged-out", account: null, member: null, street: null, visiting: null });
       },
 
       async join(street) {
@@ -144,6 +161,8 @@ export function createV2Store(api: V2Api | null) {
               member = { ...local, data: { ...local.data, coins: (local.data.coins ?? 0) + delta, sales: server.data.sales } };
           }
           set({ account: state.account, member, street: state.street, status: state.member && state.street ? "ready" : "no-street" });
+          const visiting = get().visiting;
+          if (visiting) set({ visiting: await api.street(visiting.id).catch(() => visiting) });
         } catch (error) {
           if (api.forgetIfSignedOut(error)) set({ status: "logged-out", account: null, member: null, street: null });
         }
@@ -170,7 +189,7 @@ export function createV2Store(api: V2Api | null) {
         if (!api || !street) return { ok: false, message: "Wähl zuerst deine Straße." };
         try {
           const { shop } = await api.updateShop(id, patch);
-          set({ street: { ...street, shops: street.shops.map((s) => (s.id === id ? shop : s)) } });
+          putShop(shop);
           return { ok: true };
         } catch (error) {
           return { ok: false, message: messageOf(error) };
@@ -241,7 +260,7 @@ export function createV2Store(api: V2Api | null) {
         if (!api || !street) return { ok: false, message: "Wähl zuerst deine Straße." };
         try {
           const { shop } = await api.updateShop(shopId, { data: { ...street.shops.find((s) => s.id === shopId)?.data, items } });
-          set({ street: { ...get().street!, shops: get().street!.shops.map((s) => (s.id === shopId ? shop : s)) } });
+          putShop(shop);
           return { ok: true };
         } catch (error) {
           return { ok: false, message: messageOf(error) };
@@ -249,18 +268,20 @@ export function createV2Store(api: V2Api | null) {
       },
 
       async buy(shopId, itemId) {
-        const { member, street } = get();
+        const member = get().member;
+        const street = currentStreetOf(get());
         if (!api || !member || !street) return { ok: false, message: "Wähl zuerst deine Straße." };
         const shop = street.shops.find((s) => s.id === shopId);
         const item = shop?.data.items?.find((i) => i.id === itemId);
         if (!shop || !item) return { ok: false, message: "Diese Ware gibt es nicht mehr." };
-        if (get().coins() < item.price) return { ok: false, message: `Dafür fehlen dir 🪙 ${item.price - get().coins()}.` };
+        const own = shop.memberId === member.id;
+        if (!own && get().coins() < item.price) return { ok: false, message: `Dafür fehlen dir 🪙 ${item.price - get().coins()}.` };
         try {
           // Der Server rechnet mit seinem Stand – also erst meine Münzen hinschicken.
           await api.save(member.data);
           const result = await api.buy(shopId, itemId);
           apply(result);
-          set({ street: { ...get().street!, shops: get().street!.shops.map((s) => (s.id === shopId ? result.shop : s)) } });
+          putShop(result.shop);
           return { ok: true, bought: result.bought };
         } catch (error) {
           await get().refresh();
@@ -275,6 +296,35 @@ export function createV2Store(api: V2Api | null) {
       pending(now = Date.now()) {
         const { member, street } = get();
         return member && street ? pendingOf(member, street, now) : 0;
+      },
+
+      async loadStreets(q = "") {
+        if (!api) return [];
+        return api.streets(q).catch(() => []);
+      },
+
+      async visit(streetId) {
+        if (!api) return { ok: false, message: "Ohne Server geht es nicht." };
+        if (streetId === get().street?.id) {
+          set({ visiting: null });
+          return { ok: true };
+        }
+        try {
+          set({ visiting: await api.street(streetId) });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, message: messageOf(error) };
+        }
+      },
+
+      goHome() {
+        set({ visiting: null });
+      },
+
+      async loadNews() {
+        const street = currentStreetOf(get());
+        if (!api || !street) return [];
+        return api.news(street.id).catch(() => []);
       },
     };
   });

@@ -11,7 +11,7 @@ import { describeDesign, designFromText } from "../game/designer";
 import { inventionsLeft, residentSalesPerHour } from "../game/figure";
 import { lotsOf, openCostFor, residentsOf, shopIncomePerHour } from "../game/street";
 import type { Shop, ShopItem } from "../model/types";
-import { useV2 } from "../store";
+import { currentStreetOf, useV2 } from "../store";
 
 const GROUP_ORDER = Object.keys(SHOP_GROUPS) as ShopGroup[];
 
@@ -19,7 +19,7 @@ const GROUP_ORDER = Object.keys(SHOP_GROUPS) as ShopGroup[];
 export function ShopSheet({ mode }: { mode: "new" | "edit" }) {
   const navigate = useNavigate();
   const { shopId } = useParams();
-  const street = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
   const member = useV2((s) => s.member)!;
   const shop = mode === "edit" ? street.shops.find((s) => s.id === shopId) : undefined;
 
@@ -36,7 +36,7 @@ export function ShopSheet({ mode }: { mode: "new" | "edit" }) {
 
 function NewShop() {
   const navigate = useNavigate();
-  const street = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
   const member = useV2((s) => s.member)!;
   const coins = useV2((s) => s.coins());
   const openShop = useV2((s) => s.openShop);
@@ -137,7 +137,7 @@ function NewShop() {
 
 function ShopDetails({ shopId, mine }: { shopId: string; mine: boolean }) {
   const navigate = useNavigate();
-  const street = useV2((s) => s.street)!;
+  const street = useV2(currentStreetOf)!;
   const updateShop = useV2((s) => s.updateShop);
   const closeShop = useV2((s) => s.closeShop);
   const shop = street.shops.find((s) => s.id === shopId)!;
@@ -247,7 +247,7 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
       return;
     }
     sound.cash();
-    setNote({ text: `${item.name} gehört jetzt dir – zieh es gleich an!`, ok: true });
+    setNote({ text: mine ? `${item.name} liegt jetzt in deinem Schrank – zieh es gleich an!` : `${item.name} gehört jetzt dir – zieh es gleich an!`, ok: true });
   }
 
   async function patch(id: string, change: Partial<ShopItem> | null) {
@@ -343,6 +343,9 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
               >
                 {item.showcase ? "im Fenster" : "ins Fenster"}
               </button>
+              <button type="button" className="btn btn-small" disabled={busy !== null} aria-label={`${item.name} für mich mitnehmen`} onClick={() => void onBuy(item)}>
+                {owned.has(item.id) ? "nochmal für mich" : "für mich"}
+              </button>
               <button type="button" className="btn btn-link" disabled={busy !== null} aria-label={`${item.name} löschen`} onClick={() => void patch(item.id, null)}>
                 löschen
               </button>
@@ -353,6 +356,11 @@ function Wares({ shop, mine, residents }: { shop: Shop; mine: boolean; residents
       {note && (
         <p className={note.ok ? "notice" : "error"} role="status">
           {note.text}
+          {note.ok && (
+            <button type="button" className="btn btn-link" onClick={() => navigate("/figur")}>
+              Anziehen
+            </button>
+          )}
         </p>
       )}
       <Invent shop={shop} />

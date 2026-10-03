@@ -103,6 +103,35 @@ export interface StreetV2 {
   shops: Shop[];
 }
 
+/** Eine Straße in der Bummel-Liste. */
+export interface StreetListing {
+  id: string;
+  name: string;
+  city: string;
+  members: number;
+  shops: number;
+  foundedAt: number;
+}
+
+export type NewsKind = "join" | "leave" | "shop" | "close" | "item" | "buy";
+
+/** Ein Ereignis in der Zeitung einer Straße. */
+export interface NewsEvent {
+  id: string;
+  kind: NewsKind;
+  memberId: string | null;
+  at: number;
+  data: {
+    who?: string;
+    visitor?: boolean;
+    shopId?: string;
+    shopName?: string;
+    type?: string;
+    shops?: number;
+    item?: { id: string; name: string; price: number; design: ItemDesign | null };
+  };
+}
+
 export interface V2State {
   account: V2Account;
   member: Member | null;

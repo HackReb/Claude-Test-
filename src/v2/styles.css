@@ -607,6 +607,11 @@ p {
   gap: 14px;
 }
 
+/* Das Blatt scrollt als Ganzes – keine Zeile darf schrumpfen (sonst verschwinden Tabs und Fassaden-Reihe auf dem Handy). */
+.sheet-body > * {
+  flex-shrink: 0;
+}
+
 .shop-list {
   list-style: none;
   margin: 0;
@@ -683,10 +688,11 @@ p {
 
 .group-tabs {
   display: flex;
+  flex: none;
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 2px;
+  padding: 2px 0 4px;
 }
 
 .group-tabs button {
@@ -750,9 +756,11 @@ p {
 
 .look-row {
   display: flex;
+  flex: none;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
+  padding: 2px 0 4px;
 }
 
 .look-card {
@@ -1077,4 +1085,117 @@ p {
 
 .invent-fields .field {
   margin-top: 0;
+}
+
+/* ---------- Bummeln & Zeitung ---------- */
+.dock button.home .ico {
+  background: #ffd166;
+}
+
+.paper-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 10px;
+  border-bottom: 3px double var(--border);
+  text-align: center;
+}
+
+.paper-head b {
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+}
+
+.paper-head small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.best-list,
+.news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.best-row,
+.news-row {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+button.best-row,
+button.news-row {
+  cursor: pointer;
+}
+
+.best-row > svg,
+.news-icon svg {
+  flex: none;
+  background: #d7f3ff;
+  border-radius: 10px;
+}
+
+.best-rank {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+
+.news-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+}
+
+.news-row .shop-text b {
+  font-size: 0.92rem;
+  white-space: normal;
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.facts > div {
+  border: 3px solid var(--border);
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.05rem;
 }
