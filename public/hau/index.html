@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#2b2118" />
+<title>Hau drauf!</title>
+<style>
+  :root { --ink: #2b2118; --bg: #8fd3ff; --grass: #7fc46b; --hole: #4a3321; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  #app { height: 100%; display: flex; flex-direction: column; background: linear-gradient(#8fd3ff, #d9f0ff); }
+  header { display: flex; justify-content: space-between; align-items: center; padding: max(10px, env(safe-area-inset-top)) 14px 6px; font-weight: 900; }
+  .chip { background: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: 5px 12px; box-shadow: 0 3px 0 var(--ink); font-size: 1rem; }
+  #board { flex: none; height: min(66vh, 600px); margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px 12px; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); max-width: 520px; width: 100%; margin-left: auto; margin-right: auto; background: var(--grass); border-top: 4px solid #5fa14f; border-radius: 40px 40px 0 0; }
+  .hole { position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 7%; }
+  .pit-back { position: absolute; left: 8%; right: 8%; bottom: 4%; height: 16%; background: #3a2718; border: 3px solid var(--ink); border-radius: 50%; }
+  .pit-front { position: absolute; left: 8%; right: 8%; bottom: 4%; height: 8%; background: var(--hole); border: 3px solid var(--ink); border-top: none; border-radius: 0 0 50% 50% / 0 0 100% 100%; z-index: 3; pointer-events: none; }
+  .person { position: relative; z-index: 2; width: 70%; max-width: 150px; transform: translateY(105%); transition: transform 0.16s cubic-bezier(.2,.9,.3,1.3); cursor: pointer; }
+  .hole.up .person { transform: translateY(0); }
+  .hole.hit .person { transform: translateY(0) scaleY(0.55) scaleX(1.2); transform-origin: 50% 100%; transition: transform 0.08s; }
+  .person svg { width: 100%; display: block; }
+  .person .label { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; font-weight: 900; white-space: nowrap; transition: opacity 0.1s; }
+  .hole:not(.up) .person .label { opacity: 0; }
+  #hammer { position: fixed; width: 90px; height: 90px; pointer-events: none; z-index: 10; transform: translate(-30%, -90%) rotate(-30deg); transform-origin: 80% 85%; opacity: 0; transition: opacity 0.2s; }
+  #hammer.show { opacity: 1; }
+  #hammer.whack { animation: whack 0.18s ease-out; }
+  @keyframes whack { 0% { transform: translate(-30%, -90%) rotate(-30deg); } 50% { transform: translate(-30%, -90%) rotate(35deg); } 100% { transform: translate(-30%, -90%) rotate(-30deg); } }
+  .pow { position: fixed; z-index: 9; font-weight: 900; font-size: 1.6rem; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke; pointer-events: none; animation: pow 0.6s ease-out forwards; }
+  @keyframes pow { 0% { transform: translate(-50%, -50%) scale(0.4) rotate(-10deg); opacity: 1; } 60% { transform: translate(-50%, -80%) scale(1.2) rotate(6deg); opacity: 1; } 100% { transform: translate(-50%, -120%) scale(1); opacity: 0; } }
+  #overlay { position: fixed; inset: 0; background: rgba(43,33,24,0.55); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 20px; }
+  #overlay.hidden { display: none; }
+  .card { background: #fffdf6; border: 3px solid var(--ink); border-radius: 22px; padding: 22px 20px; text-align: center; max-width: 360px; width: 100%; box-shadow: 0 6px 0 var(--ink); }
+  .card h1 { margin: 0 0 6px; font-size: 1.8rem; }
+  .card p { margin: 6px 0 14px; font-weight: 700; color: #5b4b3a; }
+  .card .faces { display: flex; justify-content: center; gap: 8px; margin: 8px 0 14px; }
+  .card .faces svg { width: 56px; }
+  button.big { font: inherit; font-weight: 900; font-size: 1.15rem; background: #ff7a45; color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: 12px 26px; box-shadow: 0 4px 0 var(--ink); cursor: pointer; }
+  button.big:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+  .best { font-size: 0.85rem; color: #5b4b3a; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="chip">🔨 <span id="score">0</span></span>
+    <span class="chip">⏱️ <span id="time">30</span></span>
+  </header>
+  <div id="board"></div>
+</div>
+<svg id="hammer" viewBox="0 0 100 100" aria-hidden="true">
+  <rect x="44" y="30" width="12" height="62" rx="4" fill="#c98b4a" stroke="#2b2118" stroke-width="3"/>
+  <rect x="18" y="8" width="64" height="30" rx="8" fill="#8d99ae" stroke="#2b2118" stroke-width="3"/>
+  <rect x="24" y="14" width="14" height="18" rx="3" fill="#b8c2d1"/>
+</svg>
+<div id="overlay">
+  <div class="card">
+    <h1>Hau drauf!</h1>
+    <p id="intro">Sascha, Matze, David und Michi gucken aus ihren Löchern. Tipp sie an, bevor sie wieder abtauchen. 30 Sekunden!</p>
+    <div class="faces" id="faces"></div>
+    <button class="big" id="start">Los geht's</button>
+    <p class="best" id="best"></p>
+  </div>
+</div>
+<script>
+(() => {
+  const PEOPLE = [
+    { name: "Sascha", skin: "#f1c7a3", hair: "#2b2118", shirt: "#1982c4", style: "spiky", pow: "AUA!", sound: "boing" },
+    { name: "Matze",  skin: "#e8b48a", hair: "#e0b050", shirt: "#ef476f", style: "cap",   pow: "HEY!", sound: "quack" },
+    { name: "David",  skin: "#d9a066", hair: "#6b4226", shirt: "#06d6a0", style: "curly", pow: "OOF!", sound: "honk" },
+    { name: "Michi",  skin: "#ffdbac", hair: "#b5533c", shirt: "#8338ec", style: "long",  pow: "AUTSCH!", sound: "squeak" },
+  ];
+
+  // ---------- Figuren ----------
+  const hairSvg = (p) => ({
+    spiky: `<path d="M22 44 L26 18 L36 32 L44 12 L52 32 L62 14 L70 30 L78 44 Z" fill="${p.hair}" stroke="#2b2118" stroke-width="3"/>`,
+    cap:   `<path d="M22 44 Q50 10 78 44 Z" fill="${p.hair}" stroke="#2b2118" stroke-width="3"/><rect x="18" y="38" width="72" height="10" rx="5" fill="#e63946" stroke="#2b2118" stroke-width="3"/>`,
+    curly: `<g fill="${p.hair}" stroke="#2b2118" stroke-width="3"><circle cx="30" cy="38" r="12"/><circle cx="50" cy="26" r="14"/><circle cx="70" cy="38" r="12"/><circle cx="40" cy="26" r="10"/><circle cx="60" cy="26" r="10"/></g>`,
+    long:  `<path d="M20 50 Q22 10 50 12 Q78 10 80 50 L82 92 L66 92 L64 56 Q50 48 36 56 L34 92 L18 92 Z" fill="${p.hair}" stroke="#2b2118" stroke-width="3"/>`,
+  }[p.style]);
+
+  const personSvg = (p, hit = false) => `
+    <svg viewBox="0 0 100 130" aria-hidden="true">
+      ${p.style === "long" ? hairSvg(p) : ""}
+      <rect x="22" y="86" width="56" height="44" rx="14" fill="${p.shirt}" stroke="#2b2118" stroke-width="3"/>
+      <circle cx="50" cy="52" r="34" fill="${p.skin}" stroke="#2b2118" stroke-width="3"/>
+      ${p.style !== "long" ? hairSvg(p) : ""}
+      ${hit
+        ? `<path d="M34 50 l10 10 M44 50 l-10 10 M56 50 l10 10 M66 50 l-10 10" stroke="#2b2118" stroke-width="3" stroke-linecap="round"/>
+           <ellipse cx="50" cy="74" rx="8" ry="10" fill="#2b2118"/>`
+        : `<circle cx="38" cy="52" r="4" fill="#2b2118"/><circle cx="62" cy="52" r="4" fill="#2b2118"/>
+           <path d="M38 68 Q50 78 62 68" stroke="#2b2118" stroke-width="3" fill="none" stroke-linecap="round"/>`}
+    </svg>`;
+
+  // ---------- Geräusche (synthetisch, kein Download) ----------
+  let ctx = null;
+  const audio = () => (ctx ??= new (window.AudioContext || window.webkitAudioContext)());
+  const tone = (type, f0, f1, dur, gain = 0.4, when = 0) => {
+    const ac = audio(), t = ac.currentTime + when;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+  };
+  const noise = (dur, gain = 0.5) => {
+    const ac = audio(), n = ac.sampleRate * dur, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+    f.type = "lowpass"; f.frequency.value = 900; s.buffer = buf; g.gain.value = gain;
+    s.connect(f).connect(g).connect(ac.destination); s.start();
+  };
+  const SOUNDS = {
+    // Sascha: Sprungfeder
+    boing: () => { tone("sine", 160, 520, 0.35, 0.5); tone("sine", 480, 140, 0.4, 0.3, 0.12); },
+    // Matze: Quietsche-Ente
+    quack: () => { tone("sawtooth", 420, 300, 0.12, 0.35); tone("sawtooth", 380, 260, 0.14, 0.3, 0.14); },
+    // David: Hupe
+    honk:  () => { tone("square", 220, 200, 0.28, 0.25); tone("square", 277, 250, 0.28, 0.2); },
+    // Michi: Quietscher
+    squeak:() => { tone("triangle", 1200, 2400, 0.1, 0.35); tone("triangle", 2200, 900, 0.22, 0.3, 0.1); },
+  };
+  const thud = () => { noise(0.09, 0.6); tone("sine", 120, 50, 0.12, 0.6); };
+  const miss = () => { noise(0.05, 0.25); };
+
+  // ---------- Spiel ----------
+  const board = document.getElementById("board");
+  const scoreEl = document.getElementById("score"), timeEl = document.getElementById("time");
+  const overlay = document.getElementById("overlay"), startBtn = document.getElementById("start");
+  const intro = document.getElementById("intro"), bestEl = document.getElementById("best");
+  const hammer = document.getElementById("hammer");
+  const holes = PEOPLE.map((p, i) => {
+    const el = document.createElement("div");
+    el.className = "hole";
+    el.innerHTML = `<div class="pit-back"></div><div class="person">${personSvg(p)}<span class="label">${p.name}</span></div><div class="pit-front"></div>`;
+    board.appendChild(el);
+    return { el, person: el.querySelector(".person"), p, up: false, timer: null };
+  });
+  document.getElementById("faces").innerHTML = PEOPLE.map((p) => personSvg(p)).join("");
+
+  let score = 0, timeLeft = 30, running = false, loop = null, clock = null;
+  const best = () => Number(localStorage.getItem("hau:best") || 0);
+  const showBest = () => { bestEl.textContent = best() ? `Rekord: ${best()} Treffer` : ""; };
+  showBest();
+
+  const pop = (h, dur) => {
+    h.up = true; h.el.classList.add("up");
+    clearTimeout(h.timer);
+    h.timer = setTimeout(() => hide(h), dur);
+  };
+  const hide = (h) => { h.up = false; h.el.classList.remove("up", "hit"); h.person.innerHTML = personSvg(h.p) + `<span class="label">${h.p.name}</span>`; };
+
+  const tick = () => {
+    if (!running) return;
+    const free = holes.filter((h) => !h.up);
+    const speed = 1 - Math.min(0.6, (30 - timeLeft) / 50);
+    if (free.length && Math.random() < 0.8) pop(free[Math.floor(Math.random() * free.length)], 700 + Math.random() * 800 * speed);
+    if (free.length > 2 && Math.random() < 0.35) pop(free[Math.floor(Math.random() * free.length)], 600 + Math.random() * 700 * speed);
+    loop = setTimeout(tick, 450 + Math.random() * 500 * speed);
+  };
+
+  const pow = (x, y, text) => {
+    const el = document.createElement("div");
+    el.className = "pow"; el.textContent = text; el.style.left = x + "px"; el.style.top = y + "px";
+    document.body.appendChild(el); setTimeout(() => el.remove(), 650);
+  };
+
+  const whack = (x, y) => {
+    hammer.style.left = x + "px"; hammer.style.top = y + "px";
+    hammer.classList.add("show"); hammer.classList.remove("whack"); void hammer.offsetWidth; hammer.classList.add("whack");
+  };
+
+  const onTap = (e) => {
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    whack(t.clientX, t.clientY);
+    if (!running) return;
+    const target = document.elementFromPoint(t.clientX, t.clientY)?.closest(".hole");
+    const h = holes.find((k) => k.el === target);
+    if (h && h.up && !h.el.classList.contains("hit")) {
+      score++; scoreEl.textContent = score;
+      h.el.classList.add("hit");
+      h.person.innerHTML = personSvg(h.p, true) + `<span class="label">${h.p.name}</span>`;
+      thud(); setTimeout(SOUNDS[h.p.sound], 60);
+      pow(t.clientX, t.clientY - 30, h.p.pow);
+      clearTimeout(h.timer); h.timer = setTimeout(() => hide(h), 420);
+      if (navigator.vibrate) navigator.vibrate(25);
+    } else miss();
+  };
+  document.addEventListener("pointerdown", onTap);
+
+  const start = () => {
+    audio().resume?.();
+    score = 0; timeLeft = 30; running = true;
+    scoreEl.textContent = "0"; timeEl.textContent = "30";
+    overlay.classList.add("hidden");
+    holes.forEach(hide);
+    clearTimeout(loop); clearInterval(clock);
+    loop = setTimeout(tick, 500);
+    clock = setInterval(() => {
+      timeLeft--; timeEl.textContent = timeLeft;
+      if (timeLeft <= 0) end();
+    }, 1000);
+  };
+  const end = () => {
+    running = false; clearTimeout(loop); clearInterval(clock);
+    holes.forEach((h) => { clearTimeout(h.timer); hide(h); });
+    const record = score > best();
+    if (record) localStorage.setItem("hau:best", String(score));
+    intro.textContent = `${score} Treffer!${record ? " Neuer Rekord!" : ""} ${score >= 25 ? "Hammerhart." : score >= 15 ? "Ordentlich draufgehauen." : "Die vier lachen noch."}`;
+    startBtn.textContent = "Nochmal";
+    showBest();
+    overlay.classList.remove("hidden");
+  };
+  startBtn.addEventListener("click", (e) => { e.stopPropagation(); start(); });
+})();
+</script>
+</body>
+</html>

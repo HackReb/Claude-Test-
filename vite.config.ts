@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
         navigateFallback: "index.html",
         // Babo v2 ist eine eigene Seite unter /v2/ – ihre Navigation bekommt nicht die v1-Hülle.
-        navigateFallbackDenylist: [/\/v2\//],
+        navigateFallbackDenylist: [/\/v2\//, /\/hau\//],
       },
     }),
   ],
